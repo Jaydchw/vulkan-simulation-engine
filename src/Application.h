@@ -17,6 +17,7 @@
 #include "Scene/LightManager.h"
 #include "Util/Camera.h"
 #include "Util/Input.h"
+#include "Util/Interface.h"
 
 constexpr uint32_t WIDTH = 1280;
 constexpr uint32_t HEIGHT = 720;
@@ -47,7 +48,6 @@ class Application final {
  public:
   Application();
   ~Application();
-
   Application(const Application&) = delete;
   Application& operator=(const Application&) = delete;
 
@@ -87,6 +87,7 @@ class Application final {
   std::unique_ptr<LightManager> lightManager;
   std::unique_ptr<PostProcessing> postProcessing;
   std::unique_ptr<MainPipeline> mainPipeline;
+  std::unique_ptr<Interface> interface;
 
   VkInstance instance = VK_NULL_HANDLE;
   VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
@@ -111,12 +112,14 @@ class Application final {
   VkPipelineLayout shadowPipelineLayout = VK_NULL_HANDLE;
 
   float lastFrameTime = 0.0f;
-
   VkFormat swapChainImageFormat = VK_FORMAT_UNDEFINED;
   VkFormat depthFormat = VK_FORMAT_UNDEFINED;
 
   uint32_t currentFrame = 0;
   bool framebufferResized = false;
+
+  SimulationState simState;
+  SceneSettings sceneSettings;
 
   void initWindow();
   void initVulkan();

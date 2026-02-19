@@ -1,0 +1,22 @@
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\SHADER.FRAG
+glslc "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\SHADERS\shader.frag" -o "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\shaders\frag.spv"
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\SHADER.VERT
+glslc "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\SHADERS\shader.vert" -o "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\shaders\vert.spv"
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\POSTPROCESS.FRAG
+glslc.exe shaders/postprocess.frag -o shaders/postprocess_frag.spv
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\POSTPROCESS.VERT
+glslc.exe shaders/postprocess.vert -o shaders/postprocess_vert.spv
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\PARTICLE.FRAG
+glslc.exe "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\SHADERS\particle.frag" -o "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\shaders\particle_frag.spv"
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\PARTICLE.VERT
+glslc.exe "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\SHADERS\particle.vert" -o "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\shaders\particle_vert.spv"
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\SHADOW.FRAG
+glslc "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\SHADERS\shadow.frag" -o "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\shaders\shadow_frag.spv"
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\SHADOW.VERT
+glslc "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\SHADERS\shadow.vert" -o "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\shaders\shadow_vert.spv"
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\SKYBOX.FRAG
+glslc "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\SHADERS\skybox.frag" -o "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\shaders\skybox_frag.spv"
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\SKYBOX.VERT
+glslc "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\SHADERS\skybox.vert" -o "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\shaders\skybox_vert.spv"
+^D:\FILES\DOCUMENTS\APROJECTS\CPP\VULKAN-SIMULATION-ENGINE\SHADERS\PLANT.VERT
+glslc "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\SHADERS\plant.vert" -o "D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\shaders\plant_vert.spv"

@@ -1,16 +1,23 @@
 #pragma once
 #include <vulkan/vulkan.h>
 
+#include <glm/glm.hpp>
 #include <vector>
 
 class RenderDevice;
+
+struct PostProcessingConfig {
+  float hue = 0.0f;
+  float saturation = 1.0f;
+  float contrast = 1.0f;
+  bool useToon = false;
+};
 
 class PostProcessing final {
  public:
   PostProcessing(RenderDevice* renderDevice, VkDevice device,
                  VkFormat swapchainFormat);
   ~PostProcessing() noexcept;
-
   PostProcessing(const PostProcessing&) = delete;
   PostProcessing& operator=(const PostProcessing&) = delete;
 
@@ -21,45 +28,42 @@ class PostProcessing final {
               VkDescriptorPool descriptorPool);
 
   void beginOffscreenPass(VkCommandBuffer commandBuffer,
-                          VkImageView depthImageViewParam,
-                          const VkExtent2D& extent) const;
+                          const VkExtent2D& extent,
+                          const glm::vec4& clearColor) const;
   void endOffscreenPass(VkCommandBuffer commandBuffer) const;
   void render(VkCommandBuffer commandBuffer, VkImageView targetImageView,
               const VkExtent2D& extent, uint32_t frameIndex) const;
 
   VkImageView getOffscreenImageView() const { return offscreenImageView; }
 
-  void toggleToonMode() { useToonShader = !useToonShader; }
-  bool isToonModeEnabled() const { return useToonShader; }
+  void toggleToonMode() { config.useToon = !config.useToon; }
+  void setToonMode(bool enabled) { config.useToon = enabled; }
+  bool isToonModeEnabled() const { return config.useToon; }
+
+  PostProcessingConfig getConfig() const { return config; }
+  void setConfig(const PostProcessingConfig& c) { config = c; }
 
  private:
   std::vector<VkDescriptorSet> descriptorSets;
-
   RenderDevice* renderDevice;
   VkDevice device;
-
   VkImage offscreenImage = VK_NULL_HANDLE;
   VkDeviceMemory offscreenImageMemory = VK_NULL_HANDLE;
   VkImageView offscreenImageView = VK_NULL_HANDLE;
   VkSampler offscreenSampler = VK_NULL_HANDLE;
-
   VkImage depthImage = VK_NULL_HANDLE;
   VkDeviceMemory depthImageMemory = VK_NULL_HANDLE;
   VkImageView depthImageView = VK_NULL_HANDLE;
-
   VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
   VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-
   VkPipeline pipeline = VK_NULL_HANDLE;
   VkPipeline toonPipeline = VK_NULL_HANDLE;
-
   VkFormat swapchainFormat;
   VkFormat depthFormat;
-
   uint32_t width = 0;
   uint32_t height = 0;
 
-  bool useToonShader = false;
+  PostProcessingConfig config;
 
   void createOffscreenResources();
   void createDepthResources();
@@ -69,6 +73,5 @@ class PostProcessing final {
   void updateDescriptorSets();
   void cleanupOffscreenResources();
   void cleanupDepthResources();
-
   VkShaderModule createShaderModule(const std::vector<char>& code) const;
 };
