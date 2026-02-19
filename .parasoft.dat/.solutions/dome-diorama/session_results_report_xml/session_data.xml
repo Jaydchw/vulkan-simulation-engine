@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<ResultsSession>
+   <SessionData configName="700120 rule set 2024" configPseudoUrl="c++test.user://700120 rule set 2024" enabledAnalysis="Static" enabledHandlers="com.parasoft.xtest.checkers.api.scope.factory;com.parasoft.xtest.checkers.api.standards.factory" hasViols="true" header="??:dome-diorama:??true??false??" runId="" startTime="1767658002652" tool="c++test">
+      <TestParameters cmdLn="C++test: -config c++test.user://700120 rule set 2024 "/>
+      <Authors>
+         <Author id="dev1" name="Jayd"/>
+      </Authors>
+      <Selection>
+         <Res id="dome-diorama/dome-diorama/Source Files/Skybox.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/WeatherSystem.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/MeshManager.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/PlantManager.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/VulkanDevice.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/RenderUtils.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/WorldState.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/ConfigParser.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/PostProcessing.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/VulkanDepthBuffer.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/Shadow.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/VulkanSwapchain.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/RenderDevice.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/PlantState.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Debug.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/MainPipeline.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/LightManager.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/VulkanDepthBuffer.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/VulkanDescriptors.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/PerlinNoise.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Texture.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Window.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Input.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/PostProcessing.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/MeshManager.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/ParticleEmitter.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/VulkanInstance.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/RenderUtils.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/EmitterTypes.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Camera.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/PlantManager.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/RenderDevice.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/PerlinNoise.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/TextureManager.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/ConfigParser.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Object.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/ParticleEmitter.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/VulkanCommandBuffer.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/VulkanSyncObjects.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/Application.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Application.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/MaterialManager.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Skybox.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/ParticleManager.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Shadow.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/ParticleManager.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/main.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/WeatherSystem.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/LightManager.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Light.h"/>
+         <Res id="dome-diorama/dome-diorama/Source Files/MaterialManager.cpp"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/TextureManager.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/Material.h"/>
+         <Res id="dome-diorama/dome-diorama/Header Files/PushConstants.h"/>
+      </Selection>
+      <XmlDataFiles file0="D:\Files\Documents\AProjects\CPP\dome-diorama\dome-diorama\.parasoft.dat\.solutions\dome-diorama\session_results_report_xml\cs_violations.xml"/>
+   </SessionData>
+   <Locations>
+      <Loc fsPath="D:\Files\Documents\AProjects\CPP\dome-diorama\dome-diorama\src\Particles\ParticleEmitter.h" loc="dome-diorama/dome-diorama/Header Files/ParticleEmitter.h" projPath="dome-diorama/dome-diorama" project="dome-diorama"/>
+   </Locations>
+   <CodingStandards>
+      <TestedFilesDetails>
+         <Total name="Suppressed / Total" supp="0" total="1">
+            <Project name="dome-diorama" supp="0" total="1">
+               <Res name="Source Files" supp="0" total="0">
+                  <Res name="Skybox.cpp" supp="0" total="0"/>
+                  <Res name="PlantManager.cpp" supp="0" total="0"/>
+                  <Res name="VulkanDepthBuffer.cpp" supp="0" total="0"/>
+                  <Res name="Shadow.cpp" supp="0" total="0"/>
+                  <Res name="RenderDevice.cpp" supp="0" total="0"/>
+                  <Res name="LightManager.cpp" supp="0" total="0"/>
+                  <Res name="PostProcessing.cpp" supp="0" total="0"/>
+                  <Res name="MeshManager.cpp" supp="0" total="0"/>
+                  <Res name="RenderUtils.cpp" supp="0" total="0"/>
+                  <Res name="PerlinNoise.cpp" supp="0" total="0"/>
+                  <Res name="TextureManager.cpp" supp="0" total="0"/>
+                  <Res name="ConfigParser.cpp" supp="0" total="0"/>
+                  <Res name="ParticleEmitter.cpp" supp="0" total="0"/>
+                  <Res name="Application.cpp" supp="0" total="0"/>
+                  <Res name="ParticleManager.cpp" supp="0" total="0"/>
+                  <Res name="main.cpp" supp="0" total="0"/>
+                  <Res name="WeatherSystem.cpp" supp="0" total="0"/>
+                  <Res name="MaterialManager.cpp" supp="0" total="0"/>
+               </Res>
+               <Res name="Header Files" supp="0" total="1">
+                  <Res name="WeatherSystem.h" supp="0" total="0"/>
+                  <Res name="MeshManager.h" supp="0" total="0"/>
+                  <Res name="VulkanDevice.h" supp="0" total="0"/>
+                  <Res name="RenderUtils.h" supp="0" total="0"/>
+                  <Res name="WorldState.h" supp="0" total="0"/>
+                  <Res name="PostProcessing.h" supp="0" total="0"/>
+                  <Res name="ConfigParser.h" supp="0" total="0"/>
+                  <Res name="VulkanSwapchain.h" supp="0" total="0"/>
+                  <Res name="Debug.h" supp="0" total="0"/>
+                  <Res name="PlantState.h" supp="0" total="0"/>
+                  <Res name="MainPipeline.h" supp="0" total="0"/>
+                  <Res name="VulkanDepthBuffer.h" supp="0" total="0"/>
+                  <Res name="Texture.h" supp="0" total="0"/>
+                  <Res name="PerlinNoise.h" supp="0" total="0"/>
+                  <Res name="VulkanDescriptors.h" supp="0" total="0"/>
+                  <Res name="Window.h" supp="0" total="0"/>
+                  <Res name="Input.h" supp="0" total="0"/>
+                  <Res loc="dome-diorama/dome-diorama/Header Files/ParticleEmitter.h" locType="sr" name="ParticleEmitter.h" supp="0" total="1"/>
+                  <Res name="VulkanInstance.h" supp="0" total="0"/>
+                  <Res name="EmitterTypes.h" supp="0" total="0"/>
+                  <Res name="Camera.h" supp="0" total="0"/>
+                  <Res name="PlantManager.h" supp="0" total="0"/>
+                  <Res name="RenderDevice.h" supp="0" total="0"/>
+                  <Res name="Object.h" supp="0" total="0"/>
+                  <Res name="VulkanCommandBuffer.h" supp="0" total="0"/>
+                  <Res name="VulkanSyncObjects.h" supp="0" total="0"/>
+                  <Res name="MaterialManager.h" supp="0" total="0"/>
+                  <Res name="Application.h" supp="0" total="0"/>
+                  <Res name="Skybox.h" supp="0" total="0"/>
+                  <Res name="ParticleManager.h" supp="0" total="0"/>
+                  <Res name="Shadow.h" supp="0" total="0"/>
+                  <Res name="LightManager.h" supp="0" total="0"/>
+                  <Res name="Light.h" supp="0" total="0"/>
+                  <Res name="TextureManager.h" supp="0" total="0"/>
+                  <Res name="Material.h" supp="0" total="0"/>
+                  <Res name="PushConstants.h" supp="0" total="0"/>
+               </Res>
+            </Project>
+         </Total>
+      </TestedFilesDetails>
+   </CodingStandards>
+</ResultsSession>

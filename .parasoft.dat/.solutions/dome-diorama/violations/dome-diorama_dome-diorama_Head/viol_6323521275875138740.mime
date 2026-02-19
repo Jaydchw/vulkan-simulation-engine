@@ -1,0 +1,11 @@
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=XniBLBJPmJmZiHVgT3s9LOWYiyp8NFnsONLbm07
+StorageVersion: v1
+
+--XniBLBJPmJmZiHVgT3s9LOWYiyp8NFnsONLbm07
+
+<?xml version='1.0' encoding='UTF-8'?><ResultsList path="dome-diorama/dome-diorama/Header Files/LightData.h"><VersionInfos><StorageInfo ownerId="com.parasoft.xtest.checkers.api.execution" resultId="IExecutionViolation" ver="2"/><StorageInfo ownerId="com.parasoft.xtest.checkers.api.execution" resultId="InsureViolation" ver="3"/><StorageInfo ownerId="com.parasoft.xtest.checkers.api.scope" resultId="IScopeProjectInfo" ver="3"/><StorageInfo ownerId="com.parasoft.xtest.checkers.api.standards" resultId="IMetricsViolation" ver="2"/><StorageInfo ownerId="com.parasoft.xtest.checkers.api.standards" resultId="IDupCodeViolation" ver="2"/><StorageInfo ownerId="com.parasoft.xtest.checkers.api.standards" resultId="IFlowAnalysisViolation" ver="2"/><StorageInfo ownerId="com.parasoft.xtest.checkers.api.standards" resultId="ICodingStandardsViolation" ver="2"/><StorageInfo ownerId="com.parasoft.xtest.checkers.api.generation" resultId="IGenerationInfo" ver="2"/><StorageInfo ownerId="com.parasoft.xtest.checkers.api.generation" resultId="IGenerationProjectInfo" ver="2"/></VersionInfos></ResultsList>
+--XniBLBJPmJmZiHVgT3s9LOWYiyp8NFnsONLbm07
+
+<?xml version='1.0' encoding='UTF-8'?><ResultInfo resultId="ICodingStandardsViolation" ownerId="com.parasoft.xtest.checkers.api.standards" violKeys="null"><StdViol msg="Members 'color, direction' of structure 'LightData' are declared in suboptimal order for memory layout" ln="4" sev="5" auth="Jayd" rule="OPT-13-DOWNGRADED" tool="c++test" cat="OPT-13" lang="cpp" locType="sr" config="1" hash="-1861001463" locStartln="4" locStartPos="7" locEndLn="4" locEndPos="8" locFile="dome-diorama/dome-diorama/Header Files/LightData.h"/></ResultInfo>
+--XniBLBJPmJmZiHVgT3s9LOWYiyp8NFnsONLbm07--

@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<mergePnt id="csViolations">
+  <StdViols>
+    <StdViol msg="Members 'baseColor, gravity, initialVelocity, tipColor, windDirection' of structure 'ParticleShaderParams' are declared in suboptimal order for memory layout" ln="19" sev="5" auth="Jayd" rule="OPT-13-DOWNGRADED" tool="c++test" cat="OPT-13" lang="cpp" locType="sr" config="1" hash="586530170" locStartln="19" locStartPos="7" locEndLn="19" locEndPos="8" locFile="dome-diorama/dome-diorama/Header Files/ParticleEmitter.h"/>
+  </StdViols>
+</mergePnt>

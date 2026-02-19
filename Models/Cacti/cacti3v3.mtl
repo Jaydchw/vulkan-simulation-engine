@@ -1,0 +1,50 @@
+# Blender 5.0.0 MTL File: 'snowglobe.blend'
+# www.blender.org
+
+newmtl Carnegiea_bark_01.003
+Ns 40.551991
+Ka 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd textures/Carnegiea_gigantea_HD_Carnegiea_bark_01_Carnegiea_gigantea_b.png
+
+newmtl Carnegiea_bark_03.003
+Ns 40.551991
+Ka 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd textures/Carnegiea_gigantea_HD_Carnegiea_bark_03_Carnegiea_gigantea_b.png
+
+newmtl Carnegiea_flower_stalk.002
+Ns 40.551991
+Ka 1.000000 1.000000 1.000000
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd textures/Carnegiea_gigantea_HD_Carnegiea_flower_stalk_Cactus_flower_s.png
+
+newmtl Carnegiea_petal_01.002
+Ns 40.551991
+Ka 1.000000 1.000000 1.000000
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd textures/Carnegiea_gigantea_HD_Carnegiea_petal_01_Carnegiea_petal_04_.png
+
+newmtl Carnegiea_petal_02.002
+Ns 40.551991
+Ka 1.000000 1.000000 1.000000
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_Kd textures/Carnegiea_gigantea_HD_Carnegiea_petal_02_Carnegiea_petal_05_.png
+
+newm

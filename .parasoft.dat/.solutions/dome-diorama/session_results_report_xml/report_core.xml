@@ -1,0 +1,655 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<ResultsSession buildId="Default Project-2026-01-06" date="01/06/26 00:06:42" endTime="1970-01-01T00:00:00+00:00" machine="DESKTOP-JUMDB3J" project="Default Project" tag="700120 rule set 2024" time="2026-01-06T00:06:42+00:00" toolName="C++test" toolVer="2025.1.0.20250523B2782" user="Jayd">
+   <TestParameters cmdLn="C++test: -config c++test.user://700120 rule set 2024 "/>
+   <TestConfig machine="DESKTOP-JUMDB3J" name="700120 rule set 2024" pseudoUrl="c++test.user://700120 rule set 2024" user="Jayd"/>
+   <Authors>
+      <Author id="dev1" name="Jayd"/>
+   </Authors>
+   <VersionInfos>
+      <StorageInfo ownerId="com.parasoft.xtest.checkers.api.execution" resultId="IExecutionViolation" ver="2"/>
+      <StorageInfo ownerId="com.parasoft.xtest.checkers.api.execution" resultId="InsureViolation" ver="3"/>
+      <StorageInfo ownerId="com.parasoft.xtest.checkers.api.scope" resultId="IScopeProjectInfo" ver="3"/>
+      <StorageInfo ownerId="com.parasoft.xtest.checkers.api.standards" resultId="IMetricsViolation" ver="2"/>
+      <StorageInfo ownerId="com.parasoft.xtest.checkers.api.standards" resultId="IDupCodeViolation" ver="2"/>
+      <StorageInfo ownerId="com.parasoft.xtest.checkers.api.standards" resultId="IFlowAnalysisViolation" ver="2"/>
+      <StorageInfo ownerId="com.parasoft.xtest.checkers.api.standards" resultId="ICodingStandardsViolation" ver="2"/>
+      <StorageInfo ownerId="com.parasoft.xtest.checkers.api.generation" resultId="IGenerationInfo" ver="2"/>
+      <StorageInfo ownerId="com.parasoft.xtest.checkers.api.generation" resultId="IGenerationProjectInfo" ver="2"/>
+   </VersionInfos>
+   <mergePnt id="locationsDetails"/>
+   <mergePnt id="executedTestsDetails"/>
+   <Scope>
+      <ProjectInformations>
+         <ScopeProjectInfo fltFiles="54" fltLns="12215" project="dome-diorama/dome-diorama" totFiles="54" totLns="12215"/>
+      </ProjectInformations>
+   </Scope>
+   <CodingStandards ownerId="com.parasoft.xtest.checkers.api.standards" time="0:00:04">
+      <Projects>
+         <Project bdCheckedFiles="0" bdTotalFiles="0" checkedFiles="54" checkedLns="12215" name="dome-diorama" qfixErrs="0" suppErrs="0" totErrs="1" totFiles="54" totLns="12215"/>
+      </Projects>
+      <Rules>
+         <RulesList>
+            <Rule cat="CDD" desc="Avoid function duplication" id="CDD-DUPM" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CDD" desc="Avoid code duplication" id="CDD-DUPC" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CDD" desc="Avoid duplication of #include directives" id="CDD-DUPI" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CDD" desc="Avoid string literal duplication" id="CDD-DUPS" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="Local variables should not use the same names as member variables" id="CODSTA-44" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="Parameters should not use the same names as member variables" id="CODSTA-45" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="Do not declare the size of an array when the array is passed into a function as a parameter" id="CODSTA-15" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="Do not define constants via #define" id="CODSTA-03" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="If a function has no parameters, use ( ) instead of ( void )" id="CODSTA-07" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="A cast should not remove any 'const' qualification from the type of a pointer or reference" id="CODSTA-14" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="Shift and bitwise operations should not be performed on operands of essentially signed or enum type" id="CODSTA-161_e" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="The value of an expression shall not be assigned to an object with a narrower essential type" id="CODSTA-163_a" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="Floating-point expressions shall not be explicitly (syntactically) tested for equality (==) or inequality (!=)" id="CODSTA-225" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="If a pointer to a structure or union is never dereferenced within a translation unit, then the implementation of the object should be hidden" id="CODSTA-115" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="Avoid arithmetic operations in macros" id="CODSTA-38" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA" desc="Avoid switch statements with only one case" id="CODSTA-41" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Constructors allowing for conversion should be made explicit" id="CODSTA-CPP-04" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Do not use user-defined conversion functions" id="CODSTA-CPP-05" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="The first operand of a conditional-operator shall have type bool" id="CODSTA-CPP-65" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Copy operations must not mutate the source object" id="CODSTA-CPP-98" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Have assignment operator returns a reference to *this; make assignment operator's return type a non-const reference to it's class' type" id="CODSTA-CPP-02" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Bitwise operators, comparison operators, logical operators, comma operator should be const" id="CODSTA-CPP-03" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Postfix increment and decrement should be implemented in terms of their prefix counterparts" id="CODSTA-CPP-07" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Avoid overloading logical operators AND, OR (&amp;&amp;, ||)" id="CODSTA-CPP-08" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Do not compare objects of a class that may contain padding bits with C standard library functions" id="CODSTA-CPP-100" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="A relational operator shall return a boolean value" id="CODSTA-CPP-101" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Define special members as =default when the behavior is equivalent to the compiler's behavior" id="CODSTA-CPP-105" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="C-style casts should not be used" id="CODSTA-CPP-11" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="If you'd like to support mixed-mode operations make operators a non-member functions" id="CODSTA-CPP-20" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Avoid making any assignment operator virtual. Do not return const T&amp; from assignment operator" id="CODSTA-CPP-24" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Prefer non-member operators than member ones to support mixed-mode arithmetic" id="CODSTA-CPP-30" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Avoid using static_cast on pointers" id="CODSTA-CPP-34" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Avoid dynamic_casts" id="CODSTA-CPP-35" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Conversion operator, operator-&gt;, operator(), operator[] should be const" id="CODSTA-CPP-38" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Declare reference parameters as const references whenever possible" id="CODSTA-CPP-43" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Have the non-const version call the const version of member function instead of duplicating the const version definition" id="CODSTA-CPP-44" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Do not define inline functions in source files" id="CODSTA-CPP-51" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Consider using the natural relationship between the assignment version of an operator and the stand-alone version" id="CODSTA-CPP-52" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Declare local variable as const whenever possible" id="CODSTA-CPP-53" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Member functions shall be declared const whenever possible" id="CODSTA-CPP-54" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Literal zero (0) shall not be used as the null-pointer-constant" id="CODSTA-CPP-63" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="The unary &amp; operator shall not be overloaded" id="CODSTA-CPP-68" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Const member functions shall not return non-const pointers or references to class-data" id="CODSTA-CPP-77" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Avoid overloading comma operator &quot;,&quot;" id="CODSTA-CPP-80" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="The overloaded binary operator should be implemented in terms of its corresponding compound assignment operator" id="CODSTA-CPP-91" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Do not modify the standard namespaces 'std' and 'posix'" id="CODSTA-CPP-95" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Classes which have only getters/setters (accessors/mutators) are not allowed" id="CODSTA-CPP-81" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP" desc="Prefer iostream.h to stdio.h" id="CODSTA-CPP-01" sev="5">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-CPP-06" desc="Avoid returning handles to class data from member functions" id="CODSTA-CPP-06-DOWNGRADED" sev="5">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-MCPP" desc="User-conversion cast operators should be made explicit" id="CODSTA-MCPP-01" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-MCPP" desc="Prefer alias declarations to typedefs" id="CODSTA-MCPP-02" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-MCPP" desc="The only form of the null-pointer-constant should be 'nullptr'" id="CODSTA-MCPP-04" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-MCPP" desc="Each overriding virtual function shall be declared with the override or final specifier" id="CODSTA-MCPP-05" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-MCPP" desc="Declare copy constructor and copy assignment operators with the 'delete' specifier to prevent copying of class" id="CODSTA-MCPP-06_a" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-MCPP" desc="Declare copy constructor and copy assignment operators with the 'delete' specifier instead of using a base class with private methods to prevent copying of class" id="CODSTA-MCPP-06_b" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-MCPP" desc="If a public destructor of a class is non-virtual, then the class should be declared final" id="CODSTA-MCPP-23" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-MCPP" desc="Consider using 'std::unique_ptr' instead of 'std::shared_ptr' for local objects" id="CODSTA-MCPP-30" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-MCPP" desc="Do not introduce virtual functions in a final class" id="CODSTA-MCPP-52" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="CODSTA-MCPP" desc="Unscoped enumerations should not be declared" id="CODSTA-MCPP-03" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="EXCEPT" desc="Never allow an exception to be thrown from a destructor, deallocation, and swap" id="EXCEPT-01" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="EXCEPT" desc="Throw by value, catch by reference" id="EXCEPT-02" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="EXCEPT" desc="Do not throw from within destructor" id="EXCEPT-03" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="INIT" desc="Do not initialize a reference to an object whose address can be changed" id="INIT-05" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="INIT" desc="All member variables should be initialized in constructor" id="INIT-06" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="INIT" desc="Initialize static class members" id="INIT-09" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="INIT" desc="An assignment operator shall assign all data members" id="INIT-11" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="INIT" desc="List members in an initialization list in the order in which they are declared" id="INIT-10" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="INIT" desc="Avoid initialization order problems across translation units by replacing non-local static objects with local static objects" id="INIT-12" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="INIT" desc="Do not assume that members are initialized in any special order in constructors" id="INIT-13" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="INIT" desc="Prefer initialization to assignment in constructors" id="INIT-14" sev="5">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MISRA" desc="All automatic variables shall have been assigned a value before being used" id="MISRA-030" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MISRA2004" desc="Assignment operators shall not be used in expressions that yield a Boolean value" id="MISRA2004-13_1" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MISRA2004" desc="Floating-point expressions shall not be tested for equality or inequality" id="MISRA2004-13_3" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MISRA2004" desc="The controlling expression of a for statement shall not contain any objects of floating type" id="MISRA2004-13_4" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MISRA2004" desc="A pointer parameter in a function prototype should be declared as pointer to const if the pointer is not used to modify the addressed object" id="MISRA2004-16_7" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MISRA2004" desc="The address of an object with automatic storage shall not be returned from a function" id="MISRA2004-17_6_a" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MISRA2004" desc="A function should be used in preference to a function-like macro" id="MISRA2004-19_7" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MISRA2008" desc="Protected member functions shall not return non-const handles to class-data" id="MISRA2008-9_3_2_a" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MISRA2008" desc="Public member functions shall not return non-const handles to class-data" id="MISRA2008-9_3_2_b" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Use the same form in corresponding calls to new/malloc and delete/free" id="MRM-06" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Do not invoke malloc/realloc for objects having constructors" id="MRM-08" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Avoid hiding the global new" id="MRM-32" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Declare a copy assignment operator for classes with dynamically allocated memory" id="MRM-37" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Declare a copy constructor for classes with dynamically allocated memory" id="MRM-38" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Never return a dereferenced local pointer initialized by new in this function scope" id="MRM-23" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Call delete on pointer members in destructors" id="MRM-33" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="A copy constructor shall copy all data members and bases" id="MRM-41" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="An assignment operator shall assign all data bases" id="MRM-43" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Adhere to convention when writing new and delete" id="MRM-12" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Adhere to convention when writing new" id="MRM-13" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="If a class defines any overload of operator new, it should provide overloads of all three of plain, in-place, and non-throwing operator new" id="MRM-14" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="If a class defines any overload of operator new[], it should provide overloads of all three of plain, in-place, and non-throwing operator new[]" id="MRM-15" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="If a class defines any overload of operator delete, it should provide overloads of all three of plain, in-place, and non-throwing operator delete" id="MRM-16" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="If a class defines any overload of operator delete[], it should provide overloads of all three of plain, in-place, and non-throwing operator delete[]" id="MRM-17" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Do not allocate memory and expect that someone else will deallocate it later" id="MRM-18" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Do not allocate memory and expect that someone else will deallocate it later" id="MRM-19" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Do not allocate memory and expect that someone else will deallocate it later" id="MRM-20" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Use objects to manage resources" id="MRM-21" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Use objects to manage resources" id="MRM-22" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Write operator delete if you write operator new" id="MRM-26" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Write operator delete[] if you write operator new[]" id="MRM-27" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Always provide new and delete together" id="MRM-28" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Always provide new[] and delete[] together" id="MRM-29" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Freed memory shouldn't be accessed under any circumstances" id="MRM-31" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Destructor should not be called manually" id="MRM-31_b" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Never provide brackets ([]) for delete when deallocating non-arrays" id="MRM-35" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Always provide empty brackets ([]) for delete when deallocating arrays" id="MRM-36" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Both copy constructor and copy assignment operator should be declared for classes with a nontrivial destructor" id="MRM-40_d" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="Do not use calloc, malloc, realloc and free functions" id="MRM-46" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="MRM" desc="A copy constructor and a copy assignment operator shall be declared for classes that contain pointers to data items or nontrivial destructors" id="MRM-49" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="NAMING" desc="All &quot;#define&quot; constants shall be in uppercase" id="NAMING-01" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Class cannot inherit other class more than once unless it is virtual inheritance" id="OOP-03" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Be wary about using multiple inheritance of classes that are not abstract interfaces" id="OOP-07" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Do not directly access global data from a constructor" id="OOP-08" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Avoid calling virtual functions from constructors" id="OOP-16" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Avoid calling virtual functions from destructors" id="OOP-16_b" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Define a virtual destructor in classes used as base classes which have virtual functions" id="OOP-22" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Make destructors virtual in base classes" id="OOP-24" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="A pointer to an abstract class shall not be converted to a pointer of a class that inherits from that abstract class" id="OOP-29" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Make base class destructors public and virtual, or protected and nonvirtual" id="OOP-31" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="If a class destructor is called and the class has virtual functions it shall have a virtual destructor" id="OOP-38" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Casts from a base class to a derived class should not be performed on polymorphic types" id="OOP-49" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Avoid &quot;public&quot; data members" id="OOP-18" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Avoid 'protected' data members" id="OOP-19" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="If a class has virtual functions it shall have a virtual destructor" id="OOP-23" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Down casting (casting from base to derived class) shall not be allowed" id="OOP-35" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Do not derive functions with the same name from more than one base class" id="OOP-04" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="For multiple inheritance use virtual common base class" id="OOP-06" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Avoid using the friend mechanism" id="OOP-11" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Protected member function shall not return non-const handles to private class-data" id="OOP-12" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Do not redefine an inherited virtual function with a different default parameter value" id="OOP-13" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Avoid explicit cast from derived to a base class" id="OOP-20" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Avoid declaring virtual functions inline" id="OOP-25" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Declare copy assignment operator for class with reference or const members" id="OOP-27" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Member functions declared in derived classes should not hide equivalent functions declared in base classes" id="OOP-32" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Do not redefine an inherited nonvirtual function with template parameter" id="OOP-33" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Public member functions shall not return non-const handles to private/protected class-data" id="OOP-36" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Member functions declared in derived classes should not hide non-equivalent functions declared in base classes" id="OOP-53" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Write a using declaration to redeclare overloaded functions" id="OOP-17" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="User-provided copy assignment operators shall handle self-assignment" id="OOP-34" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Consider use composition instead of private inheritance" id="OOP-14" sev="5">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP" desc="Prefer composition when don't need inheritance" id="OOP-37" sev="5">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OOP-05" desc="Do not use multiple inheritance" id="OOP-05-DOWNGRADED" sev="5">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Eliminate unused parameters" id="OPT-03" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Variables will not be introduced until they can be initialized with meaningful values" id="OPT-26" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Declare variables as locally as possible" id="OPT-01" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Prefer &quot;a @= b&quot; than &quot;a = a @ b&quot;, where &quot;@&quot; is +, -, *, /, %" id="OPT-07" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Prefer &quot;a @= b&quot; than &quot;a = a @ b&quot;, where &quot;@&quot; is &amp;, |, ^, &lt;&lt;, &gt;&gt;" id="OPT-08" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Pass objects by reference instead of by value" id="OPT-14" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Global function containing recursion, loops or virtual function call should not be inlined" id="OPT-16" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Member function containing recursion or loops should not be inlined" id="OPT-18" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Consider using op= instead of stand-alone op" id="OPT-19" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Postpone variable definitions as long as possible" id="OPT-20" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Every switch statement shall have at least two switch-clauses" id="OPT-39" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="A project should not contain unused local variables" id="OPT-02" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Trivial accessor and mutator functions should be inlined" id="OPT-23" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Trivial forwarding functions should be inlined" id="OPT-24" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Remove unnecessary '== true'" id="OPT-09" sev="5">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT" desc="Consider returning object by reference instead of by value" id="OPT-33" sev="5">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="OPT-13" desc="Declare member variables in the descending size order" id="OPT-13-DOWNGRADED" sev="5">
+               <Stats authTot="1;" total="1"/>
+            </Rule>
+            <Rule cat="PB" desc="Do not call delete on non-pointers" id="PB-13" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PB" desc="Properly terminate character strings" id="PB-21" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PB" desc="The class object should be passed by reference if the class has non-static pointers and has no declared copy constructor" id="PB-23" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PB" desc="Operators should not return value by reference" id="PB-09" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PB" desc="A string literal shall not be modified" id="PB-27" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PB" desc="Don't treat arrays polymorphically" id="PB-10" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PB" desc="Don't assign the dividend of two integers to a floating-point type" id="PB-15" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PB" desc="Avoid overloading class methods on a pointer and a numerical type" id="PB-18" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PB" desc="Do not create inline non-member functions that contain local static data" id="PB-19" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PB" desc="An element of an object shall not be initialized more than once" id="PB-69" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PFO" desc="Use mechanism that prevents multiple inclusion of the file i.e. include guards or &quot;#pragma once&quot; preprocessor directive" id="PFO-08" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="PORT" desc="Don't use hard coded value of offset in structures" id="PORT-03" sev="2">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="SECURITY" desc="Never use gets()" id="SECURITY-16" sev="1">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="STL" desc="When calling swap, employ a using declaration for std::swap, then call swap without namespace qualification" id="STL-40" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="STL" desc="Do not declare the non-member to be an overloading of std::swap" id="STL-41" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="STL" desc="Member version of swap should never throw exceptions" id="STL-42" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="STL-37" desc="C-style arrays shall not be used" id="STL-37-DOWNGRADED" sev="4">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="TEMPL" desc="Define non-member functions inside templates when type conversions are desired" id="TEMPL-02" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="TEMPL" desc="In template global functions use 'typename' to identify nested dependent type names" id="TEMPL-04" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+            <Rule cat="TEMPL" desc="In template classes use 'typename' to identify nested dependent type names" id="TEMPL-05" sev="3">
+               <Stats authTot="0;" total="0"/>
+            </Rule>
+         </RulesList>
+         <CategoriesList>
+            <Category desc="Code Duplication Detection" name="CDD" total="4">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Coding Conventions" name="CODSTA" total="570">
+               <Category desc="Coding Conventions for C++" name="CODSTA-CPP" total="136">
+                  <Category desc="UNKNOWN" name="CODSTA-CPP-06" total="1">
+                     <Stats authTot="0;" total="0"/>
+                  </Category>
+                  <Stats authTot="0;" total="0"/>
+               </Category>
+               <Category desc="Coding Conventions for Modern C++" name="CODSTA-MCPP" total="82">
+                  <Stats authTot="0;" total="0"/>
+               </Category>
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Exceptions" name="EXCEPT" total="27">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Initialization" name="INIT" total="25">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="MISRA C 1998" name="MISRA" total="62">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="MISRA C 2004" name="MISRA2004" total="226">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="MISRA C++ 2008" name="MISRA2008" total="346">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Memory and Resource Management" name="MRM" total="67">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Naming Conventions" name="NAMING" total="107">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Object Oriented" name="OOP" total="63">
+               <Category desc="UNKNOWN" name="OOP-05" total="1">
+                  <Stats authTot="0;" total="0"/>
+               </Category>
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Optimization" name="OPT" total="54">
+               <Category desc="UNKNOWN" name="OPT-13" total="1">
+                  <Stats authTot="1;" total="1"/>
+               </Category>
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Possible Bugs" name="PB" total="90">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Physical File Organization" name="PFO" total="12">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Portability" name="PORT" total="40">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Security" name="SECURITY" total="57">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="STL Best Practices" name="STL" total="42">
+               <Category desc="UNKNOWN" name="STL-37" total="1">
+                  <Stats authTot="0;" total="0"/>
+               </Category>
+               <Stats authTot="0;" total="0"/>
+            </Category>
+            <Category desc="Template" name="TEMPL" total="20">
+               <Stats authTot="0;" total="0"/>
+            </Category>
+         </CategoriesList>
+         <SeverityList>
+            <Severity id="5">
+               <Stats authTot="1;" total="1"/>
+            </Severity>
+         </SeverityList>
+      </Rules>
+      <mergePnt id="csViolations"/>
+      <Supps/>
+      <mergePnt id="testedFilesDetails"/>
+   </CodingStandards>
+   <AssocUrls/>
+</ResultsSession>

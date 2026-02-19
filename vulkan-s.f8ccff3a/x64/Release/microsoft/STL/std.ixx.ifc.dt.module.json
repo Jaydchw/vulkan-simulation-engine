@@ -1,0 +1,22 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "vulkan-s.f8ccff3a\\x64\\Release\\microsoft\\STL\\std.obj",
+            "outputs": [
+                "vulkan-s.f8ccff3a\\x64\\Release\\microsoft\\STL\\std.ixx.ifc.dt.module.json",
+                "vulkan-s.f8ccff3a\\x64\\Release\\microsoft\\STL\\std.ixx.ifc.dt.d.json",
+                "vulkan-s.f8ccff3a\\x64\\Release\\microsoft\\STL\\std.ifc"
+            ],
+            "provides": [
+                {
+                    "logical-name": "std",
+                    "source-path": "c:\\program files\\microsoft visual studio\\18\\insiders\\vc\\tools\\msvc\\14.50.35717\\modules\\std.ixx",
+                    "is-interface": true
+                }
+            ],
+            "requires": []
+        }
+    ]
+}
