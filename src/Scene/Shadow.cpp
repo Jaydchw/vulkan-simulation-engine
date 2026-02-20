@@ -417,19 +417,19 @@ void ShadowSystem::updateLightSpaceMatrix(uint32_t shadowMapIndex,
   }
 }
 
-glm::mat4 ShadowSystem::calculateLightSpaceMatrix(const Light& light,
-                                                  const glm::vec3& sceneCenter,
-                                                  float sceneRadius) const {
+glm::mat4 ShadowSystem::calculateLightSpaceMatrix(const LightComponent& light,
+                                                   const TransformComponent& transform,
+                                                   const glm::vec3& sceneCenter,
+                                                   float sceneRadius) const {
   glm::mat4 lightProjection;
   glm::mat4 lightView;
 
-  if (light.getType() == LightType::Sun) {
+  if (light.type == LightType::Sun) {
     const float orthoSize = sceneRadius * 1.2f;
     const float nearPlane = 1.0f;
     const float farPlane = sceneRadius * 6.0f;
 
-    glm::vec3 lightDir;
-    light.getDirection(lightDir);
+    const glm::vec3 lightDir = light.direction;
     const glm::vec3 lightPos =
         sceneCenter -
         glm::normalize(lightDir) * (sceneRadius * 3.0f);
@@ -445,18 +445,17 @@ glm::mat4 ShadowSystem::calculateLightSpaceMatrix(const Light& light,
                                  nearPlane, farPlane);
     lightProjection[1][1] *= -1;
 
-  } else if (light.getType() == LightType::Point) {
+  } else if (light.type == LightType::Point) {
     constexpr float fov = glm::radians(120.0f);
     const float aspect = 1.0f;
     const float nearPlane = 0.1f;
 
     const float maxDistance =
-        glm::sqrt(light.getIntensity() / (light.getQuadratic() * 0.01f));
+        glm::sqrt(light.intensity / (light.quadratic * 0.01f));
     const float farPlane = glm::min(maxDistance, 500.0f);
 
     glm::vec3 targetPos = sceneCenter;
-    glm::vec3 lightPos;
-    light.getPosition(lightPos);
+    glm::vec3 lightPos = transform.position;
     const glm::vec3 toScene = targetPos - lightPos;
     if (glm::length(toScene) > 0.001f) {
       targetPos = lightPos + glm::normalize(toScene) * 10.0f;

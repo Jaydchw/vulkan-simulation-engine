@@ -7,14 +7,13 @@
 #include <stdexcept>
 
 #include "../stb_image.h"
-#include "Resources/Object.h"
 #include "Util/Debug.h"
 
 void Skybox::render(VkCommandBuffer const commandBuffer,
-                    VkDescriptorSet cameraDescriptorSet,
-                    const VkExtent2D& extent, const Object* domeObject,
-                    float timeOfDay, float sunIntensity) const {
-  if (domeObject && !domeObject->isVisible()) return;
+                  VkDescriptorSet cameraDescriptorSet,
+                  const VkExtent2D& extent, bool domeVisible,
+                  float timeOfDay, float sunIntensity) const {
+if (!domeVisible) return;
 
   vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 

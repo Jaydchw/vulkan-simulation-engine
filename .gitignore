@@ -2,3 +2,4 @@
 *.ipch
 /.vs/vulkan-simulation-engine/v18/Insiders
 /.vs
+*.tlog

@@ -32,8 +32,10 @@ void Application::init() {
   initVulkan();
 }
 
-void Application::setScene(const std::vector<Object>& objects) {
-  sceneObjects = objects;
+void Application::setRegistry(Registry& reg) {
+  registry = &reg;
+  lightManager->setRegistry(registry);
+  lightManager->syncLights();
 }
 
 void Application::run() {
@@ -125,8 +127,8 @@ void Application::mainLoop() {
       simState.stepFrame = false;
     }
 
-    interface->render(simState, sceneSettings, sceneObjects, mainPipeline.get(),
-                      postProcessing.get());
+    interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
+                       postProcessing.get());
 
     if (!ImGui::GetIO().WantCaptureMouse &&
         !ImGui::GetIO().WantCaptureKeyboard) {
@@ -617,14 +619,18 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     } shadowPush;
     shadowPush.lightSpaceMatrix = shadowMap.lightSpaceMatrix;
 
-    for (const auto& object : sceneObjects) {
-      if (!object.isVisible() || object.getMeshID() == INVALID_MESH_ID)
+    for (const auto& entity : registry->getEntities()) {
+      const auto* renderComp = registry->getComponent<RenderComponent>(entity);
+      const auto* meshComp = registry->getComponent<MeshComponent>(entity);
+      const auto* transformComp = registry->getComponent<TransformComponent>(entity);
+      if (!renderComp || !meshComp || !transformComp) continue;
+      if (!renderComp->visible || meshComp->meshID == INVALID_MESH_ID)
         continue;
-      shadowPush.model = object.getModelMatrix();
+      shadowPush.model = transformComp->getModelMatrix();
       vkCmdPushConstants(commandBuffer, shadowPipelineLayout,
                          VK_SHADER_STAGE_VERTEX_BIT, 0,
                          sizeof(ShadowPushConstants), &shadowPush);
-      const Mesh* const mesh = meshManager->getMesh(object.getMeshID());
+      const Mesh* const mesh = meshManager->getMesh(meshComp->meshID);
       if (!mesh || mesh->getVertexBuffer() == VK_NULL_HANDLE) continue;
       VkBuffer vertexBuffers[] = {mesh->getVertexBuffer()};
       VkDeviceSize offsets[] = {0};
@@ -666,20 +672,26 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
                     mainPipeline->getPipeline());
   setupViewportScissor(commandBuffer, static_cast<float>(swapChainExtent.width),
                        static_cast<float>(swapChainExtent.height));
-  for (size_t i = 0; i < sceneObjects.size(); ++i) {
-    const auto& object = sceneObjects[i];
-    if (!object.isVisible() || object.getMeshID() == INVALID_MESH_ID ||
-        object.getMaterialID() == INVALID_MATERIAL_ID)
+  auto entities = registry->getEntities();
+  for (size_t i = 0; i < entities.size(); ++i) {
+    Entity entity = entities[i];
+    const auto* renderComp = registry->getComponent<RenderComponent>(entity);
+    const auto* meshComp = registry->getComponent<MeshComponent>(entity);
+    const auto* materialComp = registry->getComponent<MaterialComponent>(entity);
+    const auto* transformComp = registry->getComponent<TransformComponent>(entity);
+    if (!renderComp || !meshComp || !materialComp || !transformComp) continue;
+    if (!renderComp->visible || meshComp->meshID == INVALID_MESH_ID ||
+        materialComp->materialID == INVALID_MATERIAL_ID)
       continue;
-    const Mesh* const mesh = meshManager->getMesh(object.getMeshID());
+    const Mesh* const mesh = meshManager->getMesh(meshComp->meshID);
     const Material* const material =
-        materialManager->getMaterial(object.getMaterialID());
+        materialManager->getMaterial(materialComp->materialID);
     if (!mesh || mesh->getVertexBuffer() == VK_NULL_HANDLE || !material ||
         material->getDescriptorSet() == VK_NULL_HANDLE)
       continue;
     StandardPushConstants pushConstants;
-    pushConstants.model = object.getModelMatrix();
-    pushConstants.layerMask = object.getLayerMask();
+    pushConstants.model = transformComp->getModelMatrix();
+    pushConstants.layerMask = renderComp->layerMask;
     pushConstants.cameraLayer = 0xFFFFFFFF;
     vkCmdPushConstants(
         commandBuffer, mainPipeline->getPipelineLayout(),

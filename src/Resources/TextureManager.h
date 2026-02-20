@@ -17,6 +17,9 @@ class TextureManager final {
   TextureID load(const TextureCreateInfo& createInfo);
   TextureID load(const std::string& filepath,
                  TextureType type = TextureType::sRGB);
+  TextureID createFromPixels(const unsigned char* pixels, uint32_t width,
+                             uint32_t height,
+                             TextureType type = TextureType::sRGB);
 
   VkImageView getImageView(TextureID id) const;
   VkSampler getSampler(TextureID id) const;

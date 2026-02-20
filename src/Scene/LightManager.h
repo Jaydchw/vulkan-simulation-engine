@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 
-#include "Light.h"
+#include "ECS/Registry.h"
 #include "Rendering/RenderDevice.h"
 #include "Shadow.h"
 #include "Util/Debug.h"
@@ -47,16 +47,13 @@ class LightManager final {
   LightManager& operator=(const LightManager&) = delete;
 
   void init();
-  LightID addLight(const Light& light);
-  Light* getLight(LightID id);
-  void updateLight(LightID id, const Light& light);
-  void removeLight(LightID id);
+  void setRegistry(Registry* reg);
+  void syncLights();
   void updateLightBuffer();
-  void updateLightSpaceMatrix(LightID id, const glm::mat4& matrix);
   void cleanup();
 
   VkBuffer getLightBuffer() const { return lightBuffer; }
-  int getLightCount() const { return static_cast<int>(lights.size()); }
+  int getLightCount() const { return lightCount; }
 
   VkDescriptorSetLayout getShadowDescriptorSetLayout() const {
     return shadowSystem->getShadowDescriptorSetLayout();
@@ -77,16 +74,16 @@ class LightManager final {
   ShadowSystem* getShadowSystem() const { return shadowSystem.get(); }
 
   void updateAllShadowMatrices(const glm::vec3& sceneCenter, float sceneRadius);
-  void setShadowCastingEnabled(LightID id, bool enabled);
   void debugPrintLightInfo() const;
 
  private:
-  std::vector<std::unique_ptr<Light>> lights;
+  Registry* registry = nullptr;
   std::unique_ptr<ShadowSystem> shadowSystem;
   RenderDevice* renderDevice;
   void* lightBufferMapped;
   VkBuffer lightBuffer;
   VkDeviceMemory lightBufferMemory;
+  int lightCount = 0;
 
   void createLightBuffer();
 };

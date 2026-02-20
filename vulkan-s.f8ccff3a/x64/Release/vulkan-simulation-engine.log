@@ -1,1 +1,9 @@
-﻿
+﻿  Application.cpp
+  MaterialManager.cpp
+  TextureManager.cpp
+  main.cpp
+  Generating code
+  Previous IPDB and IOBJ mismatch, fall back to full compilation.
+  All 6272 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  vulkan-simulation-engine.vcxproj -> D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\x64\Release\vulkan-simulation-engine.exe

@@ -192,9 +192,9 @@ void Interface::createImGuiRenderPass() {
 }
 
 void Interface::render(SimulationState& simState, SceneSettings& sceneSettings,
-                       const std::vector<Object>& objects,
-                       MainPipeline* mainPipeline,
-                       PostProcessing* postProcessing) {
+const Registry& registry,
+MainPipeline* mainPipeline,
+PostProcessing* postProcessing) {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
@@ -205,7 +205,7 @@ void Interface::render(SimulationState& simState, SceneSettings& sceneSettings,
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Objects")) {
-      renderObjectsMenu(objects);
+      renderObjectsMenu(registry);
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Scene")) {
@@ -247,20 +247,30 @@ void Interface::renderSimulationMenu(SimulationState& simState) {
   ImGui::Text("Time: %.2f", simState.currentTime);
 }
 
-void Interface::renderObjectsMenu(const std::vector<Object>& objects) {
-  for (size_t i = 0; i < objects.size(); ++i) {
-    std::string name;
-    objects[i].getName(name);
+void Interface::renderObjectsMenu(const Registry& registry) {
+  auto entities = registry.getEntities();
+  for (size_t i = 0; i < entities.size(); ++i) {
+    Entity entity = entities[i];
+    const auto* nameComp = registry.getComponent<NameComponent>(entity);
+    std::string name = nameComp ? nameComp->name : "Unknown";
     ImGui::Text("%s", name.c_str());
 
     if (ImGui::IsItemHovered()) {
       ImGui::BeginTooltip();
-      ImGui::Text("ID: %zu", i);
-      glm::vec3 pos;
-      objects[i].getPosition(pos);
-      ImGui::Text("Pos: %.2f, %.2f, %.2f", pos.x, pos.y, pos.z);
-      ImGui::Text("Mesh ID: %u", objects[i].getMeshID());
-      ImGui::Text("Material ID: %u", objects[i].getMaterialID());
+      ImGui::Text("Entity: %u", entity);
+      const auto* transform = registry.getComponent<TransformComponent>(entity);
+      if (transform) {
+        ImGui::Text("Pos: %.2f, %.2f, %.2f", transform->position.x,
+                    transform->position.y, transform->position.z);
+      }
+      const auto* meshComp = registry.getComponent<MeshComponent>(entity);
+      if (meshComp) {
+        ImGui::Text("Mesh ID: %u", meshComp->meshID);
+      }
+      const auto* materialComp = registry.getComponent<MaterialComponent>(entity);
+      if (materialComp) {
+        ImGui::Text("Material ID: %u", materialComp->materialID);
+      }
       ImGui::EndTooltip();
     }
   }

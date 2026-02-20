@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "../Resources/Object.h"
+#include "../ECS/Registry.h"
 
 class MainPipeline;
 class PostProcessing;
@@ -44,7 +44,7 @@ class Interface {
   void cleanup();
 
   void render(SimulationState& simState, SceneSettings& sceneSettings,
-              const std::vector<Object>& objects, MainPipeline* mainPipeline,
+              const Registry& registry, MainPipeline* mainPipeline,
               PostProcessing* postProcessing);
 
   void draw(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -71,7 +71,7 @@ class Interface {
   void createImGuiRenderPass();
   void applyScalePreset();
   void renderSimulationMenu(SimulationState& simState);
-  void renderObjectsMenu(const std::vector<Object>& objects);
+  void renderObjectsMenu(const Registry& registry);
   void renderSceneMenu(SceneSettings& sceneSettings,
                        MainPipeline* mainPipeline);
   void renderPostProcessingMenu(PostProcessing* postProcessing);

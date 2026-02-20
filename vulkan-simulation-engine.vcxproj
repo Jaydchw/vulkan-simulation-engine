@@ -191,7 +191,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Application.h" />
+    <ClInclude Include="src\ECS\Components.h" />
+    <ClInclude Include="src\ECS\Entity.h" />
+    <ClInclude Include="src\ECS\EntityBuilder.h" />
+    <ClInclude Include="src\ECS\Registry.h" />
     <ClInclude Include="src\Rendering\MainPipeline.h" />
+    <ClInclude Include="src\Resources\ProceduralTexture.h" />
     <ClInclude Include="src\Util\Interface.h" />
     <ClInclude Include="src\Util\RenderUtils.h" />
     <ClInclude Include="src\Rendering\Window.h" />
@@ -202,12 +207,10 @@
     <ClInclude Include="src\Util\ConfigParser.h" />
     <ClInclude Include="src\Util\Debug.h" />
     <ClInclude Include="src\Util\Input.h" />
-    <ClInclude Include="src\Scene\Light.h" />
     <ClInclude Include="src\Scene\LightManager.h" />
     <ClInclude Include="src\Resources\Material.h" />
     <ClInclude Include="src\Resources\MaterialManager.h" />
     <ClInclude Include="src\Resources\MeshManager.h" />
-    <ClInclude Include="src\Resources\Object.h" />
     <ClInclude Include="src\Rendering\PostProcessing.h" />
     <ClInclude Include="src\Rendering\RenderDevice.h" />
     <ClInclude Include="src\Vulkan\VulkanCommandBuffer.h" />

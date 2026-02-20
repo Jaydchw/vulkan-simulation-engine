@@ -12,7 +12,6 @@
 #include "../Util/RenderUtils.h"
 #include "../stb_image.h"
 #include "Rendering/RenderDevice.h"
-#include "Resources/Object.h"
 #include "Util/Debug.h"
 
 class Skybox final {
@@ -72,7 +71,7 @@ class Skybox final {
 
   void render(VkCommandBuffer const commandBuffer,
               VkDescriptorSet cameraDescriptorSet, const VkExtent2D& extent,
-              const Object* domeObject, float timeOfDay,
+              bool domeVisible, float timeOfDay,
               float sunIntensity) const;
 
   VkDescriptorSetLayout getDescriptorSetLayout() const {

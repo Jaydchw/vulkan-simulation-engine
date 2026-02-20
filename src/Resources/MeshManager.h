@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "Rendering/RenderDevice.h"
-#include "Resources/Object.h"
+#include "ECS/Components.h"
 
 struct Vertex {
   glm::vec3 pos;

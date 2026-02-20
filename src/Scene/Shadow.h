@@ -8,7 +8,7 @@
 
 #include "../Rendering/RenderDevice.h"
 #include "../Util/Debug.h"
-#include "Light.h"
+#include "ECS/Components.h"
 
 constexpr uint32_t SHADOW_MAP_SIZE = 16384;
 constexpr uint32_t MAX_SHADOW_CASTERS = 4;
@@ -45,9 +45,10 @@ class ShadowSystem final {
   uint32_t createShadowMap(uint32_t lightIndex);
   void cleanup();
 
-  glm::mat4 calculateLightSpaceMatrix(const Light& light,
-                                      const glm::vec3& sceneCenter,
-                                      float sceneRadius) const;
+  glm::mat4 calculateLightSpaceMatrix(const LightComponent& light,
+                                       const TransformComponent& transform,
+                                       const glm::vec3& sceneCenter,
+                                       float sceneRadius) const;
 
   void updateLightSpaceMatrix(uint32_t shadowMapIndex, const glm::mat4& matrix);
 

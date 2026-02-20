@@ -74,6 +74,12 @@ TextureID TextureManager::load(const std::string& filepath, TextureType type) {
   return load(createInfo);
 }
 
+TextureID TextureManager::createFromPixels(const unsigned char* pixels,
+                                           uint32_t width, uint32_t height,
+                                           TextureType type) {
+  return createDefaultTexture(pixels, width, height, type);
+}
+
 VkImageView TextureManager::getImageView(TextureID id) const {
   if (id >= textures.size()) {
     Debug::log(Debug::Category::TEXTURE,

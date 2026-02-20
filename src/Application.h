@@ -12,7 +12,7 @@
 #include "Rendering/Window.h"
 #include "Resources/MaterialManager.h"
 #include "Resources/MeshManager.h"
-#include "Resources/Object.h"
+#include "ECS/Registry.h"
 #include "Resources/TextureManager.h"
 #include "Scene/LightManager.h"
 #include "Util/Camera.h"
@@ -52,18 +52,19 @@ class Application final {
   Application& operator=(const Application&) = delete;
 
   void init();
-  void setScene(const std::vector<Object>& objects);
+  void setRegistry(Registry& reg);
   void run();
 
   MeshManager* getMeshManager() const { return meshManager.get(); }
   MaterialManager* getMaterialManager() const { return materialManager.get(); }
+  TextureManager* getTextureManager() const { return textureManager.get(); }
   LightManager* getLightManager() const { return lightManager.get(); }
 
   void setCameraPreset(int presetIndex);
   void resetApplication();
 
  private:
-  std::vector<Object> sceneObjects;
+  Registry* registry = nullptr;
   std::vector<VkImage> swapChainImages;
   std::vector<VkImageView> swapChainImageViews;
   std::vector<VkBuffer> uniformBuffers;
