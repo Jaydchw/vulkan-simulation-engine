@@ -97,7 +97,9 @@ void LightManager::updateLightBuffer() {
     glm::vec3 pos = transform ? transform->position : glm::vec3(0.0f);
 
     lbo.lights[i].position = glm::vec4(pos, 1.0f);
-    lbo.lights[i].direction = glm::vec4(light.direction, 0.0f);
+    lbo.lights[i].direction = (light.type == LightType::Sun)
+                                  ? glm::vec4(light.direction, 0.0f)
+                                  : glm::vec4(0.0f);
     lbo.lights[i].color = glm::vec4(light.color, 1.0f);
     lbo.lights[i].intensity = light.intensity;
     lbo.lights[i].constant = light.constant;
@@ -185,8 +187,10 @@ void LightManager::debugPrintLightInfo() const {
                  ", ", transform->position.y, ", ", transform->position.z, ")");
     }
 
-    Debug::log(Debug::Category::LIGHTS, " Direction: (", light.direction.x,
-               ", ", light.direction.y, ", ", light.direction.z, ")");
+    if (light.type == LightType::Sun) {
+      Debug::log(Debug::Category::LIGHTS, " Direction: (", light.direction.x,
+                 ", ", light.direction.y, ", ", light.direction.z, ")");
+    }
     Debug::log(Debug::Category::LIGHTS, " Intensity: ", light.intensity);
     Debug::log(Debug::Category::LIGHTS,
                " Casts Shadows: ", (light.castsShadows ? "Yes" : "No"));

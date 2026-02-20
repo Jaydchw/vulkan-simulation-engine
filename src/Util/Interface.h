@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../ECS/Entity.h"
 #include "../ECS/Registry.h"
 
 class MainPipeline;
@@ -37,6 +38,7 @@ enum class UIScalePreset { Small, Normal, Large, XL };
 struct GeneralSettings {
   UIScalePreset scalePreset = UIScalePreset::Normal;
   bool showFPS = true;
+  bool showLightGizmos = false;
 };
 
 class Interface {
@@ -52,10 +54,15 @@ class Interface {
   void cleanup();
 
   void render(SimulationState& simState, SceneSettings& sceneSettings,
-              const Registry& registry, MainPipeline* mainPipeline,
+              Registry& registry, MainPipeline* mainPipeline,
               PostProcessing* postProcessing);
 
   void draw(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+  Entity getSelectedEntity() const { return selectedEntity; }
+  Entity getHoveredEntity() const { return hoveredEntity; }
+  bool getShowLightGizmos() const { return generalSettings.showLightGizmos; }
+  void clearSelection() { selectedEntity = INVALID_ENTITY; hoveredEntity = INVALID_ENTITY; }
 
   void setWorldLoadCallback(std::function<void(const std::string&)> callback);
   void setWorldDirectory(const std::string& dir);
@@ -78,6 +85,10 @@ class Interface {
   VkExtent2D currentExtent;
 
   GeneralSettings generalSettings;
+  float currentScale = 1.0f;
+
+  Entity selectedEntity = INVALID_ENTITY;
+  Entity hoveredEntity = INVALID_ENTITY;
 
   std::string worldDirectory;
   std::vector<std::string> worldFiles;
@@ -96,7 +107,7 @@ class Interface {
   void applyScalePreset();
   void renderWorldsMenu();
   void renderSimulationMenu(SimulationState& simState);
-  void renderObjectsMenu(const Registry& registry);
+  void renderObjectsMenu(Registry& registry);
   void renderSceneMenu(SceneSettings& sceneSettings,
                        MainPipeline* mainPipeline);
   void renderPostProcessingMenu(PostProcessing* postProcessing);

@@ -39,9 +39,11 @@ void Application::setRegistry(Registry& reg) {
 }
 
 void Application::loadWorld(const std::string& filepath) {
-  vkDeviceWaitIdle(device);
+vkDeviceWaitIdle(device);
 
-  ownedRegistry = std::make_unique<Registry>();
+if (interface) interface->clearSelection();
+
+ownedRegistry = std::make_unique<Registry>();
   registry = ownedRegistry.get();
 
   WorldSettings worldSettings;
@@ -108,9 +110,11 @@ void Application::initVulkan() {
   materialManager = std::make_unique<MaterialManager>(renderDevice.get(),
                                                       textureManager.get());
   meshManager = std::make_unique<MeshManager>(renderDevice.get());
+  gizmoMeshID = meshManager->createSphere(0.3f, 16);
   lightManager = std::make_unique<LightManager>(renderDevice.get());
   descriptorPool = Vulkan::createDescriptorPool(device, MAX_FRAMES_IN_FLIGHT);
   materialManager->init(materialDescriptorSetLayout, descriptorPool);
+  gizmoMaterialID = materialManager->getDefaultMaterial();
   lightManager->init();
   mainPipeline =
       std::make_unique<MainPipeline>(device, swapChainImageFormat, depthFormat);
@@ -822,6 +826,13 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     pushConstants.model = transformComp->getModelMatrix();
     pushConstants.layerMask = renderComp->layerMask;
     pushConstants.cameraLayer = 0xFFFFFFFF;
+    pushConstants.highlightIntensity = 0.0f;
+    if (interface) {
+      if (entity == interface->getSelectedEntity())
+        pushConstants.highlightIntensity = 0.25f;
+      else if (entity == interface->getHoveredEntity())
+        pushConstants.highlightIntensity = 0.12f;
+    }
     vkCmdPushConstants(
         commandBuffer, mainPipeline->getPipelineLayout(),
         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
@@ -842,6 +853,72 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0,
                      0, 0);
   }
+
+  // Render sphere gizmos for point lights
+  if (interface && gizmoMeshID != INVALID_MESH_ID) {
+    const Mesh* gizmoMesh = meshManager->getMesh(gizmoMeshID);
+    const Material* gizmoMat = materialManager->getMaterial(gizmoMaterialID);
+    if (gizmoMesh && gizmoMesh->getVertexBuffer() != VK_NULL_HANDLE &&
+        gizmoMat && gizmoMat->getDescriptorSet() != VK_NULL_HANDLE) {
+      // Collect which entities need a gizmo
+      Entity selEntity = interface->getSelectedEntity();
+      Entity hovEntity = interface->getHoveredEntity();
+      bool showAll = interface->getShowLightGizmos();
+
+      auto drawGizmo = [&](Entity e, float highlight) {
+        const auto* tc = registry->getComponent<TransformComponent>(e);
+        if (!tc) return;
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), tc->position);
+        StandardPushConstants gizmoPush;
+        gizmoPush.model = model;
+        gizmoPush.layerMask = 0xFFFFFFFF;
+        gizmoPush.cameraLayer = 0xFFFFFFFF;
+        gizmoPush.highlightIntensity = highlight;
+        vkCmdPushConstants(
+            commandBuffer, mainPipeline->getPipelineLayout(),
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+            sizeof(StandardPushConstants), &gizmoPush);
+        VkBuffer vb[] = {gizmoMesh->getVertexBuffer()};
+        VkDeviceSize off[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vb, off);
+        vkCmdBindIndexBuffer(commandBuffer, gizmoMesh->getIndexBuffer(), 0,
+                             VK_INDEX_TYPE_UINT16);
+        VkDescriptorSet ds[] = {descriptorSets[currentFrame],
+                                gizmoMat->getDescriptorSet(),
+                                lightManager->getShadowDescriptorSet()};
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                mainPipeline->getPipelineLayout(), 0, 3, ds, 0,
+                                nullptr);
+        std::vector<uint16_t> idx;
+        gizmoMesh->getIndices(idx);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(idx.size()), 1, 0,
+                         0, 0);
+      };
+
+      if (showAll) {
+        // Draw a gizmo for every point light
+        for (Entity e : entities) {
+          if (!registry->hasComponent<LightComponent>(e)) continue;
+          const auto* lc = registry->getComponent<LightComponent>(e);
+          if (!lc || lc->type == LightType::Sun) continue;
+          float hl = (e == selEntity) ? 0.4f : (e == hovEntity) ? 0.25f : 0.15f;
+          drawGizmo(e, hl);
+        }
+      } else {
+        // Draw gizmo only for selected or hovered point light
+        Entity gizmoEntity = selEntity;
+        if (gizmoEntity == INVALID_ENTITY) gizmoEntity = hovEntity;
+        if (gizmoEntity != INVALID_ENTITY &&
+            registry->hasComponent<LightComponent>(gizmoEntity)) {
+          const auto* lc = registry->getComponent<LightComponent>(gizmoEntity);
+          if (lc && lc->type != LightType::Sun) {
+            drawGizmo(gizmoEntity, 0.4f);
+          }
+        }
+      }
+    }
+  }
+
   postProcessing->endOffscreenPass(commandBuffer);
 
   VkImageMemoryBarrier2 swapchainBarrier{};

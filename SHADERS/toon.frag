@@ -4,8 +4,9 @@ layout(binding = 0) uniform sampler2D screenTexture;
 
 // Keep PushConstants compatible with your pipeline layout
 layout(push_constant) uniform PushConstants {
-    float temperature;
-    float humidity;
+    float hue;
+    float saturation;
+    float contrast;
 } pushConstants;
 
 layout(location = 0) in vec2 fragTexCoord;

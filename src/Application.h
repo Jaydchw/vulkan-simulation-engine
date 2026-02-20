@@ -126,6 +126,9 @@ class Application final {
   SimulationState simState;
   SceneSettings sceneSettings;
 
+  MeshID gizmoMeshID = INVALID_MESH_ID;
+  MaterialID gizmoMaterialID = INVALID_MATERIAL_ID;
+
   void initWindow();
   void initVulkan();
   void mainLoop();

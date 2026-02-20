@@ -353,12 +353,13 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
       builder.name(lightName);
       builder.position(position);
 
-      if (lightType == "sun")
+      if (lightType == "sun") {
         builder.lightType(LightType::Sun);
-      else
+        builder.direction(direction);
+      } else {
         builder.lightType(LightType::Point);
+      }
 
-      builder.direction(direction);
       builder.color(color);
       builder.intensity(intensity);
       builder.attenuation(constant, linear, quadratic);

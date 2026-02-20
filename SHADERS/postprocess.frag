@@ -2,29 +2,22 @@
 
 layout(binding = 0) uniform sampler2D screenTexture;
 
-// Added Weather Inputs
+// Color grading push constants from UI
 layout(push_constant) uniform PushConstants {
-    float temperature;
-    float humidity;
+    float hue;
+    float saturation;
+    float contrast;
 } pushConstants;
 
 layout(location = 0) in vec2 fragTexCoord;
 layout(location = 0) out vec4 outColor;
 
 // --- CONFIGURATION ---
-const float GAMMA = 1.0;  // Kept your preferred 1.0
+const float GAMMA = 1.0;
 const float EXPOSURE = 1.0;
-const float BASE_SATURATION = 0.9; // Renamed to separate from weather
-const float BASE_CONTRAST = 1.0;
 const float VIGNETTE_STRENGTH = 0.3;
 const float VIGNETTE_EXTENT = 0.6;
-const float CHROMATIC_ABERRATION = 0.003; // Slight bump so you can see it
-
-// Weather Ranges
-const float TEMP_MIN = -10.0;
-const float TEMP_MAX = 40.0;
-const float HUMIDITY_MIN = 0.0;
-const float HUMIDITY_MAX = 1.0;
+const float CHROMATIC_ABERRATION = 0.003;
 
 // --- UTILS ---
 
@@ -47,33 +40,31 @@ vec3 adjustContrast(vec3 color, float contrast) {
     return (color - 0.5) * contrast + 0.5;
 }
 
+vec3 rgb2hsv(vec3 c) {
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 adjustHue(vec3 color, float hueShift) {
+    vec3 hsv = rgb2hsv(color);
+    hsv.x = fract(hsv.x + hueShift);
+    return hsv2rgb(hsv);
+}
+
 float vignette(vec2 uv) {
     uv *= 1.0 - uv.yx;
     float vig = uv.x * uv.y * 15.0;
     return pow(vig, VIGNETTE_EXTENT);
-}
-
-// Calculates a subtle color filter based on weather
-vec3 getWeatherTint(float temp, float humidity) {
-    float tNorm = clamp((temp - TEMP_MIN) / (TEMP_MAX - TEMP_MIN), 0.0, 1.0);
-    
-    // 1. Temperature Tint (Hue Shift)
-    // Cold: Subtle Icy Blue (0.9, 0.95, 1.05)
-    // Hot: Subtle Warm Amber (1.05, 1.0, 0.92)
-    vec3 coldTint = vec3(0.92, 0.96, 1.05); 
-    vec3 hotTint  = vec3(1.05, 1.02, 0.94);
-    
-    // Mix based on temperature
-    vec3 tempTint = mix(coldTint, hotTint, tNorm);
-
-    // 2. Humidity Tint
-    // High humidity: Very subtle Green/Teal shift (thick air)
-    vec3 dryTint = vec3(1.0, 1.0, 1.0);
-    vec3 humidTint = vec3(0.98, 1.0, 0.98); // Tiny green shift
-    vec3 humidityColor = mix(dryTint, humidTint, humidity);
-
-    // Combine them
-    return tempTint * humidityColor;
 }
 
 vec3 sharpen(sampler2D tex, vec2 uv) {
@@ -94,41 +85,32 @@ void main() {
     // 1. Base Sampling (Sharpen is the 'base' look)
     vec3 color = sharpen(screenTexture, fragTexCoord);
 
-    // 2. Apply Chromatic Aberration manually on top 
-    // (Simple R/B offset based on sharpened center G)
+    // 2. Apply Chromatic Aberration
     vec2 caDir = fragTexCoord - vec2(0.5);
     float r = texture(screenTexture, fragTexCoord - caDir * CHROMATIC_ABERRATION).r;
     float b = texture(screenTexture, fragTexCoord + caDir * CHROMATIC_ABERRATION).b;
-    // We mix the CA Red/Blue with the sharpened Green for a composite look
-    // Or just apply CA tinting to the sharpened result subtly. 
-    // For simplicity/cleanness, let's just stick to the sharpen output 
-    // but allowing the edges to bleed slightly if you really want CA:
     if (CHROMATIC_ABERRATION > 0.0) {
         color.r = mix(color.r, r, 0.5);
         color.b = mix(color.b, b, 0.5);
     }
 
-    // 3. APPLY WEATHER TINT (The requested feature)
-    // This happens in Linear Space before Tone Mapping
-    vec3 weatherTint = getWeatherTint(pushConstants.temperature, pushConstants.humidity);
-    color *= weatherTint;
-
-    // 4. Exposure
+    // 3. Exposure
     color *= EXPOSURE;
-    
-    // 5. Tone Mapping
+
+    // 4. Tone Mapping
     color = tonemap_aces(color);
-    
-    // 6. Gamma
+
+    // 5. Gamma
     color = pow(color, vec3(1.0 / GAMMA));
-    
-    // 7. Grading
-    color = adjustSaturation(color, BASE_SATURATION);
-    color = adjustContrast(color, BASE_CONTRAST);
-    
-    // 8. Vignette
+
+    // 6. Color Grading (from push constants)
+    color = adjustHue(color, pushConstants.hue);
+    color = adjustSaturation(color, pushConstants.saturation);
+    color = adjustContrast(color, pushConstants.contrast);
+
+    // 7. Vignette
     float vig = vignette(fragTexCoord);
     color *= mix(1.0 - VIGNETTE_STRENGTH, 1.0, vig);
-    
+
     outColor = vec4(color, 1.0);
 }

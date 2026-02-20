@@ -1,5 +1,6 @@
 #include "MeshManager.h"
 
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -287,6 +288,56 @@ MeshID MeshManager::createParticleQuad() {
   createBuffers(mesh);
   const MeshID id = registerMesh(mesh);
   return id;
+}
+
+MeshID MeshManager::createPyramid(float baseSize, float height) {
+  Debug::log(Debug::Category::MESH, "MeshManager: Creating pyramid");
+  Mesh* const mesh = new Mesh();
+  mesh->setName("Pyramid");
+  mesh->setType(MeshType::Custom);
+
+  const float h = height;
+  const float b = baseSize * 0.5f;
+
+  // Apex at top, base centered at origin
+  glm::vec3 apex(0.0f, h, 0.0f);
+  glm::vec3 bl(-b, 0.0f, -b);
+  glm::vec3 br( b, 0.0f, -b);
+  glm::vec3 fr( b, 0.0f,  b);
+  glm::vec3 fl(-b, 0.0f,  b);
+
+  auto makeTri = [](glm::vec3 a, glm::vec3 b2, glm::vec3 c) {
+    glm::vec3 n = glm::normalize(glm::cross(b2 - a, c - a));
+    Vertex va{}; va.pos = a; va.normal = n; va.color = glm::vec3(1.0f); va.texCoord = {0.5f, 0.0f};
+    Vertex vb{}; vb.pos = b2; vb.normal = n; vb.color = glm::vec3(1.0f); vb.texCoord = {0.0f, 1.0f};
+    Vertex vc{}; vc.pos = c; vc.normal = n; vc.color = glm::vec3(1.0f); vc.texCoord = {1.0f, 1.0f};
+    return std::array<Vertex, 3>{va, vb, vc};
+  };
+
+  std::vector<Vertex> vertices;
+  std::vector<uint16_t> indices;
+  uint16_t idx = 0;
+
+  auto addTri = [&](glm::vec3 a, glm::vec3 b2, glm::vec3 c) {
+    auto tri = makeTri(a, b2, c);
+    vertices.push_back(tri[0]); vertices.push_back(tri[1]); vertices.push_back(tri[2]);
+    indices.push_back(idx); indices.push_back(idx + 1); indices.push_back(idx + 2);
+    idx += 3;
+  };
+
+  // 4 side faces
+  addTri(apex, bl, br);
+  addTri(apex, br, fr);
+  addTri(apex, fr, fl);
+  addTri(apex, fl, bl);
+  // 2 base triangles
+  addTri(bl, fr, br);
+  addTri(bl, fl, fr);
+
+  mesh->setVertices(vertices);
+  mesh->setIndices(indices);
+  createBuffers(mesh);
+  return registerMesh(mesh);
 }
 
 MeshID MeshManager::loadFromOBJ(const std::string& filepath) {

@@ -86,6 +86,7 @@ class MeshManager final {
   MeshID createCylinder(float radius = 1.0f, float height = 2.0f,
                         uint32_t segments = 32);
   MeshID createParticleQuad();
+  MeshID createPyramid(float baseSize = 0.5f, float height = 1.0f);
   MeshID loadFromOBJ(const std::string& filepath);
   Mesh* getMesh(MeshID id);
   const Mesh* getMesh(MeshID id) const;

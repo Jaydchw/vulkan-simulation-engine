@@ -63,6 +63,7 @@ layout(push_constant) uniform PushConstants {
     mat4 model;
     uint layerMask;
     uint cameraLayer;
+    float highlightIntensity;
 } pushConstants;
 
 layout(location = 0) in vec3 fragColor;
@@ -226,5 +227,10 @@ void main() {
         outColor = vec4(lighting, alpha);
     } else {
         outColor = vec4(fragLighting * albedo, alpha);
+    }
+
+    if (pushConstants.highlightIntensity > 0.0) {
+        vec3 highlightColor = vec3(0.3, 0.5, 1.0);
+        outColor.rgb = mix(outColor.rgb, outColor.rgb + highlightColor, pushConstants.highlightIntensity);
     }
 }

@@ -52,6 +52,7 @@ layout(push_constant) uniform PushConstants {
     mat4 model;
     uint layerMask;
     uint cameraLayer;
+    float highlightIntensity;
 } push;
 
 layout(location = 0) in vec3 inPosition;

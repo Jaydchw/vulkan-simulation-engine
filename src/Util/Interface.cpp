@@ -68,8 +68,9 @@ void Interface::applyScalePreset() {
     case UIScalePreset::Large:  scale = 1.8f;  break;
     case UIScalePreset::XL:     scale = 2.2f;  break;
   }
+  currentScale = scale;
 
-  ImGuiStyle& style = ImGui::GetStyle();
+  ImGuiStyle style;
   ImGui::StyleColorsDark(&style);
 
   style.WindowPadding     = ImVec2(12, 12);
@@ -111,6 +112,7 @@ void Interface::applyScalePreset() {
   colors[ImGuiCol_TabHovered]      = ImVec4(0.30f, 0.34f, 0.46f, 1.00f);
 
   style.ScaleAllSizes(scale);
+  ImGui::GetStyle() = style;
   ImGui::GetIO().FontGlobalScale = scale;
 }
 
@@ -234,11 +236,17 @@ void Interface::createImGuiRenderPass() {
 }
 
 void Interface::render(SimulationState& simState, SceneSettings& sceneSettings,
-                       const Registry& registry, MainPipeline* mainPipeline,
-                       PostProcessing* postProcessing) {
+Registry& registry, MainPipeline* mainPipeline,
+PostProcessing* postProcessing) {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
+
+  // Clear selection if entity no longer exists
+  if (selectedEntity != INVALID_ENTITY &&
+      !registry.hasComponent<NameComponent>(selectedEntity)) {
+    selectedEntity = INVALID_ENTITY;
+  }
 
   if (ImGui::BeginMainMenuBar()) {
     auto menuItem = [](const char* label) -> bool {
@@ -259,6 +267,9 @@ void Interface::render(SimulationState& simState, SceneSettings& sceneSettings,
     if (menuItem("Objects")) {
       renderObjectsMenu(registry);
       ImGui::EndMenu();
+    } else {
+      selectedEntity = INVALID_ENTITY;
+      hoveredEntity = INVALID_ENTITY;
     }
     if (menuItem("Scene")) {
       renderSceneMenu(sceneSettings, mainPipeline);
@@ -294,19 +305,8 @@ void Interface::render(SimulationState& simState, SceneSettings& sceneSettings,
 }
 
 static void keybadge(const char* key) {
-  ImGui::SameLine();
-  ImVec2 textSize = ImGui::CalcTextSize(key);
-  ImVec2 padding(6.0f, 2.0f);
-  ImVec2 pos = ImGui::GetCursorScreenPos();
-  pos.y += 1.0f;
-  ImVec2 br(pos.x + textSize.x + padding.x * 2,
-            pos.y + textSize.y + padding.y * 2);
-  ImGui::GetWindowDrawList()->AddRectFilled(
-      pos, br, IM_COL32(60, 65, 80, 220), 4.0f);
-  ImGui::GetWindowDrawList()->AddRect(
-      pos, br, IM_COL32(90, 95, 115, 180), 4.0f);
-  ImGui::SetCursorScreenPos(ImVec2(pos.x + padding.x, pos.y + padding.y));
-  ImGui::TextColored(ImVec4(0.75f, 0.80f, 0.90f, 1.0f), "%s", key);
+  ImGui::SameLine(0, 8);
+  ImGui::TextColored(ImVec4(0.50f, 0.52f, 0.58f, 1.0f), "[%s]", key);
 }
 
 static void sectionHeader(const char* label) {
@@ -317,10 +317,13 @@ static void sectionHeader(const char* label) {
 }
 
 void Interface::renderSimulationMenu(SimulationState& simState) {
-  sectionHeader("Transport");
+sectionHeader("Transport");
 
-  const float bw = 90.0f;
-  const float bh = 28.0f;
+const float s = currentScale;
+const float bw = 90.0f * s;
+const float bh = 28.0f * s;
+const float sliderW = 220.0f * s;
+const float gap = 16.0f * s;
 
   if (simState.isPaused) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.50f, 0.22f, 1.0f));
@@ -351,7 +354,7 @@ void Interface::renderSimulationMenu(SimulationState& simState) {
     simState.rewinding = false;
   }
   keybadge(".");
-  ImGui::SameLine(0, 16);
+  ImGui::SameLine(0, gap);
   if (ImGui::Button("Step Back", ImVec2(bw, bh))) {
     if (!simState.timeHistory.empty()) {
       simState.isPaused = true;
@@ -376,12 +379,12 @@ void Interface::renderSimulationMenu(SimulationState& simState) {
     simState.rewinding = false;
   }
   keybadge("R");
-  ImGui::SameLine(0, 16);
+  ImGui::SameLine(0, gap);
   if (ImGui::Button("Half Speed", ImVec2(bw, bh))) {
     simState.timeSpeed = glm::max(simState.timeSpeed * 0.5f, 0.01f);
   }
   keybadge("-");
-  ImGui::SameLine(0, 16);
+  ImGui::SameLine(0, gap);
   if (ImGui::Button("Double Spd", ImVec2(bw, bh))) {
     simState.timeSpeed = glm::min(simState.timeSpeed * 2.0f, 10.0f);
   }
@@ -397,14 +400,14 @@ void Interface::renderSimulationMenu(SimulationState& simState) {
 
   ImGui::Spacing();
 
-  ImGui::SetNextItemWidth(220.0f);
+  ImGui::SetNextItemWidth(sliderW);
   ImGui::SliderFloat("Speed", &simState.timeSpeed, 0.0f, 10.0f, "%.2fx");
-  ImGui::SameLine(0, 10);
+  ImGui::SameLine(0, 10 * s);
   if (ImGui::SmallButton("1x##spd")) simState.timeSpeed = 1.0f;
 
-  ImGui::SetNextItemWidth(220.0f);
+  ImGui::SetNextItemWidth(sliderW);
   ImGui::SliderFloat("Step Size", &simState.stepSize, 0.001f, 1.0f, "%.3fs");
-  ImGui::SameLine(0, 10);
+  ImGui::SameLine(0, 10 * s);
   if (ImGui::SmallButton("16ms##step")) simState.stepSize = 0.016f;
 
   if (!simState.timeHistory.empty()) {
@@ -436,11 +439,11 @@ void Interface::renderSimulationMenu(SimulationState& simState) {
   ImGui::Bullet();
   ImGui::SameLine();
   ImGui::TextColored(statusColor, "%s", statusText);
-  ImGui::SameLine(0, 16);
+  ImGui::SameLine(0, gap);
   ImGui::TextDisabled("%.2fx", simState.timeSpeed);
 }
 
-void Interface::renderObjectsMenu(const Registry& registry) {
+void Interface::renderObjectsMenu(Registry& registry) {
   auto entities = registry.getEntities();
   int meshCount = 0;
   int lightCount = 0;
@@ -457,108 +460,208 @@ void Interface::renderObjectsMenu(const Registry& registry) {
     }
   }
 
+  const float s = currentScale;
+  const float dragW = 200.0f * s;
+  const float labelCol = 100.0f * s;
+
   ImGui::TextDisabled("%d entities  |  %d objects  |  %d lights",
                       static_cast<int>(entities.size()), meshCount, lightCount);
   ImGui::Separator();
   ImGui::Spacing();
 
-  const float labelW = 110.0f;
-
   auto propRow = [&](const char* label, const char* fmt, ...) {
     ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "%s", label);
-    ImGui::SameLine(labelW);
+    ImGui::SameLine(labelCol);
     va_list args;
     va_start(args, fmt);
     ImGui::TextV(fmt, args);
     va_end(args);
   };
 
-  if (ImGui::TreeNodeEx("Objects",
-                        ImGuiTreeNodeFlags_DefaultOpen |
-                            ImGuiTreeNodeFlags_SpanAvailWidth)) {
-    for (Entity e : meshEntities) {
-      const auto* nameComp = registry.getComponent<NameComponent>(e);
-      std::string name = nameComp ? nameComp->name : "Unknown";
+  hoveredEntity = INVALID_ENTITY;
 
-      ImGui::PushID(static_cast<int>(e));
-      if (ImGui::TreeNodeEx(name.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth)) {
-        ImGui::Spacing();
-        const auto* transform = registry.getComponent<TransformComponent>(e);
-        if (transform) {
-          propRow("Position", "%.2f, %.2f, %.2f", transform->position.x,
-                  transform->position.y, transform->position.z);
-          propRow("Scale", "%.2f, %.2f, %.2f", transform->scale.x,
-                  transform->scale.y, transform->scale.z);
+  // --- Entity List ---
+  const float listHeight = 200.0f * s;
+  ImGui::TextColored(ImVec4(0.50f, 0.70f, 1.0f, 1.0f), "Entity List");
+  ImGui::Separator();
+
+  ImGui::BeginChild("##entityList", ImVec2(0, listHeight), true,
+                    ImGuiWindowFlags_HorizontalScrollbar);
+  {
+    if (!meshEntities.empty()) {
+      ImGui::TextColored(ImVec4(0.45f, 0.65f, 0.45f, 1.0f), "  Objects (%d)",
+                         meshCount);
+      ImGui::Separator();
+      for (Entity e : meshEntities) {
+        auto* nameComp = registry.getComponent<NameComponent>(e);
+        std::string label =
+            (nameComp ? nameComp->name : "Unknown");
+
+        ImGui::PushID(static_cast<int>(e));
+        bool isSelected = (selectedEntity == e);
+
+        if (ImGui::Selectable(label.c_str(), isSelected,
+                              ImGuiSelectableFlags_None)) {
+          selectedEntity = isSelected ? INVALID_ENTITY : e;
         }
-        const auto* meshComp = registry.getComponent<MeshComponent>(e);
-        if (meshComp) propRow("Mesh", "#%u", meshComp->meshID);
-        const auto* matComp = registry.getComponent<MaterialComponent>(e);
-        if (matComp) propRow("Material", "#%u", matComp->materialID);
-        const auto* renderComp = registry.getComponent<RenderComponent>(e);
-        if (renderComp)
-          propRow("Visible", "%s", renderComp->visible ? "Yes" : "No");
-        ImGui::Spacing();
-        ImGui::TreePop();
+        if (ImGui::IsItemHovered()) hoveredEntity = e;
+        ImGui::PopID();
       }
-      ImGui::PopID();
     }
-    ImGui::TreePop();
+
+    if (!lightEntities.empty()) {
+      ImGui::Spacing();
+      ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.30f, 1.0f), "  Lights (%d)",
+                         lightCount);
+      ImGui::Separator();
+      for (Entity e : lightEntities) {
+        auto* nameComp = registry.getComponent<NameComponent>(e);
+        auto* light = registry.getComponent<LightComponent>(e);
+        const char* typeIcon =
+            (light && light->type == LightType::Sun) ? "[Sun] " : "[Pt]  ";
+        std::string label =
+            std::string(typeIcon) + (nameComp ? nameComp->name : "Unknown");
+
+        ImGui::PushID(static_cast<int>(e));
+        bool isSelected = (selectedEntity == e);
+
+        if (ImGui::Selectable(label.c_str(), isSelected,
+                              ImGuiSelectableFlags_None)) {
+          selectedEntity = isSelected ? INVALID_ENTITY : e;
+        }
+        if (ImGui::IsItemHovered()) hoveredEntity = e;
+        ImGui::PopID();
+      }
+    }
   }
+  ImGui::EndChild();
 
+  // --- Inspector ---
   ImGui::Spacing();
+  if (selectedEntity == INVALID_ENTITY) {
+    ImGui::TextDisabled("Select an entity above to inspect.");
+  } else {
+    auto* nameComp = registry.getComponent<NameComponent>(selectedEntity);
+    std::string entityName = nameComp ? nameComp->name : "Unknown";
+    bool isLight = registry.hasComponent<LightComponent>(selectedEntity);
 
-  if (ImGui::TreeNodeEx("Lights",
-                        ImGuiTreeNodeFlags_DefaultOpen |
-                            ImGuiTreeNodeFlags_SpanAvailWidth)) {
-    for (Entity e : lightEntities) {
-      const auto* nameComp = registry.getComponent<NameComponent>(e);
-      std::string name = nameComp ? nameComp->name : "Unknown";
+    ImGui::TextColored(ImVec4(0.50f, 0.70f, 1.0f, 1.0f), "%s",
+                       entityName.c_str());
+    ImGui::SameLine();
+    ImGui::TextDisabled("(ID: %u%s)", selectedEntity,
+                        isLight ? ", Light" : ", Object");
+    ImGui::Separator();
+    ImGui::Spacing();
 
-      ImGui::PushID(static_cast<int>(e));
-      if (ImGui::TreeNodeEx(name.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth)) {
-        ImGui::Spacing();
-        const auto* light = registry.getComponent<LightComponent>(e);
-        const auto* transform = registry.getComponent<TransformComponent>(e);
-        if (light) {
-          propRow("Type", "%s",
-                  light->type == LightType::Sun ? "Sun" : "Point");
-          if (transform)
-            propRow("Position", "%.2f, %.2f, %.2f", transform->position.x,
-                    transform->position.y, transform->position.z);
-          propRow("Direction", "%.2f, %.2f, %.2f", light->direction.x,
-                  light->direction.y, light->direction.z);
+    ImGui::PushID(static_cast<int>(selectedEntity));
 
-          ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Color");
-          ImGui::SameLine(labelW);
-          ImVec4 lc(light->color.r, light->color.g, light->color.b, 1.0f);
-          ImGui::ColorButton("##lc", lc,
-                             ImGuiColorEditFlags_NoBorder |
-                                 ImGuiColorEditFlags_NoTooltip,
-                             ImVec2(16, 16));
-          ImGui::SameLine(0, 6);
-          ImGui::Text("%.2f, %.2f, %.2f", light->color.r, light->color.g,
-                      light->color.b);
+    // --- Transform (all entities have this) ---
+    if (registry.hasComponent<TransformComponent>(selectedEntity)) {
+      auto* transform =
+          registry.getComponent<TransformComponent>(selectedEntity);
+      auto* light = registry.getComponent<LightComponent>(selectedEntity);
+      bool isSun = light && light->type == LightType::Sun;
 
-          propRow("Intensity", "%.2f", light->intensity);
-          propRow("Shadows", "%s", light->castsShadows ? "Yes" : "No");
-        }
-        ImGui::Spacing();
-        ImGui::TreePop();
+      if (!isSun) {
+        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Position");
+        ImGui::SetNextItemWidth(dragW);
+        ImGui::DragFloat3("##pos", &transform->position.x, 0.05f, 0.0f, 0.0f,
+                          "%.2f");
       }
-      ImGui::PopID();
+
+      if (!isLight) {
+        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Scale");
+        ImGui::SetNextItemWidth(dragW);
+        ImGui::DragFloat3("##scl", &transform->scale.x, 0.01f, 0.001f,
+                          100.0f, "%.3f");
+
+        glm::vec3 euler =
+            glm::degrees(glm::eulerAngles(transform->rotation));
+        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Rotation");
+        ImGui::SetNextItemWidth(dragW);
+        if (ImGui::DragFloat3("##rot", &euler.x, 0.5f, -360.0f, 360.0f,
+                              "%.1f deg")) {
+          transform->rotation = glm::quat(glm::radians(euler));
+        }
+      }
+
+      ImGui::Spacing();
     }
-    ImGui::TreePop();
+
+    // --- Light properties ---
+    if (isLight) {
+      auto* light = registry.getComponent<LightComponent>(selectedEntity);
+      if (light) {
+        propRow("Type", "%s",
+                light->type == LightType::Sun ? "Sun" : "Point");
+
+        if (light->type == LightType::Sun) {
+          ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Direction");
+          ImGui::SetNextItemWidth(dragW);
+          ImGui::DragFloat3("##ldir", &light->direction.x, 0.01f, -1.0f, 1.0f,
+                            "%.3f");
+        }
+
+        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Color");
+        ImGui::SetNextItemWidth(dragW);
+        ImGui::ColorEdit3("##lcol", &light->color.x);
+
+        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Intensity");
+        ImGui::SetNextItemWidth(dragW);
+        ImGui::DragFloat("##lint", &light->intensity, 0.01f, 0.0f, 100.0f,
+                         "%.2f");
+
+        if (light->type == LightType::Point) {
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f),
+                             "Attenuation");
+          ImGui::SetNextItemWidth(dragW);
+          ImGui::DragFloat("Constant##att", &light->constant, 0.01f, 0.0f,
+                           10.0f, "%.3f");
+          ImGui::SetNextItemWidth(dragW);
+          ImGui::DragFloat("Linear##att", &light->linear, 0.001f, 0.0f, 1.0f,
+                           "%.4f");
+          ImGui::SetNextItemWidth(dragW);
+          ImGui::DragFloat("Quadratic##att", &light->quadratic, 0.001f, 0.0f,
+                           1.0f, "%.4f");
+        }
+
+        ImGui::Spacing();
+        ImGui::Checkbox("Shadows", &light->castsShadows);
+      }
+    }
+
+    // --- Mesh object properties ---
+    if (registry.hasComponent<MeshComponent>(selectedEntity)) {
+      const auto* meshComp =
+          registry.getComponent<MeshComponent>(selectedEntity);
+      propRow("Mesh ID", "#%u", meshComp->meshID);
+    }
+    if (registry.hasComponent<MaterialComponent>(selectedEntity)) {
+      const auto* matComp =
+          registry.getComponent<MaterialComponent>(selectedEntity);
+      propRow("Material ID", "#%u", matComp->materialID);
+    }
+    if (registry.hasComponent<RenderComponent>(selectedEntity)) {
+      auto* renderComp =
+          registry.getComponent<RenderComponent>(selectedEntity);
+      ImGui::Checkbox("Visible", &renderComp->visible);
+      propRow("Layer Mask", "0x%08X", renderComp->layerMask);
+    }
+
+    ImGui::PopID();
   }
 }
 
 void Interface::renderSceneMenu(SceneSettings& sceneSettings,
-                                MainPipeline* mainPipeline) {
-  sectionHeader("Background");
+                              MainPipeline* mainPipeline) {
+const float s = currentScale;
+sectionHeader("Background");
 
-  ImGui::ColorPicker3("##clearcolor", &sceneSettings.clearColor[0],
-                      ImGuiColorEditFlags_PickerHueWheel |
-                          ImGuiColorEditFlags_NoSidePreview |
-                          ImGuiColorEditFlags_NoInputs);
+ImGui::ColorPicker3("##clearcolor", &sceneSettings.clearColor[0],
+                    ImGuiColorEditFlags_PickerHueWheel |
+                        ImGuiColorEditFlags_NoSidePreview |
+                        ImGuiColorEditFlags_NoInputs);
   ImGui::Spacing();
   ImGui::ColorEdit3("Clear Color", &sceneSettings.clearColor[0],
                     ImGuiColorEditFlags_NoLabel);
@@ -569,7 +672,7 @@ void Interface::renderSceneMenu(SceneSettings& sceneSettings,
   int currentShading =
       (mainPipeline->getShadingMode() == MainPipeline::ShadingMode::Phong) ? 0
                                                                            : 1;
-  ImGui::SetNextItemWidth(180.0f);
+  ImGui::SetNextItemWidth(180.0f * s);
   if (ImGui::Combo("Shading Mode", &currentShading, shadingItems,
                    IM_ARRAYSIZE(shadingItems))) {
     mainPipeline->setShadingMode(currentShading == 0
@@ -583,7 +686,7 @@ void Interface::renderSceneMenu(SceneSettings& sceneSettings,
 
   const char* polygonItems[] = {"Fill", "Line", "Point"};
   static int currentPolygon = 0;
-  ImGui::SetNextItemWidth(180.0f);
+  ImGui::SetNextItemWidth(180.0f * s);
   if (ImGui::Combo("Render Mode", &currentPolygon, polygonItems,
                    IM_ARRAYSIZE(polygonItems))) {
     VkPolygonMode mode = VK_POLYGON_MODE_FILL;
@@ -599,30 +702,33 @@ void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
   PostProcessingConfig config = postProcessing->getConfig();
   bool changed = false;
 
+  const float s = currentScale;
+  const float sliderW = 220.0f * s;
+
   sectionHeader("Color Grading");
 
-  ImGui::SetNextItemWidth(220.0f);
+  ImGui::SetNextItemWidth(sliderW);
   if (ImGui::SliderFloat("Hue", &config.hue, -1.0f, 1.0f, "%.2f"))
     changed = true;
-  ImGui::SameLine(0, 10);
+  ImGui::SameLine(0, 10 * s);
   if (ImGui::SmallButton("Reset##hue")) {
     config.hue = 0.0f;
     changed = true;
   }
 
-  ImGui::SetNextItemWidth(220.0f);
+  ImGui::SetNextItemWidth(sliderW);
   if (ImGui::SliderFloat("Saturation", &config.saturation, 0.0f, 2.0f, "%.2f"))
     changed = true;
-  ImGui::SameLine(0, 10);
+  ImGui::SameLine(0, 10 * s);
   if (ImGui::SmallButton("Reset##sat")) {
     config.saturation = 1.0f;
     changed = true;
   }
 
-  ImGui::SetNextItemWidth(220.0f);
+  ImGui::SetNextItemWidth(sliderW);
   if (ImGui::SliderFloat("Contrast", &config.contrast, 0.0f, 2.0f, "%.2f"))
     changed = true;
-  ImGui::SameLine(0, 10);
+  ImGui::SameLine(0, 10 * s);
   if (ImGui::SmallButton("Reset##con")) {
     config.contrast = 1.0f;
     changed = true;
@@ -639,7 +745,7 @@ void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
   ImGui::Spacing();
   ImGui::Spacing();
 
-  if (ImGui::Button("Reset All", ImVec2(120, 28))) {
+  if (ImGui::Button("Reset All", ImVec2(120 * s, 28 * s))) {
     config.hue = 0.0f;
     config.saturation = 1.0f;
     config.contrast = 1.0f;
@@ -654,11 +760,12 @@ void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
 }
 
 void Interface::renderSettingsMenu() {
+  const float s = currentScale;
   sectionHeader("Interface");
 
   const char* presetItems[] = {"Small", "Normal", "Large", "XL"};
   int currentPreset = static_cast<int>(generalSettings.scalePreset);
-  ImGui::SetNextItemWidth(140.0f);
+  ImGui::SetNextItemWidth(140.0f * s);
   if (ImGui::Combo("UI Scale", &currentPreset, presetItems,
                    IM_ARRAYSIZE(presetItems))) {
     generalSettings.scalePreset = static_cast<UIScalePreset>(currentPreset);
@@ -667,21 +774,15 @@ void Interface::renderSettingsMenu() {
 
   ImGui::Checkbox("Show FPS", &generalSettings.showFPS);
   keybadge("F1");
+  ImGui::Checkbox("Show Light Gizmos", &generalSettings.showLightGizmos);
 
   sectionHeader("Keyboard Shortcuts");
 
-  auto shortcutRow = [](const char* key, const char* desc) {
-    ImVec2 textSize = ImGui::CalcTextSize(key);
-    ImVec2 pad(6.0f, 2.0f);
-    ImVec2 pos = ImGui::GetCursorScreenPos();
-    ImVec2 br(pos.x + textSize.x + pad.x * 2, pos.y + textSize.y + pad.y * 2);
-    ImGui::GetWindowDrawList()->AddRectFilled(pos, br,
-                                              IM_COL32(60, 65, 80, 220), 4.0f);
-    ImGui::GetWindowDrawList()->AddRect(pos, br, IM_COL32(90, 95, 115, 180),
-                                        4.0f);
-    ImGui::SetCursorScreenPos(ImVec2(pos.x + pad.x, pos.y + pad.y));
-    ImGui::TextColored(ImVec4(0.75f, 0.80f, 0.90f, 1.0f), "%s", key);
-    ImGui::SameLine(150);
+  const float keyColW = 120.0f * s;
+
+  auto shortcutRow = [&](const char* key, const char* desc) {
+    ImGui::TextColored(ImVec4(0.50f, 0.52f, 0.58f, 1.0f), "%s", key);
+    ImGui::SameLine(keyColW);
     ImGui::Text("%s", desc);
   };
 
@@ -779,7 +880,7 @@ void Interface::renderWorldsMenu() {
   ImGui::Separator();
   ImGui::Spacing();
 
-  if (ImGui::Button("Refresh", ImVec2(100, 28))) {
+  if (ImGui::Button("Refresh", ImVec2(100 * currentScale, 28 * currentScale))) {
     refreshWorldList();
   }
   ImGui::SameLine(0, 12);
