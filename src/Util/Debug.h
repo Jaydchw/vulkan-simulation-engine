@@ -20,7 +20,8 @@ class Debug final {
     TEXTURE,
     MATERIALS,
     POSTPROCESSING,
-    SHADOWS
+    SHADOWS,
+    PHYSICS
   };
 
   static void setEnabled(Category category, bool enabled) {
@@ -76,6 +77,9 @@ class Debug final {
       case Category::SHADOWS:
         enableShadows = enabled;
         break;
+      case Category::PHYSICS:
+        enablePhysics = enabled;
+        break;
     }
   }
 
@@ -115,6 +119,8 @@ class Debug final {
         return enablePostProcessing;
       case Category::SHADOWS:
         return enableShadows;
+      case Category::PHYSICS:
+        return enablePhysics;
       default:
         return false;
     }
@@ -165,6 +171,8 @@ class Debug final {
         return "POSTPROCESSING";
       case Category::SHADOWS:
         return "SHADOWS";
+      case Category::PHYSICS:
+        return "PHYSICS";
       default:
         return "UNKNOWN";
     }
@@ -187,6 +195,7 @@ class Debug final {
   static bool enableMaterials;
   static bool enablePostProcessing;
   static bool enableShadows;
+  static bool enablePhysics;
 };
 
 inline bool Debug::enableMain = false;
@@ -206,4 +215,5 @@ inline bool Debug::enableTexture = false;
 inline bool Debug::enableMaterials = false;
 inline bool Debug::enablePostProcessing = false;
 inline bool Debug::enableShadows = false;
+inline bool Debug::enablePhysics = false;
 

@@ -78,6 +78,76 @@ class EntityBuilder final {
     return *this;
   }
 
+  EntityBuilder& velocity(const glm::vec3& v) {
+    hasPhysics = true;
+    physicsComp.velocity = v;
+    return *this;
+  }
+
+  EntityBuilder& velocity(float x, float y, float z) {
+    hasPhysics = true;
+    physicsComp.velocity = glm::vec3(x, y, z);
+    return *this;
+  }
+
+  EntityBuilder& acceleration(const glm::vec3& a) {
+    hasPhysics = true;
+    physicsComp.acceleration = a;
+    return *this;
+  }
+
+  EntityBuilder& mass(float m) {
+    hasPhysics = true;
+    physicsComp.mass = m;
+    return *this;
+  }
+
+  EntityBuilder& restitution(float r) {
+    hasPhysics = true;
+    physicsComp.restitution = r;
+    return *this;
+  }
+
+  EntityBuilder& damping(float d) {
+    hasPhysics = true;
+    physicsComp.damping = d;
+    return *this;
+  }
+
+  EntityBuilder& useGravity(bool g) {
+    hasPhysics = true;
+    physicsComp.useGravity = g;
+    return *this;
+  }
+
+  EntityBuilder& sphereCollider(float radius) {
+    hasCollider = true;
+    colliderComp.type = ColliderType::Sphere;
+    colliderComp.radius = radius;
+    return *this;
+  }
+
+  EntityBuilder& boxCollider(const glm::vec3& halfExtents) {
+    hasCollider = true;
+    colliderComp.type = ColliderType::AABB;
+    colliderComp.halfExtents = halfExtents;
+    return *this;
+  }
+
+  EntityBuilder& boxCollider(float hx, float hy, float hz) {
+    hasCollider = true;
+    colliderComp.type = ColliderType::AABB;
+    colliderComp.halfExtents = glm::vec3(hx, hy, hz);
+    return *this;
+  }
+
+  EntityBuilder& planeCollider(const glm::vec3& normal) {
+    hasCollider = true;
+    colliderComp.type = ColliderType::Plane;
+    colliderComp.normal = glm::normalize(normal);
+    return *this;
+  }
+
   EntityBuilder& lightType(LightType t) {
     hasLight = true;
     lightComp.type = t;
@@ -159,6 +229,13 @@ class EntityBuilder final {
                  ", Material: ", materialComp.materialID, ")");
     }
 
+    if (hasPhysics) {
+      registry.addComponent<PhysicsComponent>(entity, physicsComp);
+    }
+    if (hasCollider) {
+      registry.addComponent<ColliderComponent>(entity, colliderComp);
+    }
+
     return entity;
   }
 
@@ -169,5 +246,9 @@ class EntityBuilder final {
   MaterialComponent materialComp;
   RenderComponent renderComp;
   LightComponent lightComp;
+  PhysicsComponent physicsComp;
+  ColliderComponent colliderComp;
   bool hasLight = false;
+  bool hasPhysics = false;
+  bool hasCollider = false;
 };

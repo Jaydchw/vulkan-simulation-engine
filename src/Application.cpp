@@ -8,6 +8,7 @@
 
 #include "Util/Debug.h"
 #include "Util/RenderUtils.h"
+#include "Physics/PhysicsSystem.h"
 #include "Vulkan/VulkanCommandBuffer.h"
 #include "Vulkan/VulkanDepthBuffer.h"
 #include "Vulkan/VulkanDescriptors.h"
@@ -36,6 +37,7 @@ void Application::setRegistry(Registry& reg) {
   registry = &reg;
   lightManager->setRegistry(registry);
   lightManager->syncLights();
+  physicsSystem->setRegistry(registry);
 }
 
 void Application::loadWorld(const std::string& filepath) {
@@ -55,6 +57,8 @@ ownedRegistry = std::make_unique<Registry>();
 
   lightManager->setRegistry(registry);
   lightManager->syncLights();
+
+  physicsSystem->setRegistry(registry);
 
   Debug::log(Debug::Category::MAIN, "Application: Loaded world: ", filepath);
 }
@@ -139,6 +143,7 @@ void Application::initVulkan() {
   worldParser = std::make_unique<WorldParser>(meshManager.get(),
                                               materialManager.get(),
                                               textureManager.get());
+  physicsSystem = std::make_unique<PhysicsSystem>();
   interface->setWorldDirectory("Worlds");
   interface->setWorldLoadCallback(
       [this](const std::string& path) { loadWorld(path); });
@@ -167,6 +172,8 @@ while (!window->shouldClose()) {
             simState.maxHistoryTime) {
       simState.timeHistory.erase(simState.timeHistory.begin());
     }
+
+    physicsSystem->update(advance);
   }
 
     interface->render(simState, sceneSettings, *registry, mainPipeline.get(),

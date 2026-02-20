@@ -258,6 +258,17 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
       std::string meshRef;
       std::string materialRef;
       bool visible = true;
+      bool hasPhysics = false;
+      glm::vec3 velocity(0.0f);
+      float mass = 1.0f;
+      float restitution = 0.5f;
+      float physicsDamping = 0.99f;
+      bool useGravity = true;
+      bool hasCollider = false;
+      std::string colliderType;
+      float colliderRadius = 1.0f;
+      glm::vec3 colliderHalfExtents(0.5f);
+      glm::vec3 colliderNormal(0.0f, 1.0f, 0.0f);
 
       while (std::getline(file, line)) {
         lineNum++;
@@ -284,6 +295,35 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
           materialRef = val;
         else if (key == "Visible")
           visible = parseBool(val);
+        else if (key == "Physics") {
+          hasPhysics = parseBool(val);
+        } else if (key == "Velocity")
+          velocity = parseVec3(val);
+        else if (key == "Mass") {
+          hasPhysics = true;
+          mass = parseFloat(val);
+        } else if (key == "Restitution") {
+          hasPhysics = true;
+          restitution = parseFloat(val);
+        } else if (key == "Damping") {
+          hasPhysics = true;
+          physicsDamping = parseFloat(val);
+        } else if (key == "UseGravity") {
+          hasPhysics = true;
+          useGravity = parseBool(val);
+        } else if (key == "Collider") {
+          hasCollider = true;
+          colliderType = val;
+        } else if (key == "ColliderRadius") {
+          hasCollider = true;
+          colliderRadius = parseFloat(val);
+        } else if (key == "ColliderHalfExtents") {
+          hasCollider = true;
+          colliderHalfExtents = parseVec3(val);
+        } else if (key == "ColliderNormal") {
+          hasCollider = true;
+          colliderNormal = parseVec3(val);
+        }
       }
 
       EntityBuilder builder;
@@ -299,6 +339,24 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
 
       auto matIt = namedMaterials.find(materialRef);
       if (matIt != namedMaterials.end()) builder.material(matIt->second);
+
+      if (hasPhysics) {
+        builder.mass(mass);
+        builder.restitution(restitution);
+        builder.damping(physicsDamping);
+        builder.useGravity(useGravity);
+        if (velocity != glm::vec3(0.0f))
+          builder.velocity(velocity);
+      }
+
+      if (hasCollider) {
+        if (colliderType == "sphere")
+          builder.sphereCollider(colliderRadius);
+        else if (colliderType == "box")
+          builder.boxCollider(colliderHalfExtents);
+        else if (colliderType == "plane")
+          builder.planeCollider(colliderNormal);
+      }
 
       builder.build(registry);
       continue;

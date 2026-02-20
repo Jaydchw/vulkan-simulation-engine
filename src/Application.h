@@ -15,6 +15,7 @@
 #include "ECS/Registry.h"
 #include "Resources/TextureManager.h"
 #include "Scene/LightManager.h"
+#include "Physics/PhysicsSystem.h"
 #include "Util/Camera.h"
 #include "Util/Input.h"
 #include "Util/Interface.h"
@@ -93,6 +94,7 @@ class Application final {
   std::unique_ptr<PostProcessing> postProcessing;
   std::unique_ptr<MainPipeline> mainPipeline;
   std::unique_ptr<Interface> interface;
+  std::unique_ptr<PhysicsSystem> physicsSystem;
 
   VkInstance instance = VK_NULL_HANDLE;
   VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;

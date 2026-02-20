@@ -19,6 +19,8 @@ class Registry final {
     materials.erase(entity);
     renders.erase(entity);
     lights.erase(entity);
+    physics.erase(entity);
+    colliders.erase(entity);
   }
 
   template <typename T>
@@ -51,6 +53,15 @@ class Registry final {
   const std::unordered_map<Entity, LightComponent>& allLights() const {
     return lights;
   }
+  const std::unordered_map<Entity, PhysicsComponent>& allPhysics() const {
+    return physics;
+  }
+  std::unordered_map<Entity, PhysicsComponent>& allPhysicsMut() {
+    return physics;
+  }
+  const std::unordered_map<Entity, ColliderComponent>& allColliders() const {
+    return colliders;
+  }
 
   std::vector<Entity> getEntities() const {
     std::vector<Entity> result;
@@ -68,6 +79,8 @@ class Registry final {
   std::unordered_map<Entity, MaterialComponent> materials;
   std::unordered_map<Entity, RenderComponent> renders;
   std::unordered_map<Entity, LightComponent> lights;
+  std::unordered_map<Entity, PhysicsComponent> physics;
+  std::unordered_map<Entity, ColliderComponent> colliders;
 };
 
 template <>
@@ -99,6 +112,16 @@ template <>
 inline void Registry::addComponent<LightComponent>(Entity entity,
                                                    const LightComponent& c) {
   lights[entity] = c;
+}
+template <>
+inline void Registry::addComponent<PhysicsComponent>(
+    Entity entity, const PhysicsComponent& c) {
+  physics[entity] = c;
+}
+template <>
+inline void Registry::addComponent<ColliderComponent>(
+    Entity entity, const ColliderComponent& c) {
+  colliders[entity] = c;
 }
 
 template <>
@@ -133,6 +156,18 @@ template <>
 inline LightComponent* Registry::getComponent<LightComponent>(Entity entity) {
   auto it = lights.find(entity);
   return it != lights.end() ? &it->second : nullptr;
+}
+template <>
+inline PhysicsComponent* Registry::getComponent<PhysicsComponent>(
+    Entity entity) {
+  auto it = physics.find(entity);
+  return it != physics.end() ? &it->second : nullptr;
+}
+template <>
+inline ColliderComponent* Registry::getComponent<ColliderComponent>(
+    Entity entity) {
+  auto it = colliders.find(entity);
+  return it != colliders.end() ? &it->second : nullptr;
 }
 
 template <>
@@ -171,6 +206,18 @@ inline const LightComponent* Registry::getComponent<LightComponent>(
   auto it = lights.find(entity);
   return it != lights.end() ? &it->second : nullptr;
 }
+template <>
+inline const PhysicsComponent* Registry::getComponent<PhysicsComponent>(
+    Entity entity) const {
+  auto it = physics.find(entity);
+  return it != physics.end() ? &it->second : nullptr;
+}
+template <>
+inline const ColliderComponent* Registry::getComponent<ColliderComponent>(
+    Entity entity) const {
+  auto it = colliders.find(entity);
+  return it != colliders.end() ? &it->second : nullptr;
+}
 
 template <>
 inline bool Registry::hasComponent<NameComponent>(Entity entity) const {
@@ -195,4 +242,12 @@ inline bool Registry::hasComponent<RenderComponent>(Entity entity) const {
 template <>
 inline bool Registry::hasComponent<LightComponent>(Entity entity) const {
   return lights.count(entity) > 0;
+}
+template <>
+inline bool Registry::hasComponent<PhysicsComponent>(Entity entity) const {
+  return physics.count(entity) > 0;
+}
+template <>
+inline bool Registry::hasComponent<ColliderComponent>(Entity entity) const {
+  return colliders.count(entity) > 0;
 }
