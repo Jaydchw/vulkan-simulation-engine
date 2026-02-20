@@ -38,6 +38,7 @@ void Application::setRegistry(Registry& reg) {
   lightManager->setRegistry(registry);
   lightManager->syncLights();
   physicsSystem->setRegistry(registry);
+  physicsSystem->saveInitialSnapshot();
 }
 
 void Application::loadWorld(const std::string& filepath) {
@@ -52,13 +53,15 @@ ownedRegistry = std::make_unique<Registry>();
   worldParser->load(filepath, *registry, worldSettings);
 
   sceneSettings.clearColor = worldSettings.clearColor;
-  simState.timeSpeed = worldSettings.timeSpeed;
-  simState.currentTime = 0.0f;
 
   lightManager->setRegistry(registry);
   lightManager->syncLights();
 
   physicsSystem->setRegistry(registry);
+  physicsSystem->saveInitialSnapshot();
+
+  simState = SimulationState{};
+  simState.timeSpeed = worldSettings.timeSpeed;
 
   Debug::log(Debug::Category::MAIN, "Application: Loaded world: ", filepath);
 }
@@ -157,23 +160,76 @@ while (!window->shouldClose()) {
   const float deltaTime = currentTime - lastFrameTime;
   lastFrameTime = currentTime;
 
-  if (!simState.isPaused || simState.stepFrame) {
+  if (simState.resetRequested) {
+    simState.resetRequested = false;
+    physicsSystem->restoreInitialSnapshot();
+    physicsSystem->clearSnapshots();
+    simState.timeHistory.clear();
+    simState.currentTime = 0.0f;
+    simState.historyIndex = -1;
+    simState.rewinding = false;
+    simState.reversePlay = false;
+  }
+
+  if (simState.snapshotScrubbed) {
+    simState.snapshotScrubbed = false;
+    if (simState.historyIndex >= 0 &&
+        simState.historyIndex < physicsSystem->getSnapshotCount()) {
+      physicsSystem->restoreSnapshot(simState.historyIndex);
+    }
+  }
+
+  if (simState.reversePlay && !simState.isPaused) {
+    int snapshotCount = physicsSystem->getSnapshotCount();
+    if (snapshotCount > 0) {
+      if (simState.historyIndex < 0)
+        simState.historyIndex = snapshotCount - 1;
+
+      float rewindSpeed = deltaTime * simState.timeSpeed;
+      float framesBack = rewindSpeed / simState.stepSize;
+      int steps = glm::max(static_cast<int>(framesBack), 1);
+
+      simState.historyIndex = glm::max(simState.historyIndex - steps, 0);
+      physicsSystem->restoreSnapshot(simState.historyIndex);
+
+      if (simState.historyIndex < static_cast<int>(simState.timeHistory.size()))
+        simState.currentTime = simState.timeHistory[simState.historyIndex];
+
+      if (simState.historyIndex <= 0) {
+        simState.reversePlay = false;
+        simState.isPaused = true;
+      }
+    }
+  } else if (!simState.isPaused || simState.stepFrame) {
+    if (!physicsSystem->hasInitialSnapshot()) {
+      physicsSystem->saveInitialSnapshot();
+    }
+
+    if (simState.historyIndex >= 0) {
+      int truncIdx = simState.historyIndex;
+      physicsSystem->truncateAfter(truncIdx);
+      if (truncIdx + 1 < static_cast<int>(simState.timeHistory.size()))
+        simState.timeHistory.erase(
+            simState.timeHistory.begin() + truncIdx + 1,
+            simState.timeHistory.end());
+      simState.historyIndex = -1;
+    }
+
     float advance = simState.stepFrame ? simState.stepSize
                                        : deltaTime * simState.timeSpeed;
     simState.currentTime += advance;
     simState.stepFrame = false;
     simState.rewinding = false;
-    simState.historyIndex = -1;
-
-    simState.timeHistory.push_back(simState.currentTime);
-    if (simState.maxHistoryTime > 0.0f &&
-        !simState.timeHistory.empty() &&
-        (simState.timeHistory.back() - simState.timeHistory.front()) >
-            simState.maxHistoryTime) {
-      simState.timeHistory.erase(simState.timeHistory.begin());
-    }
+    simState.reversePlay = false;
 
     physicsSystem->update(advance);
+    physicsSystem->saveSnapshot();
+    simState.timeHistory.push_back(simState.currentTime);
+
+    while (static_cast<int>(simState.timeHistory.size()) >
+           physicsSystem->getSnapshotCount()) {
+      simState.timeHistory.erase(simState.timeHistory.begin());
+    }
   }
 
     interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
@@ -406,15 +462,13 @@ void Application::keyCallback(GLFWwindow* win, int key, int scancode,
         glfwSetWindowShouldClose(win, true);
         break;
       case GLFW_KEY_R:
-        app->simState.currentTime = 0.0f;
-        app->simState.timeHistory.clear();
-        app->simState.historyIndex = -1;
-        app->simState.rewinding = false;
+        app->simState.resetRequested = true;
         break;
       case GLFW_KEY_SPACE:
         if (!ImGui::GetIO().WantCaptureKeyboard) {
           app->simState.isPaused = !app->simState.isPaused;
           app->simState.rewinding = false;
+          app->simState.reversePlay = false;
         }
         break;
       case GLFW_KEY_PERIOD:
@@ -423,16 +477,20 @@ void Application::keyCallback(GLFWwindow* win, int key, int scancode,
         app->simState.rewinding = false;
         break;
       case GLFW_KEY_COMMA:
-        if (!app->simState.timeHistory.empty()) {
+        if (app->physicsSystem->getSnapshotCount() > 0) {
           app->simState.isPaused = true;
           app->simState.rewinding = true;
+          app->simState.reversePlay = false;
+          int snapshotCount = app->physicsSystem->getSnapshotCount();
           if (app->simState.historyIndex < 0)
-            app->simState.historyIndex =
-                static_cast<int>(app->simState.timeHistory.size()) - 1;
+            app->simState.historyIndex = snapshotCount - 1;
           if (app->simState.historyIndex > 0) {
             app->simState.historyIndex--;
-            app->simState.currentTime =
-                app->simState.timeHistory[app->simState.historyIndex];
+            app->physicsSystem->restoreSnapshot(app->simState.historyIndex);
+            if (app->simState.historyIndex <
+                static_cast<int>(app->simState.timeHistory.size()))
+              app->simState.currentTime =
+                  app->simState.timeHistory[app->simState.historyIndex];
           }
         }
         break;

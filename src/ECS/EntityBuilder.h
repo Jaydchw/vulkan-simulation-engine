@@ -145,6 +145,17 @@ class EntityBuilder final {
     hasCollider = true;
     colliderComp.type = ColliderType::Plane;
     colliderComp.normal = glm::normalize(normal);
+    colliderComp.finite = false;
+    return *this;
+  }
+
+  EntityBuilder& planeCollider(const glm::vec3& normal,
+                               const glm::vec3& halfExtents) {
+    hasCollider = true;
+    colliderComp.type = ColliderType::Plane;
+    colliderComp.normal = glm::normalize(normal);
+    colliderComp.halfExtents = halfExtents;
+    colliderComp.finite = true;
     return *this;
   }
 

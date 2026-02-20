@@ -72,4 +72,5 @@ struct ColliderComponent {
   float radius = 1.0f;
   glm::vec3 halfExtents = glm::vec3(0.5f);
   glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
+  bool finite = false;
 };

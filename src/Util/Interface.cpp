@@ -342,9 +342,37 @@ const float gap = 16.0f * s;
                     ImVec2(bw, bh))) {
     simState.isPaused = !simState.isPaused;
     simState.rewinding = false;
+    simState.reversePlay = false;
   }
   ImGui::PopStyleColor(3);
   keybadge("Space");
+  ImGui::SameLine(0, gap);
+  if (simState.reversePlay && !simState.isPaused) {
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImVec4(0.65f, 0.22f, 0.22f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          ImVec4(0.75f, 0.28f, 0.28f, 1.0f));
+  } else {
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.30f, 0.18f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImVec4(0.60f, 0.38f, 0.22f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          ImVec4(0.70f, 0.45f, 0.28f, 1.0f));
+  }
+  if (ImGui::Button(simState.reversePlay && !simState.isPaused ? " Stop Rev "
+                                                               : " Reverse ",
+                    ImVec2(bw, bh))) {
+    if (simState.reversePlay && !simState.isPaused) {
+      simState.isPaused = true;
+      simState.reversePlay = false;
+    } else {
+      simState.isPaused = false;
+      simState.reversePlay = true;
+      simState.rewinding = true;
+    }
+  }
+  ImGui::PopStyleColor(3);
 
   ImGui::Spacing();
 
@@ -352,20 +380,23 @@ const float gap = 16.0f * s;
     simState.isPaused = true;
     simState.stepFrame = true;
     simState.rewinding = false;
+    simState.reversePlay = false;
   }
   keybadge(".");
   ImGui::SameLine(0, gap);
   if (ImGui::Button("Step Back", ImVec2(bw, bh))) {
-    if (!simState.timeHistory.empty()) {
-      simState.isPaused = true;
-      simState.rewinding = true;
-      if (simState.historyIndex < 0)
-        simState.historyIndex =
-            static_cast<int>(simState.timeHistory.size()) - 1;
-      if (simState.historyIndex > 0) {
-        simState.historyIndex--;
+    simState.isPaused = true;
+    simState.rewinding = true;
+    simState.reversePlay = false;
+    simState.snapshotScrubbed = true;
+    if (simState.historyIndex < 0)
+      simState.historyIndex =
+          static_cast<int>(simState.timeHistory.size()) - 1;
+    if (simState.historyIndex > 0) {
+      simState.historyIndex--;
+      if (simState.historyIndex <
+          static_cast<int>(simState.timeHistory.size()))
         simState.currentTime = simState.timeHistory[simState.historyIndex];
-      }
     }
   }
   keybadge(",");
@@ -373,10 +404,7 @@ const float gap = 16.0f * s;
   ImGui::Spacing();
 
   if (ImGui::Button("Restart", ImVec2(bw, bh))) {
-    simState.currentTime = 0.0f;
-    simState.timeHistory.clear();
-    simState.historyIndex = -1;
-    simState.rewinding = false;
+    simState.resetRequested = true;
   }
   keybadge("R");
   ImGui::SameLine(0, gap);
@@ -421,8 +449,10 @@ const float gap = 16.0f * s;
                          "Frame %d")) {
       simState.isPaused = true;
       simState.rewinding = true;
+      simState.reversePlay = false;
       simState.historyIndex = scrubIdx;
       simState.currentTime = simState.timeHistory[scrubIdx];
+      simState.snapshotScrubbed = true;
     }
     ImGui::TextDisabled("History: %d frames (%.1fs)", histSize,
                         simState.timeHistory.back());
@@ -432,10 +462,13 @@ const float gap = 16.0f * s;
 
   ImVec4 statusColor = simState.isPaused
                            ? ImVec4(1.0f, 0.6f, 0.2f, 1.0f)
-                           : ImVec4(0.4f, 1.0f, 0.4f, 1.0f);
-  const char* statusText = simState.isPaused
-                               ? (simState.rewinding ? "Rewinding" : "Paused")
-                               : "Running";
+                           : (simState.reversePlay
+                                  ? ImVec4(1.0f, 0.5f, 0.3f, 1.0f)
+                                  : ImVec4(0.4f, 1.0f, 0.4f, 1.0f));
+  const char* statusText =
+      simState.isPaused
+          ? (simState.rewinding ? "Rewinding" : "Paused")
+          : (simState.reversePlay ? "Reverse" : "Running");
   ImGui::Bullet();
   ImGui::SameLine();
   ImGui::TextColored(statusColor, "%s", statusText);

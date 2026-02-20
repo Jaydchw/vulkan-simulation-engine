@@ -354,8 +354,12 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
           builder.sphereCollider(colliderRadius);
         else if (colliderType == "box")
           builder.boxCollider(colliderHalfExtents);
-        else if (colliderType == "plane")
-          builder.planeCollider(colliderNormal);
+        else if (colliderType == "plane") {
+          if (colliderHalfExtents != glm::vec3(0.5f))
+            builder.planeCollider(colliderNormal, colliderHalfExtents);
+          else
+            builder.planeCollider(colliderNormal);
+        }
       }
 
       builder.build(registry);

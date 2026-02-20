@@ -23,10 +23,12 @@ struct SimulationState {
   float timeSpeed = 1.0f;
   float currentTime = 0.0f;
   float stepSize = 0.016f;
-  float maxHistoryTime = 30.0f;
   std::vector<float> timeHistory;
   int historyIndex = -1;
   bool rewinding = false;
+  bool reversePlay = false;
+  bool snapshotScrubbed = false;
+  bool resetRequested = false;
 };
 
 struct SceneSettings {
