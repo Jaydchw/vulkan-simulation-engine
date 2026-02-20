@@ -1,0 +1,57 @@
+# Minimal World
+# A simple scene with just a floor, a cube, and a light
+
+BeginSettings
+  ClearColor = 0.15, 0.15, 0.2, 1.0
+  TimeSpeed = 1.0
+EndSettings
+
+BeginMaterial
+  Name = GreyFloor
+  AlbedoColor = 0.4, 0.4, 0.4
+  Roughness = 0.8
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = WhiteCube
+  AlbedoColor = 0.9, 0.9, 0.9
+  Roughness = 0.5
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 30.0
+  Height = 30.0
+EndMesh
+
+BeginMesh
+  Name = Cube
+  Type = cube
+  Size = 2.0
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GreyFloor
+EndObject
+
+BeginObject
+  Name = Center Cube
+  Position = 0.0, 1.0, 0.0
+  Mesh = Cube
+  Material = WhiteCube
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.3, -1.0, 0.4
+  Color = 1.0, 1.0, 0.95
+  Intensity = 2.5
+  CastsShadows = true
+EndLight

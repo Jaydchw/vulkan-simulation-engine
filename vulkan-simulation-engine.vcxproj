@@ -157,6 +157,7 @@
     <ClCompile Include="src\Util\ConfigParser.cpp" />
     <ClCompile Include="src\Util\Interface.cpp" />
     <ClCompile Include="src\Util\RenderUtils.cpp" />
+    <ClCompile Include="src\Util\WorldParser.cpp" />
     <ClCompile Include="src\Vulkan\VulkanDepthBuffer.cpp" />
     <ClCompile Include="include\imgui\imgui.cpp" />
     <ClCompile Include="include\imgui\imgui_draw.cpp" />
@@ -213,6 +214,7 @@
     <ClInclude Include="src\Resources\MeshManager.h" />
     <ClInclude Include="src\Rendering\PostProcessing.h" />
     <ClInclude Include="src\Rendering\RenderDevice.h" />
+    <ClInclude Include="src\Util\WorldParser.h" />
     <ClInclude Include="src\Vulkan\VulkanCommandBuffer.h" />
     <ClInclude Include="src\Vulkan\VulkanDepthBuffer.h" />
     <ClInclude Include="src\Vulkan\VulkanDescriptors.h" />
@@ -317,6 +319,11 @@
 </Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(ProjectDir)shaders\plant_vert.spv</Outputs>
     </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Worlds\minimal.world" />
+    <None Include="Worlds\neon.world" />
+    <None Include="Worlds\showcase.world" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

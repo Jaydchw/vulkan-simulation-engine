@@ -1,0 +1,238 @@
+# Neon World
+# A dark scene with bright coloured objects and multiple point lights
+
+BeginSettings
+  ClearColor = 0.02, 0.02, 0.04, 1.0
+  TimeSpeed = 1.0
+EndSettings
+
+# ===========================
+# Textures
+# ===========================
+
+BeginTexture
+  Name = NeonPinkSolid
+  Type = solid
+  Color = 1.0, 0.1, 0.5
+EndTexture
+
+BeginTexture
+  Name = NeonCyanSolid
+  Type = solid
+  Color = 0.0, 1.0, 0.9
+EndTexture
+
+BeginTexture
+  Name = NeonGreenSolid
+  Type = solid
+  Color = 0.2, 1.0, 0.1
+EndTexture
+
+BeginTexture
+  Name = CyanPinkStripe
+  Type = stripe
+  ColorA = 0.0, 0.9, 0.9
+  ColorB = 0.9, 0.0, 0.5
+  Size = 256
+  StripeCount = 4
+  Vertical = true
+EndTexture
+
+BeginTexture
+  Name = NeonRadial
+  Type = radial
+  ColorA = 1.0, 0.0, 1.0
+  ColorB = 0.0, 0.0, 0.1
+  Size = 256
+EndTexture
+
+# ===========================
+# Materials
+# ===========================
+
+BeginMaterial
+  Name = DarkFloor
+  AlbedoColor = 0.05, 0.05, 0.08
+  Roughness = 0.95
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = NeonPink
+  AlbedoTexture = NeonPinkSolid
+  Roughness = 0.15
+  Metallic = 0.3
+EndMaterial
+
+BeginMaterial
+  Name = NeonCyan
+  AlbedoTexture = NeonCyanSolid
+  Roughness = 0.15
+  Metallic = 0.3
+EndMaterial
+
+BeginMaterial
+  Name = NeonGreen
+  AlbedoTexture = NeonGreenSolid
+  Roughness = 0.15
+  Metallic = 0.3
+EndMaterial
+
+BeginMaterial
+  Name = StripedNeon
+  AlbedoTexture = CyanPinkStripe
+  Roughness = 0.2
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = RadialNeon
+  AlbedoTexture = NeonRadial
+  Roughness = 0.3
+  Metallic = 0.2
+EndMaterial
+
+# ===========================
+# Meshes
+# ===========================
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 40.0
+  Height = 40.0
+EndMesh
+
+BeginMesh
+  Name = Cube
+  Type = cube
+  Size = 1.5
+EndMesh
+
+BeginMesh
+  Name = Sphere
+  Type = sphere
+  Radius = 0.8
+  Segments = 32
+EndMesh
+
+BeginMesh
+  Name = Pillar
+  Type = cylinder
+  Radius = 0.4
+  Height = 4.0
+  Segments = 24
+EndMesh
+
+# ===========================
+# Objects
+# ===========================
+
+BeginObject
+  Name = Floor
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = DarkFloor
+EndObject
+
+# Pillars in a circle
+BeginObject
+  Name = Pillar Front
+  Position = 0.0, 2.0, -5.0
+  Mesh = Pillar
+  Material = NeonPink
+EndObject
+
+BeginObject
+  Name = Pillar Left
+  Position = -5.0, 2.0, 0.0
+  Mesh = Pillar
+  Material = NeonCyan
+EndObject
+
+BeginObject
+  Name = Pillar Right
+  Position = 5.0, 2.0, 0.0
+  Mesh = Pillar
+  Material = NeonGreen
+EndObject
+
+BeginObject
+  Name = Pillar Back
+  Position = 0.0, 2.0, 5.0
+  Mesh = Pillar
+  Material = StripedNeon
+EndObject
+
+# Center piece
+BeginObject
+  Name = Center Sphere
+  Position = 0.0, 1.2, 0.0
+  Scale = 1.5, 1.5, 1.5
+  Mesh = Sphere
+  Material = RadialNeon
+EndObject
+
+# Floating cubes
+BeginObject
+  Name = Floating Cube 1
+  Position = -3.0, 3.0, -3.0
+  Rotation = 45.0, 30.0, 0.0
+  Mesh = Cube
+  Material = NeonPink
+EndObject
+
+BeginObject
+  Name = Floating Cube 2
+  Position = 3.0, 2.5, -3.0
+  Rotation = 20.0, 60.0, 15.0
+  Mesh = Cube
+  Material = NeonCyan
+EndObject
+
+BeginObject
+  Name = Floating Cube 3
+  Position = 0.0, 4.0, 3.0
+  Rotation = 10.0, 45.0, 30.0
+  Mesh = Cube
+  Material = NeonGreen
+EndObject
+
+# ===========================
+# Lights
+# ===========================
+
+# Dim overhead sun so shadows work
+BeginLight
+  Name = Dim Sun
+  Type = sun
+  Direction = 0.0, -1.0, 0.2
+  Color = 0.15, 0.15, 0.2
+  Intensity = 0.5
+  CastsShadows = true
+EndLight
+
+# Neon point lights matching the pillars
+BeginLight
+  Name = Pink Light
+  Type = point
+  Position = 0.0, 3.5, -5.0
+  Color = 1.0, 0.1, 0.5
+  Intensity = 8.0
+  Constant = 1.0
+  Linear = 0.09
+  Quadratic = 0.032
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Cyan Light
+  Type = point
+  Position = -5.0, 3.5, 0.0
+  Color = 0.0, 1.0, 0.9
+  Intensity = 8.0
+  Constant = 1.0
+  Linear = 0.09
+  Quadratic = 0.032
+  CastsShadows = true
+EndLight

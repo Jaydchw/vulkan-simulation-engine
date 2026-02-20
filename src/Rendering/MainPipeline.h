@@ -65,6 +65,7 @@ class MainPipeline final {
   VkPipeline getPipeline() const { return pipeline; }
   VkPipelineLayout getPipelineLayout() const { return pipelineLayout; }
   void setPolygonMode(VkPolygonMode mode) { currentPolygonMode = mode; }
+  VkPolygonMode getPolygonMode() const { return currentPolygonMode; }
   void setShadingMode(ShadingMode mode) { currentShadingMode = mode; }
   ShadingMode getShadingMode() const { return currentShadingMode; }
 

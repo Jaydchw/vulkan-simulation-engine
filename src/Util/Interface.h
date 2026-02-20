@@ -5,7 +5,10 @@
 #include <imgui_impl_vulkan.h>
 #include <vulkan/vulkan.h>
 
+#include <functional>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../ECS/Registry.h"
@@ -18,6 +21,11 @@ struct SimulationState {
   bool stepFrame = false;
   float timeSpeed = 1.0f;
   float currentTime = 0.0f;
+  float stepSize = 0.016f;
+  float maxHistoryTime = 30.0f;
+  std::vector<float> timeHistory;
+  int historyIndex = -1;
+  bool rewinding = false;
 };
 
 struct SceneSettings {
@@ -49,6 +57,10 @@ class Interface {
 
   void draw(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
+  void setWorldLoadCallback(std::function<void(const std::string&)> callback);
+  void setWorldDirectory(const std::string& dir);
+  void refreshWorldList();
+
  private:
   GLFWwindow* window;
   VkInstance instance;
@@ -67,9 +79,22 @@ class Interface {
 
   GeneralSettings generalSettings;
 
+  std::string worldDirectory;
+  std::vector<std::string> worldFiles;
+  std::function<void(const std::string&)> worldLoadCallback;
+
+  struct WorldFileStats {
+    int objects = 0;
+    int lights = 0;
+    int textures = 0;
+    int materials = 0;
+  };
+  std::unordered_map<std::string, WorldFileStats> worldFileStats;
+
   void createDescriptorPool();
   void createImGuiRenderPass();
   void applyScalePreset();
+  void renderWorldsMenu();
   void renderSimulationMenu(SimulationState& simState);
   void renderObjectsMenu(const Registry& registry);
   void renderSceneMenu(SceneSettings& sceneSettings,

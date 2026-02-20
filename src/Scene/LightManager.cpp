@@ -27,7 +27,10 @@ void LightManager::init() {
   Debug::log(Debug::Category::LIGHTS, "LightManager: Initialization complete");
 }
 
-void LightManager::setRegistry(Registry* reg) { registry = reg; }
+void LightManager::setRegistry(Registry* reg) {
+  registry = reg;
+  lightCount = 0;
+}
 
 void LightManager::syncLights() {
   if (!registry) return;

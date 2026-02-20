@@ -18,6 +18,7 @@
 #include "Util/Camera.h"
 #include "Util/Input.h"
 #include "Util/Interface.h"
+#include "Util/WorldParser.h"
 
 constexpr uint32_t WIDTH = 1280;
 constexpr uint32_t HEIGHT = 720;
@@ -53,6 +54,7 @@ class Application final {
 
   void init();
   void setRegistry(Registry& reg);
+  void loadWorld(const std::string& filepath);
   void run();
 
   MeshManager* getMeshManager() const { return meshManager.get(); }
@@ -65,6 +67,8 @@ class Application final {
 
  private:
   Registry* registry = nullptr;
+  std::unique_ptr<Registry> ownedRegistry;
+  std::unique_ptr<WorldParser> worldParser;
   std::vector<VkImage> swapChainImages;
   std::vector<VkImageView> swapChainImageViews;
   std::vector<VkBuffer> uniformBuffers;

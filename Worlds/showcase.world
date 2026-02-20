@@ -1,0 +1,257 @@
+# Showcase World
+# Demonstrates various textures, materials, and mesh types
+
+BeginSettings
+  ClearColor = 0.08, 0.08, 0.12, 1.0
+  TimeSpeed = 1.0
+EndSettings
+
+# ===========================
+# Textures
+# ===========================
+
+BeginTexture
+  Name = FloorChecker
+  Type = checker
+  ColorA = 0.3, 0.3, 0.3
+  ColorB = 0.6, 0.6, 0.6
+  Size = 512
+  Divisions = 16
+EndTexture
+
+BeginTexture
+  Name = GoldSolid
+  Type = solid
+  Color = 1.0, 0.84, 0.0
+EndTexture
+
+BeginTexture
+  Name = SunsetGradient
+  Type = gradient
+  ColorA = 0.9, 0.4, 0.1
+  ColorB = 0.6, 0.1, 0.8
+  Size = 256
+  Vertical = true
+EndTexture
+
+BeginTexture
+  Name = WarningStripe
+  Type = stripe
+  ColorA = 0.1, 0.1, 0.1
+  ColorB = 0.95, 0.95, 0.0
+  Size = 256
+  StripeCount = 6
+  Vertical = true
+EndTexture
+
+BeginTexture
+  Name = RadialGlow
+  Type = radial
+  ColorA = 1.0, 1.0, 1.0
+  ColorB = 0.05, 0.05, 0.3
+  Size = 256
+EndTexture
+
+BeginTexture
+  Name = BlueChecker
+  Type = checker
+  ColorA = 0.1, 0.1, 0.9
+  ColorB = 0.9, 0.9, 0.9
+  Size = 256
+  Divisions = 4
+EndTexture
+
+# ===========================
+# Materials
+# ===========================
+
+BeginMaterial
+  Name = CheckerFloor
+  AlbedoTexture = FloorChecker
+  Roughness = 0.9
+  Metallic = 0.0
+  TextureScale = 4.0
+EndMaterial
+
+BeginMaterial
+  Name = Red
+  AlbedoColor = 0.9, 0.15, 0.15
+  Roughness = 0.3
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = Green
+  AlbedoColor = 0.15, 0.8, 0.2
+  Roughness = 0.5
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = Blue
+  AlbedoColor = 0.2, 0.3, 0.9
+  Roughness = 0.4
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = Gold
+  AlbedoTexture = GoldSolid
+  Roughness = 0.2
+  Metallic = 0.9
+EndMaterial
+
+BeginMaterial
+  Name = Sunset
+  AlbedoTexture = SunsetGradient
+  Roughness = 0.6
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = Warning
+  AlbedoTexture = WarningStripe
+  Roughness = 0.5
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = Radial
+  AlbedoTexture = RadialGlow
+  Roughness = 0.7
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = BlueCheck
+  AlbedoTexture = BlueChecker
+  Roughness = 0.3
+  Metallic = 0.0
+EndMaterial
+
+# ===========================
+# Meshes
+# ===========================
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 50.0
+  Height = 50.0
+EndMesh
+
+BeginMesh
+  Name = Cube
+  Type = cube
+  Size = 2.0
+EndMesh
+
+BeginMesh
+  Name = Sphere
+  Type = sphere
+  Radius = 1.0
+  Segments = 32
+EndMesh
+
+BeginMesh
+  Name = Cylinder
+  Type = cylinder
+  Radius = 0.8
+  Height = 2.5
+  Segments = 32
+EndMesh
+
+# ===========================
+# Objects
+# ===========================
+
+BeginObject
+  Name = Floor
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = CheckerFloor
+EndObject
+
+# Front row - solid colors and textured
+BeginObject
+  Name = Red Cube
+  Position = -6.0, 1.0, 0.0
+  Mesh = Cube
+  Material = Red
+EndObject
+
+BeginObject
+  Name = Green Cube
+  Position = -3.0, 1.0, 0.0
+  Mesh = Cube
+  Material = Green
+EndObject
+
+BeginObject
+  Name = Blue Cube
+  Position = 0.0, 1.0, 0.0
+  Mesh = Cube
+  Material = Blue
+EndObject
+
+BeginObject
+  Name = Gold Sphere
+  Position = 3.0, 1.0, 0.0
+  Mesh = Sphere
+  Material = Gold
+EndObject
+
+BeginObject
+  Name = Gradient Sphere
+  Position = 6.0, 1.0, 0.0
+  Mesh = Sphere
+  Material = Sunset
+EndObject
+
+# Back row - patterns
+BeginObject
+  Name = Striped Cylinder
+  Position = -4.0, 1.25, 5.0
+  Mesh = Cylinder
+  Material = Warning
+EndObject
+
+BeginObject
+  Name = Radial Sphere
+  Position = 0.0, 1.0, 5.0
+  Mesh = Sphere
+  Material = Radial
+EndObject
+
+BeginObject
+  Name = Checker Cube
+  Position = 4.0, 1.0, 5.0
+  Rotation = 0.0, 45.0, 0.0
+  Mesh = Cube
+  Material = BlueCheck
+EndObject
+
+# ===========================
+# Lights
+# ===========================
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.5, -1.0, 0.5
+  Color = 1.0, 0.95, 0.8
+  Intensity = 2.0
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Blue Accent
+  Type = point
+  Position = 5.0, 3.0, 5.0
+  Color = 0.2, 0.2, 1.0
+  Intensity = 5.0
+  Constant = 1.0
+  Linear = 0.09
+  Quadratic = 0.032
+  CastsShadows = true
+EndLight

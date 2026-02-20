@@ -38,6 +38,25 @@ void Application::setRegistry(Registry& reg) {
   lightManager->syncLights();
 }
 
+void Application::loadWorld(const std::string& filepath) {
+  vkDeviceWaitIdle(device);
+
+  ownedRegistry = std::make_unique<Registry>();
+  registry = ownedRegistry.get();
+
+  WorldSettings worldSettings;
+  worldParser->load(filepath, *registry, worldSettings);
+
+  sceneSettings.clearColor = worldSettings.clearColor;
+  simState.timeSpeed = worldSettings.timeSpeed;
+  simState.currentTime = 0.0f;
+
+  lightManager->setRegistry(registry);
+  lightManager->syncLights();
+
+  Debug::log(Debug::Category::MAIN, "Application: Loaded world: ", filepath);
+}
+
 void Application::run() {
   mainLoop();
   cleanup();
@@ -112,20 +131,39 @@ void Application::initVulkan() {
   Vulkan::createSyncObjects(device, static_cast<int>(swapChainImages.size()),
                             imageAvailableSemaphores, renderFinishedSemaphores,
                             inFlightFences);
+
+  worldParser = std::make_unique<WorldParser>(meshManager.get(),
+                                              materialManager.get(),
+                                              textureManager.get());
+  interface->setWorldDirectory("Worlds");
+  interface->setWorldLoadCallback(
+      [this](const std::string& path) { loadWorld(path); });
 }
 
 void Application::mainLoop() {
-  setCameraPreset(1);
-  while (!window->shouldClose()) {
-    window->pollEvents();
-    const float currentTime = static_cast<float>(glfwGetTime());
-    const float deltaTime = currentTime - lastFrameTime;
-    lastFrameTime = currentTime;
+setCameraPreset(1);
+while (!window->shouldClose()) {
+  window->pollEvents();
+  const float currentTime = static_cast<float>(glfwGetTime());
+  const float deltaTime = currentTime - lastFrameTime;
+  lastFrameTime = currentTime;
 
-    if (!simState.isPaused || simState.stepFrame) {
-      simState.currentTime += deltaTime * simState.timeSpeed;
-      simState.stepFrame = false;
+  if (!simState.isPaused || simState.stepFrame) {
+    float advance = simState.stepFrame ? simState.stepSize
+                                       : deltaTime * simState.timeSpeed;
+    simState.currentTime += advance;
+    simState.stepFrame = false;
+    simState.rewinding = false;
+    simState.historyIndex = -1;
+
+    simState.timeHistory.push_back(simState.currentTime);
+    if (simState.maxHistoryTime > 0.0f &&
+        !simState.timeHistory.empty() &&
+        (simState.timeHistory.back() - simState.timeHistory.front()) >
+            simState.maxHistoryTime) {
+      simState.timeHistory.erase(simState.timeHistory.begin());
     }
+  }
 
     interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
                        postProcessing.get());
@@ -352,10 +390,98 @@ void Application::keyCallback(GLFWwindow* win, int key, int scancode,
       reinterpret_cast<Application*>(glfwGetWindowUserPointer(win));
   app->input.onKey(key, scancode, action, mods);
   if (action == GLFW_PRESS) {
-    if (key == GLFW_KEY_ESCAPE)
-      glfwSetWindowShouldClose(win, true);
-    else if (key == GLFW_KEY_R)
-      app->resetApplication();
+    switch (key) {
+      case GLFW_KEY_ESCAPE:
+        glfwSetWindowShouldClose(win, true);
+        break;
+      case GLFW_KEY_R:
+        app->simState.currentTime = 0.0f;
+        app->simState.timeHistory.clear();
+        app->simState.historyIndex = -1;
+        app->simState.rewinding = false;
+        break;
+      case GLFW_KEY_SPACE:
+        if (!ImGui::GetIO().WantCaptureKeyboard) {
+          app->simState.isPaused = !app->simState.isPaused;
+          app->simState.rewinding = false;
+        }
+        break;
+      case GLFW_KEY_PERIOD:
+        app->simState.isPaused = true;
+        app->simState.stepFrame = true;
+        app->simState.rewinding = false;
+        break;
+      case GLFW_KEY_COMMA:
+        if (!app->simState.timeHistory.empty()) {
+          app->simState.isPaused = true;
+          app->simState.rewinding = true;
+          if (app->simState.historyIndex < 0)
+            app->simState.historyIndex =
+                static_cast<int>(app->simState.timeHistory.size()) - 1;
+          if (app->simState.historyIndex > 0) {
+            app->simState.historyIndex--;
+            app->simState.currentTime =
+                app->simState.timeHistory[app->simState.historyIndex];
+          }
+        }
+        break;
+      case GLFW_KEY_EQUAL:
+      case GLFW_KEY_KP_ADD:
+        app->simState.timeSpeed =
+            glm::min(app->simState.timeSpeed * 2.0f, 10.0f);
+        break;
+      case GLFW_KEY_MINUS:
+      case GLFW_KEY_KP_SUBTRACT:
+        app->simState.timeSpeed =
+            glm::max(app->simState.timeSpeed * 0.5f, 0.01f);
+        break;
+      case GLFW_KEY_L:
+        app->toggleShadingMode();
+        break;
+      case GLFW_KEY_K:
+        app->postProcessing->toggleToonMode();
+        break;
+      case GLFW_KEY_TAB: {
+        auto current = app->mainPipeline->getPolygonMode();
+        if (current == VK_POLYGON_MODE_FILL)
+          app->mainPipeline->setPolygonMode(VK_POLYGON_MODE_LINE);
+        else if (current == VK_POLYGON_MODE_LINE)
+          app->mainPipeline->setPolygonMode(VK_POLYGON_MODE_POINT);
+        else
+          app->mainPipeline->setPolygonMode(VK_POLYGON_MODE_FILL);
+        app->recreateGraphicsPipeline();
+        break;
+      }
+      case GLFW_KEY_G:
+        if (app->mainPipeline->getPolygonMode() == VK_POLYGON_MODE_LINE)
+          app->mainPipeline->setPolygonMode(VK_POLYGON_MODE_FILL);
+        else
+          app->mainPipeline->setPolygonMode(VK_POLYGON_MODE_LINE);
+        app->recreateGraphicsPipeline();
+        break;
+      case GLFW_KEY_F1:
+        break;
+      case GLFW_KEY_F11: {
+        GLFWmonitor* monitor = glfwGetWindowMonitor(win);
+        if (monitor) {
+          glfwSetWindowMonitor(win, nullptr, 100, 100, WIDTH, HEIGHT, 0);
+        } else {
+          monitor = glfwGetPrimaryMonitor();
+          const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+          glfwSetWindowMonitor(win, monitor, 0, 0, mode->width, mode->height,
+                               mode->refreshRate);
+        }
+        break;
+      }
+      case GLFW_KEY_1:
+        app->setCameraPreset(1);
+        break;
+      case GLFW_KEY_2:
+        app->setCameraPreset(2);
+        break;
+      default:
+        break;
+    }
   }
 }
 
@@ -370,6 +496,9 @@ void Application::setCameraPreset(int presetIndex) {
 void Application::resetApplication() {
   setCameraPreset(1);
   simState.currentTime = 0.0f;
+  simState.timeHistory.clear();
+  simState.historyIndex = -1;
+  simState.rewinding = false;
 }
 
 void Application::cursorPosCallback(GLFWwindow* win, double xpos, double ypos) {
