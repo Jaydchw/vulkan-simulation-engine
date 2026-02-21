@@ -5,6 +5,7 @@
 
 #include "ECS/Components.h"
 #include "ECS/Entity.h"
+#include <PhysicsObject.h>
 
 class Registry final {
  public:
@@ -21,6 +22,7 @@ class Registry final {
     lights.erase(entity);
     physics.erase(entity);
     colliders.erase(entity);
+    physicsObjects.erase(entity);
   }
 
   template <typename T>
@@ -63,6 +65,13 @@ class Registry final {
     return colliders;
   }
 
+  jphys::PhysicsObject& getPhysicsObject(Entity entity) {
+    return physicsObjects[entity];
+  }
+  const jphys::PhysicsObject& getPhysicsObject(Entity entity) const {
+    return physicsObjects.at(entity);
+  }
+
   std::vector<Entity> getEntities() const {
     std::vector<Entity> result;
     for (const auto& [entity, _] : names) {
@@ -81,6 +90,7 @@ class Registry final {
   std::unordered_map<Entity, LightComponent> lights;
   std::unordered_map<Entity, PhysicsComponent> physics;
   std::unordered_map<Entity, ColliderComponent> colliders;
+  std::unordered_map<Entity, jphys::PhysicsObject> physicsObjects;
 };
 
 template <>

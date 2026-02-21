@@ -1,6 +1,8 @@
 #pragma once
 #include <glm/glm.hpp>
 
+#include <PhysicsWorld.h>
+
 class Registry;
 
 class PhysicsSystem final {
@@ -10,13 +12,13 @@ class PhysicsSystem final {
   void setRegistry(Registry* reg);
   void update(float deltaTime);
 
-  void setGravity(const glm::vec3& g) { gravity = g; }
-  glm::vec3 getGravity() const { return gravity; }
+  void setGravity(const glm::vec3& g) { world.setGravity(g); }
+  glm::vec3 getGravity() const { return world.getGravity(); }
 
  private:
   Registry* registry = nullptr;
-  glm::vec3 gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+  jphys::PhysicsWorld world;
 
-  void integrate(float deltaTime);
-  void resolveCollisions();
+  void syncToLibrary();
+  void syncFromLibrary();
 };

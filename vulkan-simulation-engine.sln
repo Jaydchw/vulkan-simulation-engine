@@ -1,9 +1,17 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.3.11312.210 d18.3
+VisualStudioVersion = 18.3.11312.210
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vulkan-simulation-engine", "vulkan-simulation-engine.vcxproj", "{F8CCFF3A-8543-4ED9-9E57-519BDBBDB1A1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{5C0FB350-9D1B-454E-B3C0-6F803253912C} = {5C0FB350-9D1B-454E-B3C0-6F803253912C}
+		{196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E} = {196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jphyslib", "jphyslib\jphyslib.vcxproj", "{5C0FB350-9D1B-454E-B3C0-6F803253912C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "jphyslib-test", "jphyslib-test\jphyslib-test.vcxproj", "{196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +29,22 @@ Global
 		{F8CCFF3A-8543-4ED9-9E57-519BDBBDB1A1}.Release|x64.Build.0 = Release|x64
 		{F8CCFF3A-8543-4ED9-9E57-519BDBBDB1A1}.Release|x86.ActiveCfg = Release|Win32
 		{F8CCFF3A-8543-4ED9-9E57-519BDBBDB1A1}.Release|x86.Build.0 = Release|Win32
+		{5C0FB350-9D1B-454E-B3C0-6F803253912C}.Debug|x64.ActiveCfg = Debug|x64
+		{5C0FB350-9D1B-454E-B3C0-6F803253912C}.Debug|x64.Build.0 = Debug|x64
+		{5C0FB350-9D1B-454E-B3C0-6F803253912C}.Debug|x86.ActiveCfg = Debug|Win32
+		{5C0FB350-9D1B-454E-B3C0-6F803253912C}.Debug|x86.Build.0 = Debug|Win32
+		{5C0FB350-9D1B-454E-B3C0-6F803253912C}.Release|x64.ActiveCfg = Release|x64
+		{5C0FB350-9D1B-454E-B3C0-6F803253912C}.Release|x64.Build.0 = Release|x64
+		{5C0FB350-9D1B-454E-B3C0-6F803253912C}.Release|x86.ActiveCfg = Release|Win32
+		{5C0FB350-9D1B-454E-B3C0-6F803253912C}.Release|x86.Build.0 = Release|Win32
+		{196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E}.Debug|x64.ActiveCfg = Debug|x64
+		{196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E}.Debug|x64.Build.0 = Debug|x64
+		{196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E}.Debug|x86.ActiveCfg = Debug|Win32
+		{196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E}.Debug|x86.Build.0 = Debug|Win32
+		{196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E}.Release|x64.ActiveCfg = Release|x64
+		{196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E}.Release|x64.Build.0 = Release|x64
+		{196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E}.Release|x86.ActiveCfg = Release|Win32
+		{196BEB6B-9CB9-480C-B7FD-7FEC6FCAEB5E}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
