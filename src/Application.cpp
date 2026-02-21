@@ -5,6 +5,7 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <limits>
 
 #include "Util/Debug.h"
 #include "Util/RenderUtils.h"
@@ -48,7 +49,9 @@ vkDeviceWaitIdle(device);
 
 if (interface) interface->clearSelection();
 
-ownedRegistry = std::make_unique<Registry>();
+  lightManager->resetForNewScene();
+
+  ownedRegistry = std::make_unique<Registry>();
   registry = ownedRegistry.get();
 
   WorldSettings worldSettings;
@@ -479,10 +482,30 @@ void Application::cleanupSwapChain() {
 }
 
 void Application::updateUniformBuffer(uint32_t currentImage) {
-  const glm::vec3 sceneCenter = glm::vec3(0.0f, 0.0f, 0.0f);
-  const float sceneRadius = 100.0f;
-  lightManager->updateAllShadowMatrices(sceneCenter, sceneRadius);
-  lightManager->updateLightBuffer();
+// Compute scene bounding sphere from all entity transforms
+glm::vec3 sceneMin(std::numeric_limits<float>::max());
+glm::vec3 sceneMax(std::numeric_limits<float>::lowest());
+bool hasEntities = false;
+for (const auto& [entity, transform] : registry->allTransforms()) {
+  const glm::vec3& pos = transform.position;
+  const glm::vec3& scl = transform.scale;
+  float maxScale = glm::max(scl.x, glm::max(scl.y, scl.z));
+  sceneMin = glm::min(sceneMin, pos - glm::vec3(maxScale));
+  sceneMax = glm::max(sceneMax, pos + glm::vec3(maxScale));
+  hasEntities = true;
+}
+glm::vec3 sceneCenter;
+float sceneRadius;
+if (hasEntities) {
+  sceneCenter = (sceneMin + sceneMax) * 0.5f;
+  sceneRadius = glm::length(sceneMax - sceneMin) * 0.5f;
+  sceneRadius = glm::clamp(sceneRadius, 10.0f, 5000.0f);
+} else {
+  sceneCenter = glm::vec3(0.0f);
+  sceneRadius = 100.0f;
+}
+lightManager->updateAllShadowMatrices(sceneCenter, sceneRadius);
+lightManager->updateLightBuffer();
   UniformBufferObject ubo{};
   ubo.view = camera.getViewMatrix();
   ubo.proj = glm::perspective(

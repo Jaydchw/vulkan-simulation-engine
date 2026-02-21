@@ -32,6 +32,16 @@ void LightManager::setRegistry(Registry* reg) {
   lightCount = 0;
 }
 
+void LightManager::resetForNewScene() {
+  Debug::log(Debug::Category::LIGHTS, "LightManager: Resetting for new scene");
+  if (shadowSystem) {
+    shadowSystem->resetShadowMaps();
+  }
+  lightCount = 0;
+  LightBufferObject lbo{};
+  memcpy(lightBufferMapped, &lbo, sizeof(LightBufferObject));
+}
+
 void LightManager::syncLights() {
   if (!registry) return;
 

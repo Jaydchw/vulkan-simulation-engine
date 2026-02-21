@@ -1,3 +1,4 @@
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include "Shadow.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -129,6 +130,28 @@ uint32_t ShadowSystem::createShadowMap(uint32_t lightIndex) {
              "ShadowSystem: Shadow map created successfully, total maps: ",
              shadowMaps.size());
   return static_cast<uint32_t>(shadowMaps.size() - 1);
+}
+
+void ShadowSystem::resetShadowMaps() {
+  Debug::log(Debug::Category::SHADOWS,
+             "ShadowSystem: Resetting ", shadowMaps.size(), " shadow maps");
+
+  vkDeviceWaitIdle(renderDevice->getDevice());
+
+  for (auto& shadowMap : shadowMaps) {
+    if (shadowMap.sampler != VK_NULL_HANDLE)
+      vkDestroySampler(renderDevice->getDevice(), shadowMap.sampler, nullptr);
+    if (shadowMap.imageView != VK_NULL_HANDLE)
+      vkDestroyImageView(renderDevice->getDevice(), shadowMap.imageView, nullptr);
+    if (shadowMap.image != VK_NULL_HANDLE)
+      vkDestroyImage(renderDevice->getDevice(), shadowMap.image, nullptr);
+    if (shadowMap.memory != VK_NULL_HANDLE)
+      vkFreeMemory(renderDevice->getDevice(), shadowMap.memory, nullptr);
+  }
+  shadowMaps.clear();
+  updateDescriptorSet();
+
+  Debug::log(Debug::Category::SHADOWS, "ShadowSystem: Reset complete");
 }
 
 void ShadowSystem::cleanup() {
@@ -425,24 +448,25 @@ glm::mat4 ShadowSystem::calculateLightSpaceMatrix(const LightComponent& light,
   glm::mat4 lightView;
 
   if (light.type == LightType::Sun) {
-    const float orthoSize = sceneRadius * 1.2f;
-    const float nearPlane = 1.0f;
-    const float farPlane = sceneRadius * 6.0f;
-
-    const glm::vec3 lightDir = light.direction;
-    const glm::vec3 lightPos =
-        sceneCenter -
-        glm::normalize(lightDir) * (sceneRadius * 3.0f);
+    const glm::vec3 lightDir = glm::normalize(light.direction);
 
     glm::vec3 upVector = glm::vec3(0.0f, 1.0f, 0.0f);
-    if (glm::abs(glm::dot(glm::normalize(lightDir), upVector)) >
-        0.99f) {
+    if (glm::abs(glm::dot(lightDir, upVector)) > 0.99f) {
       upVector = glm::vec3(1.0f, 0.0f, 0.0f);
     }
 
+    // Place the light far enough back to encompass the whole scene
+    const glm::vec3 lightPos = sceneCenter - lightDir * (sceneRadius * 4.0f);
     lightView = glm::lookAt(lightPos, sceneCenter, upVector);
-    lightProjection = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize,
-                                 nearPlane, farPlane);
+
+    const float orthoSize = sceneRadius * 1.5f;
+    const float nearPlane = 0.1f;
+    const float farPlane = sceneRadius * 10.0f;
+
+    lightProjection = glm::ortho(
+        -orthoSize, orthoSize,
+        -orthoSize, orthoSize,
+        nearPlane, farPlane);
     lightProjection[1][1] *= -1;
 
   } else if (light.type == LightType::Point) {

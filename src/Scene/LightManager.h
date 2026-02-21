@@ -48,6 +48,7 @@ class LightManager final {
 
   void init();
   void setRegistry(Registry* reg);
+  void resetForNewScene();
   void syncLights();
   void updateLightBuffer();
   void cleanup();

@@ -43,6 +43,7 @@ class ShadowSystem final {
 
   void init();
   uint32_t createShadowMap(uint32_t lightIndex);
+  void resetShadowMaps();
   void cleanup();
 
   glm::mat4 calculateLightSpaceMatrix(const LightComponent& light,
