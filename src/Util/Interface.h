@@ -33,6 +33,9 @@ struct SimulationState {
   bool bakeRequested = false;
   float bakeDuration = 10.0f;
   bool baked = false;
+
+  bool reloadRequested = false;
+  float scrubAccumulator = 0.0f;
 };
 
 struct SceneSettings {
@@ -45,6 +48,7 @@ struct GeneralSettings {
   UIScalePreset scalePreset = UIScalePreset::Normal;
   bool showFPS = true;
   bool showLightGizmos = false;
+  bool snapshotsEnabled = true;
 };
 
 class Interface {
@@ -68,6 +72,7 @@ class Interface {
   Entity getSelectedEntity() const { return selectedEntity; }
   Entity getHoveredEntity() const { return hoveredEntity; }
   bool getShowLightGizmos() const { return generalSettings.showLightGizmos; }
+  bool getSnapshotsEnabled() const { return generalSettings.snapshotsEnabled; }
   void clearSelection() { selectedEntity = INVALID_ENTITY; hoveredEntity = INVALID_ENTITY; }
 
   void setWorldLoadCallback(std::function<void(const std::string&)> callback);
@@ -97,6 +102,7 @@ class Interface {
   Entity hoveredEntity = INVALID_ENTITY;
 
   std::string worldDirectory;
+  std::string lastLoadedWorld;
   std::vector<std::string> worldFiles;
   std::function<void(const std::string&)> worldLoadCallback;
 
@@ -110,6 +116,7 @@ class Interface {
 
   bool showSpeedPopup = false;
   bool showBakePopup = false;
+  bool scaleLinked = true;
 
   void createDescriptorPool();
   void createImGuiRenderPass();
@@ -120,5 +127,5 @@ class Interface {
   void renderSceneMenu(SceneSettings& sceneSettings,
                        MainPipeline* mainPipeline);
   void renderPostProcessingMenu(PostProcessing* postProcessing);
-  void renderSettingsMenu();
+  void renderSettingsMenu(SimulationState& simState);
 };

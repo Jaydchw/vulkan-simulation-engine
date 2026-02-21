@@ -276,7 +276,7 @@ PostProcessing* postProcessing) {
       ImGui::EndMenu();
     }
     if (menuItem("Settings")) {
-      renderSettingsMenu();
+      renderSettingsMenu(simState);
       ImGui::EndMenu();
     }
 
@@ -304,14 +304,26 @@ PostProcessing* postProcessing) {
 
 static void keybadge(const char* key) {
   ImGui::SameLine(0, 8);
-  ImGui::TextColored(ImVec4(0.50f, 0.52f, 0.58f, 1.0f), "[%s]", key);
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.44f, 0.52f, 1.0f));
+  ImGui::Text("[%s]", key);
+  ImGui::PopStyleColor();
 }
 
 static void sectionHeader(const char* label) {
   ImGui::Spacing();
-  ImGui::TextColored(ImVec4(0.50f, 0.70f, 1.0f, 1.0f), "%s", label);
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.50f, 0.62f, 0.88f, 1.0f));
+  ImGui::Text("%s", label);
+  ImGui::PopStyleColor();
+  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
   ImGui::Separator();
+  ImGui::PopStyleColor();
   ImGui::Spacing();
+}
+
+static void fieldLabel(const char* label) {
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.58f, 0.68f, 1.0f));
+  ImGui::Text("%s", label);
+  ImGui::PopStyleColor();
 }
 
 void Interface::renderTransportBar(SimulationState& simState) {
@@ -322,6 +334,7 @@ void Interface::renderTransportBar(SimulationState& simState) {
   const float btnW = 24.0f * s;
   const float gap = 4.0f * s;
   const float sepGap = 10.0f * s;
+  const bool snapshotsOn = generalSettings.snapshotsEnabled;
 
   ImGui::SetNextWindowPos(
       ImVec2(viewport->WorkPos.x,
@@ -359,7 +372,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
       simState.resetRequested = true;
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Restart [R]");
-    // Draw restart icon (square)
     {
       ImVec2 p = ImGui::GetItemRectMin();
       ImVec2 sz = ImGui::GetItemRectSize();
@@ -371,70 +383,73 @@ void Interface::renderTransportBar(SimulationState& simState) {
     }
     ImGui::SameLine(0, gap);
 
-    // --- Step Back ---
-    if (ImGui::Button("##step_back", ImVec2(btnW, btnH))) {
-      simState.isPaused = true;
-      simState.rewinding = true;
-      simState.reversePlay = false;
-      simState.snapshotScrubbed = true;
-      if (simState.historyIndex < 0)
-        simState.historyIndex =
-            static_cast<int>(simState.timeHistory.size()) - 1;
-      if (simState.historyIndex > 0) {
-        simState.historyIndex--;
-        if (simState.historyIndex <
-            static_cast<int>(simState.timeHistory.size()))
-          simState.currentTime = simState.timeHistory[simState.historyIndex];
-      }
-    }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Step Back [,]");
-    {
-      ImVec2 p = ImGui::GetItemRectMin();
-      ImVec2 sz = ImGui::GetItemRectSize();
-      float cx = p.x + sz.x * 0.5f, cy = p.y + sz.y * 0.5f;
-      float r = 4.0f * s;
-      ImDrawList* dl = ImGui::GetWindowDrawList();
-      dl->AddRectFilled(ImVec2(cx - r, cy - r), ImVec2(cx - r + 2 * s, cy + r),
-                        IM_COL32(200, 200, 200, 220));
-      dl->AddTriangleFilled(ImVec2(cx + r, cy - r), ImVec2(cx + r, cy + r),
-                            ImVec2(cx - r + 3 * s, cy),
-                            IM_COL32(200, 200, 200, 220));
-    }
-    ImGui::SameLine(0, gap);
-
-    // --- Reverse ---
-    {
-      bool revActive = simState.reversePlay && !simState.isPaused;
-      if (revActive) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.30f, 0.18f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.38f, 0.22f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.70f, 0.45f, 0.28f, 1.0f));
-      }
-      if (ImGui::Button("##reverse", ImVec2(btnW, btnH))) {
-        if (revActive) {
-          simState.isPaused = true;
-          simState.reversePlay = false;
-        } else {
-          simState.isPaused = false;
-          simState.reversePlay = true;
-          simState.rewinding = true;
+    // --- Step Back (snapshots only) ---
+    if (snapshotsOn) {
+      if (ImGui::Button("##step_back", ImVec2(btnW, btnH))) {
+        simState.isPaused = true;
+        simState.rewinding = true;
+        simState.reversePlay = false;
+        simState.snapshotScrubbed = true;
+        if (simState.historyIndex < 0)
+          simState.historyIndex =
+              static_cast<int>(simState.timeHistory.size()) - 1;
+        if (simState.historyIndex > 0) {
+          simState.historyIndex--;
+          if (simState.historyIndex <
+              static_cast<int>(simState.timeHistory.size()))
+            simState.currentTime = simState.timeHistory[simState.historyIndex];
         }
       }
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reverse Play");
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Step Back [,]");
       {
         ImVec2 p = ImGui::GetItemRectMin();
         ImVec2 sz = ImGui::GetItemRectSize();
         float cx = p.x + sz.x * 0.5f, cy = p.y + sz.y * 0.5f;
         float r = 4.0f * s;
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        dl->AddTriangleFilled(ImVec2(cx + r * 0.4f, cy - r), ImVec2(cx + r * 0.4f, cy + r),
-                              ImVec2(cx - r, cy), IM_COL32(200, 200, 200, 220));
+        dl->AddRectFilled(ImVec2(cx - r, cy - r), ImVec2(cx - r + 2 * s, cy + r),
+                          IM_COL32(200, 200, 200, 220));
         dl->AddTriangleFilled(ImVec2(cx + r, cy - r), ImVec2(cx + r, cy + r),
-                              ImVec2(cx + r * 0.3f - r, cy), IM_COL32(200, 200, 200, 220));
+                              ImVec2(cx - r + 3 * s, cy),
+                              IM_COL32(200, 200, 200, 220));
       }
-      if (revActive) ImGui::PopStyleColor(3);
+      ImGui::SameLine(0, gap);
+
+      // --- Reverse (snapshots only) ---
+      {
+        bool revActive = simState.reversePlay && !simState.isPaused;
+        if (revActive) {
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.30f, 0.18f, 1.0f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.38f, 0.22f, 1.0f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.70f, 0.45f, 0.28f, 1.0f));
+        }
+        if (ImGui::Button("##reverse", ImVec2(btnW, btnH))) {
+          if (revActive) {
+            simState.isPaused = true;
+            simState.reversePlay = false;
+          } else {
+            simState.isPaused = false;
+            simState.reversePlay = true;
+            simState.rewinding = true;
+            simState.scrubAccumulator = 0.0f;
+          }
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reverse Play");
+        {
+          ImVec2 p = ImGui::GetItemRectMin();
+          ImVec2 sz = ImGui::GetItemRectSize();
+          float cx = p.x + sz.x * 0.5f, cy = p.y + sz.y * 0.5f;
+          float r = 4.0f * s;
+          ImDrawList* dl = ImGui::GetWindowDrawList();
+          dl->AddTriangleFilled(ImVec2(cx + r * 0.4f, cy - r), ImVec2(cx + r * 0.4f, cy + r),
+                                ImVec2(cx - r, cy), IM_COL32(200, 200, 200, 220));
+          dl->AddTriangleFilled(ImVec2(cx + r, cy - r), ImVec2(cx + r, cy + r),
+                                ImVec2(cx + r * 0.3f - r, cy), IM_COL32(200, 200, 200, 220));
+        }
+        if (revActive) ImGui::PopStyleColor(3);
+      }
+      ImGui::SameLine(0, gap);
     }
-    ImGui::SameLine(0, gap);
 
     // --- Play / Pause ---
     {
@@ -448,6 +463,7 @@ void Interface::renderTransportBar(SimulationState& simState) {
         simState.isPaused = !simState.isPaused;
         simState.rewinding = false;
         simState.reversePlay = false;
+        simState.scrubAccumulator = 0.0f;
       }
       if (ImGui::IsItemHovered()) ImGui::SetTooltip(simState.isPaused ? "Play [Space]" : "Pause [Space]");
       {
@@ -495,12 +511,16 @@ void Interface::renderTransportBar(SimulationState& simState) {
     ImGui::SameLine(0, sepGap);
 
     // --- Timeline scrub ---
-    float rightControlsW = 240.0f * s;
+    // Compute right-side width: sepGap + time + sepGap + speed button + [gap + bake button]
+    float timeTextW = ImGui::CalcTextSize("00:00.00").x;
+    float speedBtnW = 52.0f * s;
+    float rightControlsW = sepGap + timeTextW + sepGap + speedBtnW;
+    if (snapshotsOn) rightControlsW += gap + btnW;
     float scrubWidth = ImGui::GetContentRegionAvail().x - rightControlsW;
     if (scrubWidth < 60.0f * s) scrubWidth = 60.0f * s;
 
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.50f, 0.60f, 0.85f, 1.0f));
-    if (!simState.timeHistory.empty()) {
+    if (snapshotsOn && !simState.timeHistory.empty()) {
       int histSize = static_cast<int>(simState.timeHistory.size());
       int scrubIdx =
           simState.historyIndex >= 0 ? simState.historyIndex : histSize - 1;
@@ -539,18 +559,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
     }
     ImGui::SameLine(0, sepGap);
 
-    // --- Frame count ---
-    {
-      char frmBuf[24];
-      int frmCount = static_cast<int>(simState.timeHistory.size());
-      snprintf(frmBuf, sizeof(frmBuf), "%d frm", frmCount);
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.48f, 0.55f, 1.0f));
-      ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2 * s);
-      ImGui::Text("%s", frmBuf);
-      ImGui::PopStyleColor(1);
-    }
-    ImGui::SameLine(0, sepGap);
-
     // --- Speed button (opens popup) ---
     {
       char speedLabel[16];
@@ -562,11 +570,16 @@ void Interface::renderTransportBar(SimulationState& simState) {
     }
 
     if (showSpeedPopup) {
-      ImGui::SetNextWindowPos(
-          ImVec2(ImGui::GetItemRectMin().x,
-                 ImGui::GetItemRectMin().y - 140 * s));
-      ImGui::SetNextWindowSize(ImVec2(180 * s, 0));
-      ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.12f, 0.12f, 0.16f, 0.98f));
+      float popW = 180 * s;
+      float autoH = 130 * s;
+      const ImGuiViewport* vp = ImGui::GetMainViewport();
+      float popX = ImGui::GetItemRectMin().x;
+      float popY = ImGui::GetItemRectMin().y - 8 * s - autoH;
+      popX = glm::clamp(popX, vp->WorkPos.x, vp->WorkPos.x + vp->WorkSize.x - popW);
+      popY = glm::max(popY, vp->WorkPos.y);
+      ImGui::SetNextWindowPos(ImVec2(popX, popY));
+      ImGui::SetNextWindowSize(ImVec2(popW, 0));
+      ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.16f, 0.98f));
       if (ImGui::Begin("##speed_popup", &showSpeedPopup,
                        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
@@ -597,70 +610,73 @@ void Interface::renderTransportBar(SimulationState& simState) {
       ImGui::End();
       ImGui::PopStyleColor(1);
     }
-    ImGui::SameLine(0, gap);
 
-    // --- Bake button (opens popup) ---
-    {
+    // --- Bake button (snapshots only) ---
+    if (snapshotsOn) {
+      ImGui::SameLine(0, gap);
       if (simState.baked) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.38f, 0.20f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.46f, 0.26f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.52f, 0.30f, 1.0f));
       }
-      if (ImGui::Button("Bake", ImVec2(42 * s, btnH))) {
+      if (ImGui::Button("##bake_btn", ImVec2(btnW, btnH))) {
         showBakePopup = !showBakePopup;
       }
-      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Bake Simulation");
-      if (simState.baked) ImGui::PopStyleColor(3);
-    }
-
-    if (showBakePopup) {
-      ImGui::SetNextWindowPos(
-          ImVec2(ImGui::GetItemRectMin().x,
-                 ImGui::GetItemRectMin().y - 130 * s));
-      ImGui::SetNextWindowSize(ImVec2(170 * s, 0));
-      ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.12f, 0.12f, 0.16f, 0.98f));
-      if (ImGui::Begin("##bake_popup", &showBakePopup,
-                       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.90f, 1.0f), "Bake Duration");
-        ImGui::Separator();
-        ImGui::Spacing();
-        struct BakePreset { const char* label; float duration; };
-        BakePreset presets[] = {
-            {"5s",  5.0f},
-            {"10s", 10.0f},
-            {"30s", 30.0f},
-            {"60s", 60.0f},
-        };
-        for (int i = 0; i < 4; i++) {
-          bool active = (std::abs(simState.bakeDuration - presets[i].duration) < 0.01f);
-          if (active) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.38f, 0.58f, 1.0f));
-          }
-          if (ImGui::Button(presets[i].label, ImVec2(-1, btnH))) {
-            simState.bakeDuration = presets[i].duration;
-          }
-          if (active) ImGui::PopStyleColor(1);
-        }
-        ImGui::Spacing();
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.48f, 0.26f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.58f, 0.32f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.34f, 0.66f, 0.38f, 1.0f));
-        int estFrames = static_cast<int>(simState.bakeDuration / simState.stepSize);
-        char bakeLabel[48];
-        snprintf(bakeLabel, sizeof(bakeLabel), "Bake (%d frames)", estFrames);
-        if (ImGui::Button(bakeLabel, ImVec2(-1, btnH + 4 * s))) {
-          simState.bakeRequested = true;
-          showBakePopup = false;
-        }
-        ImGui::PopStyleColor(3);
-        if (simState.baked) {
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Baked");
-        }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip(simState.baked ? "Baked" : "Bake Simulation");
+      {
+        ImVec2 p = ImGui::GetItemRectMin();
+        ImVec2 sz = ImGui::GetItemRectSize();
+        float cx = p.x + sz.x * 0.5f, cy = p.y + sz.y * 0.5f;
+        float r = 4.0f * s;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImU32 col = simState.baked ? IM_COL32(120, 200, 120, 220) : IM_COL32(200, 200, 200, 220);
+        dl->AddCircle(ImVec2(cx, cy), r, col, 0, 2.0f * s);
+        dl->AddCircleFilled(ImVec2(cx, cy), r * 0.4f, col);
       }
-      ImGui::End();
-      ImGui::PopStyleColor(1);
+      if (simState.baked) ImGui::PopStyleColor(3);
+
+      if (showBakePopup) {
+        float popW = 160 * s;
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        float popX = ImGui::GetItemRectMin().x;
+        float popY = ImGui::GetItemRectMin().y - 12 * s;
+        ImGui::SetNextWindowSize(ImVec2(popW, 0));
+        float autoH = 130 * s;
+        popY -= autoH;
+        popX = glm::clamp(popX, vp->WorkPos.x, vp->WorkPos.x + vp->WorkSize.x - popW);
+        popY = glm::max(popY, vp->WorkPos.y);
+        ImGui::SetNextWindowPos(ImVec2(popX, popY));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.16f, 0.98f));
+        if (ImGui::Begin("##bake_popup", &showBakePopup,
+                         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
+          ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.90f, 1.0f), "Bake");
+          ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+          ImGui::Separator();
+          ImGui::PopStyleColor();
+          ImGui::Spacing();
+          struct BakePreset { float duration; };
+          BakePreset presets[] = {{5.0f}, {10.0f}, {30.0f}, {60.0f}};
+          for (int i = 0; i < 4; i++) {
+            int frames = static_cast<int>(presets[i].duration / simState.stepSize);
+            char label[48];
+            snprintf(label, sizeof(label), "%.0fs  (%d frames)", presets[i].duration, frames);
+            if (ImGui::Button(label, ImVec2(-1, btnH))) {
+              simState.bakeDuration = presets[i].duration;
+              simState.bakeRequested = true;
+              showBakePopup = false;
+            }
+          }
+          if (simState.baked) {
+            ImGui::Spacing();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.8f, 0.4f, 0.8f));
+            ImGui::Text("Baked");
+            ImGui::PopStyleColor();
+          }
+        }
+        ImGui::End();
+        ImGui::PopStyleColor(1);
+      }
     }
   }
   ImGui::End();
@@ -686,16 +702,27 @@ void Interface::renderObjectsMenu(Registry& registry) {
   }
 
   const float s = currentScale;
-  const float dragW = 200.0f * s;
-  const float labelCol = 100.0f * s;
+  const float dragW = 180.0f * s;
+  const float labelCol = 90.0f * s;
+  const float listW = 160.0f * s;
+  const float inspectorW = 220.0f * s;
+  const float menuW = listW + 8 * s + inspectorW;
+  const float totalH = 340.0f * s;
 
-  ImGui::TextDisabled("%d entities  |  %d objects  |  %d lights",
-                      static_cast<int>(entities.size()), meshCount, lightCount);
+  // Force a minimum width for the menu popup
+  ImGui::Dummy(ImVec2(menuW, 0));
+
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.44f, 0.52f, 1.0f));
+  ImGui::Text("%d entities  |  %d objects  |  %d lights",
+              static_cast<int>(entities.size()), meshCount, lightCount);
+  ImGui::PopStyleColor();
+  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
   ImGui::Separator();
+  ImGui::PopStyleColor();
   ImGui::Spacing();
 
   auto propRow = [&](const char* label, const char* fmt, ...) {
-    ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "%s", label);
+    fieldLabel(label);
     ImGui::SameLine(labelCol);
     va_list args;
     va_start(args, fmt);
@@ -705,28 +732,32 @@ void Interface::renderObjectsMenu(Registry& registry) {
 
   hoveredEntity = INVALID_ENTITY;
 
-  // --- Entity List ---
-  const float listHeight = 200.0f * s;
-  ImGui::TextColored(ImVec4(0.50f, 0.70f, 1.0f, 1.0f), "Entity List");
-  ImGui::Separator();
-
-  ImGui::BeginChild("##entityList", ImVec2(0, listHeight), true,
-                    ImGuiWindowFlags_HorizontalScrollbar);
+  // --- Side-by-side: list left, inspector right ---
+  ImGui::BeginChild("##obj_list_pane", ImVec2(listW, totalH), false);
   {
     if (!meshEntities.empty()) {
-      ImGui::TextColored(ImVec4(0.45f, 0.65f, 0.45f, 1.0f), "  Objects (%d)",
-                         meshCount);
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.68f, 0.45f, 1.0f));
+      ImGui::Text("Objects (%d)", meshCount);
+      ImGui::PopStyleColor();
+      ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.35f, 0.25f, 0.40f));
       ImGui::Separator();
+      ImGui::PopStyleColor();
       for (Entity e : meshEntities) {
         auto* nameComp = registry.getComponent<NameComponent>(e);
-        std::string label =
-            (nameComp ? nameComp->name : "Unknown");
+        std::string label = (nameComp ? nameComp->name : "Unknown");
 
         ImGui::PushID(static_cast<int>(e));
         bool isSelected = (selectedEntity == e);
 
+        // Draw cube icon
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.60f, 0.40f, 0.8f));
+        ImGui::Text("#");
+        ImGui::PopStyleColor();
+        ImGui::SameLine(0, 4 * s);
+
         if (ImGui::Selectable(label.c_str(), isSelected,
-                              ImGuiSelectableFlags_None)) {
+                              ImGuiSelectableFlags_None,
+                              ImVec2(listW - 24 * s, 0))) {
           selectedEntity = isSelected ? INVALID_ENTITY : e;
         }
         if (ImGui::IsItemHovered()) hoveredEntity = e;
@@ -736,22 +767,34 @@ void Interface::renderObjectsMenu(Registry& registry) {
 
     if (!lightEntities.empty()) {
       ImGui::Spacing();
-      ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.30f, 1.0f), "  Lights (%d)",
-                         lightCount);
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.75f, 0.30f, 1.0f));
+      ImGui::Text("Lights (%d)", lightCount);
+      ImGui::PopStyleColor();
+      ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.45f, 0.40f, 0.20f, 0.40f));
       ImGui::Separator();
+      ImGui::PopStyleColor();
       for (Entity e : lightEntities) {
         auto* nameComp = registry.getComponent<NameComponent>(e);
         auto* light = registry.getComponent<LightComponent>(e);
-        const char* typeIcon =
-            (light && light->type == LightType::Sun) ? "[Sun] " : "[Pt]  ";
-        std::string label =
-            std::string(typeIcon) + (nameComp ? nameComp->name : "Unknown");
+        std::string label = (nameComp ? nameComp->name : "Unknown");
 
         ImGui::PushID(static_cast<int>(e));
         bool isSelected = (selectedEntity == e);
 
+        // Sun/point icon
+        if (light && light->type == LightType::Sun) {
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.75f, 0.30f, 0.8f));
+          ImGui::Text("*");
+        } else {
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.75f, 0.30f, 0.8f));
+          ImGui::Text("o");
+        }
+        ImGui::PopStyleColor();
+        ImGui::SameLine(0, 4 * s);
+
         if (ImGui::Selectable(label.c_str(), isSelected,
-                              ImGuiSelectableFlags_None)) {
+                              ImGuiSelectableFlags_None,
+                              ImVec2(listW - 24 * s, 0))) {
           selectedEntity = isSelected ? INVALID_ENTITY : e;
         }
         if (ImGui::IsItemHovered()) hoveredEntity = e;
@@ -761,134 +804,195 @@ void Interface::renderObjectsMenu(Registry& registry) {
   }
   ImGui::EndChild();
 
-  // --- Inspector ---
-  ImGui::Spacing();
-  if (selectedEntity == INVALID_ENTITY) {
-    ImGui::TextDisabled("Select an entity above to inspect.");
-  } else {
-    auto* nameComp = registry.getComponent<NameComponent>(selectedEntity);
-    std::string entityName = nameComp ? nameComp->name : "Unknown";
-    bool isLight = registry.hasComponent<LightComponent>(selectedEntity);
+  ImGui::SameLine(0, 8 * s);
 
-    ImGui::TextColored(ImVec4(0.50f, 0.70f, 1.0f, 1.0f), "%s",
-                       entityName.c_str());
-    ImGui::SameLine();
-    ImGui::TextDisabled("(ID: %u%s)", selectedEntity,
-                        isLight ? ", Light" : ", Object");
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    ImGui::PushID(static_cast<int>(selectedEntity));
-
-    // --- Transform (all entities have this) ---
-    if (registry.hasComponent<TransformComponent>(selectedEntity)) {
-      auto* transform =
-          registry.getComponent<TransformComponent>(selectedEntity);
-      auto* light = registry.getComponent<LightComponent>(selectedEntity);
-      bool isSun = light && light->type == LightType::Sun;
-
-      if (!isSun) {
-        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Position");
-        ImGui::SetNextItemWidth(dragW);
-        ImGui::DragFloat3("##pos", &transform->position.x, 0.05f, 0.0f, 0.0f,
-                          "%.2f");
-      }
-
-      if (!isLight) {
-        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Scale");
-        ImGui::SetNextItemWidth(dragW);
-        ImGui::DragFloat3("##scl", &transform->scale.x, 0.01f, 0.001f,
-                          100.0f, "%.3f");
-
-        glm::vec3 euler =
-            glm::degrees(glm::eulerAngles(transform->rotation));
-        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Rotation");
-        ImGui::SetNextItemWidth(dragW);
-        if (ImGui::DragFloat3("##rot", &euler.x, 0.5f, -360.0f, 360.0f,
-                              "%.1f deg")) {
-          transform->rotation = glm::quat(glm::radians(euler));
-        }
-      }
-
+  // --- Inspector pane ---
+  ImGui::BeginChild("##obj_inspector_pane", ImVec2(inspectorW, totalH), false);
+  {
+    if (selectedEntity == INVALID_ENTITY) {
       ImGui::Spacing();
-    }
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.40f, 0.48f, 1.0f));
+      ImGui::Text("Select an entity to inspect");
+      ImGui::PopStyleColor();
+    } else {
+      auto* nameComp = registry.getComponent<NameComponent>(selectedEntity);
+      std::string entityName = nameComp ? nameComp->name : "Unknown";
+      bool isLight = registry.hasComponent<LightComponent>(selectedEntity);
 
-    // --- Light properties ---
-    if (isLight) {
-      auto* light = registry.getComponent<LightComponent>(selectedEntity);
-      if (light) {
-        propRow("Type", "%s",
-                light->type == LightType::Sun ? "Sun" : "Point");
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f, 0.72f, 0.95f, 1.0f));
+      ImGui::Text("%s", entityName.c_str());
+      ImGui::PopStyleColor();
+      ImGui::SameLine(0, 6 * s);
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.38f, 0.40f, 0.48f, 1.0f));
+      ImGui::Text("(%u)", selectedEntity);
+      ImGui::PopStyleColor();
+      ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+      ImGui::Separator();
+      ImGui::PopStyleColor();
+      ImGui::Spacing();
 
-        if (light->type == LightType::Sun) {
-          ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Direction");
+      ImGui::PushID(static_cast<int>(selectedEntity));
+
+      if (registry.hasComponent<TransformComponent>(selectedEntity)) {
+        auto* transform =
+            registry.getComponent<TransformComponent>(selectedEntity);
+        auto* light = registry.getComponent<LightComponent>(selectedEntity);
+        bool isSun = light && light->type == LightType::Sun;
+
+        if (!isSun) {
+          fieldLabel("Position");
           ImGui::SetNextItemWidth(dragW);
-          ImGui::DragFloat3("##ldir", &light->direction.x, 0.01f, -1.0f, 1.0f,
-                            "%.3f");
+          ImGui::DragFloat3("##pos", &transform->position.x, 0.05f, 0.0f, 0.0f,
+                            "%.2f");
         }
 
-        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Color");
-        ImGui::SetNextItemWidth(dragW);
-        ImGui::ColorEdit3("##lcol", &light->color.x);
+        if (!isLight) {
+          // Scale with link toggle
+          fieldLabel("Scale");
+          ImGui::SameLine(0, 4 * s);
 
-        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Intensity");
-        ImGui::SetNextItemWidth(dragW);
-        ImGui::DragFloat("##lint", &light->intensity, 0.01f, 0.0f, 100.0f,
-                         "%.2f");
+          // Link icon button
+          ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2 * s, 2 * s));
+          ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.35f, 1.0f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.30f, 0.42f, 1.0f));
+          {
+            ImU32 linkCol = scaleLinked
+                ? IM_COL32(110, 140, 200, 220)
+                : IM_COL32(100, 100, 110, 140);
+            if (ImGui::Button("##link_scale", ImVec2(14 * s, 14 * s))) {
+              scaleLinked = !scaleLinked;
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip(scaleLinked ? "Uniform Scale (linked)" : "Per-axis Scale (unlinked)");
+            // Draw link icon
+            ImVec2 p = ImGui::GetItemRectMin();
+            ImVec2 sz = ImGui::GetItemRectSize();
+            float icx = p.x + sz.x * 0.5f, icy = p.y + sz.y * 0.5f;
+            float ir = 3.0f * s;
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            if (scaleLinked) {
+              dl->AddCircle(ImVec2(icx - ir * 0.4f, icy), ir, linkCol, 0, 1.5f * s);
+              dl->AddCircle(ImVec2(icx + ir * 0.4f, icy), ir, linkCol, 0, 1.5f * s);
+            } else {
+              dl->AddCircle(ImVec2(icx - ir * 0.7f, icy), ir * 0.7f, linkCol, 0, 1.5f * s);
+              dl->AddCircle(ImVec2(icx + ir * 0.7f, icy), ir * 0.7f, linkCol, 0, 1.5f * s);
+            }
+          }
+          ImGui::PopStyleColor(3);
+          ImGui::PopStyleVar();
 
-        if (light->type == LightType::Point) {
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f),
-                             "Attenuation");
+          if (scaleLinked) {
+            float uniformScale = transform->scale.x;
+            ImGui::SetNextItemWidth(dragW);
+            if (ImGui::DragFloat("##scl_uniform", &uniformScale, 0.01f, 0.001f,
+                                 100.0f, "%.3f")) {
+              transform->scale = glm::vec3(uniformScale);
+            }
+          } else {
+            ImGui::SetNextItemWidth(dragW);
+            ImGui::DragFloat3("##scl", &transform->scale.x, 0.01f, 0.001f,
+                              100.0f, "%.3f");
+          }
+
+          glm::vec3 euler =
+              glm::degrees(glm::eulerAngles(transform->rotation));
+          fieldLabel("Rotation");
           ImGui::SetNextItemWidth(dragW);
-          ImGui::DragFloat("Constant##att", &light->constant, 0.01f, 0.0f,
-                           10.0f, "%.3f");
-          ImGui::SetNextItemWidth(dragW);
-          ImGui::DragFloat("Linear##att", &light->linear, 0.001f, 0.0f, 1.0f,
-                           "%.4f");
-          ImGui::SetNextItemWidth(dragW);
-          ImGui::DragFloat("Quadratic##att", &light->quadratic, 0.001f, 0.0f,
-                           1.0f, "%.4f");
+          if (ImGui::DragFloat3("##rot", &euler.x, 0.5f, -360.0f, 360.0f,
+                                "%.1f")) {
+            transform->rotation = glm::quat(glm::radians(euler));
+          }
         }
 
         ImGui::Spacing();
-        ImGui::Checkbox("Shadows", &light->castsShadows);
       }
-    }
 
-    // --- Mesh object properties ---
-    if (registry.hasComponent<MeshComponent>(selectedEntity)) {
-      const auto* meshComp =
-          registry.getComponent<MeshComponent>(selectedEntity);
-      propRow("Mesh ID", "#%u", meshComp->meshID);
-    }
-    if (registry.hasComponent<MaterialComponent>(selectedEntity)) {
-      const auto* matComp =
-          registry.getComponent<MaterialComponent>(selectedEntity);
-      propRow("Material ID", "#%u", matComp->materialID);
-    }
-    if (registry.hasComponent<RenderComponent>(selectedEntity)) {
-      auto* renderComp =
-          registry.getComponent<RenderComponent>(selectedEntity);
-      ImGui::Checkbox("Visible", &renderComp->visible);
-      propRow("Layer Mask", "0x%08X", renderComp->layerMask);
-    }
+      if (isLight) {
+        auto* light = registry.getComponent<LightComponent>(selectedEntity);
+        if (light) {
+          propRow("Type", "%s",
+                  light->type == LightType::Sun ? "Sun" : "Point");
 
-    ImGui::PopID();
+          if (light->type == LightType::Sun) {
+            fieldLabel("Direction");
+            ImGui::SetNextItemWidth(dragW);
+            ImGui::DragFloat3("##ldir", &light->direction.x, 0.01f, -1.0f, 1.0f,
+                              "%.3f");
+          }
+
+          fieldLabel("Color");
+          ImGui::SetNextItemWidth(dragW);
+          ImGui::ColorEdit3("##lcol", &light->color.x);
+
+          fieldLabel("Intensity");
+          ImGui::SetNextItemWidth(dragW);
+          ImGui::DragFloat("##lint", &light->intensity, 0.01f, 0.0f, 100.0f,
+                           "%.2f");
+
+          if (light->type == LightType::Point) {
+            ImGui::Spacing();
+            fieldLabel("Attenuation");
+            ImGui::SetNextItemWidth(dragW);
+            ImGui::DragFloat("Constant##att", &light->constant, 0.01f, 0.0f,
+                             10.0f, "%.3f");
+            ImGui::SetNextItemWidth(dragW);
+            ImGui::DragFloat("Linear##att", &light->linear, 0.001f, 0.0f, 1.0f,
+                             "%.4f");
+            ImGui::SetNextItemWidth(dragW);
+            ImGui::DragFloat("Quadratic##att", &light->quadratic, 0.001f, 0.0f,
+                             1.0f, "%.4f");
+          }
+
+          ImGui::Spacing();
+          ImGui::Checkbox("Shadows", &light->castsShadows);
+        }
+      }
+
+      // --- Info row for mesh objects ---
+      if (registry.hasComponent<MeshComponent>(selectedEntity) ||
+          registry.hasComponent<MaterialComponent>(selectedEntity) ||
+          registry.hasComponent<RenderComponent>(selectedEntity)) {
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.40f));
+        ImGui::Separator();
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
+      }
+
+      if (registry.hasComponent<MeshComponent>(selectedEntity)) {
+        const auto* meshComp =
+            registry.getComponent<MeshComponent>(selectedEntity);
+        propRow("Mesh", "#%u", meshComp->meshID);
+      }
+      if (registry.hasComponent<MaterialComponent>(selectedEntity)) {
+        const auto* matComp =
+            registry.getComponent<MaterialComponent>(selectedEntity);
+        propRow("Material", "#%u", matComp->materialID);
+      }
+      if (registry.hasComponent<RenderComponent>(selectedEntity)) {
+        auto* renderComp =
+            registry.getComponent<RenderComponent>(selectedEntity);
+        ImGui::Checkbox("Visible", &renderComp->visible);
+      }
+
+      ImGui::PopID();
+    }
   }
+  ImGui::EndChild();
 }
 
 void Interface::renderSceneMenu(SceneSettings& sceneSettings,
                               MainPipeline* mainPipeline) {
-const float s = currentScale;
-sectionHeader("Background");
+  const float s = currentScale;
+  sectionHeader("Background");
 
-ImGui::ColorPicker3("##clearcolor", &sceneSettings.clearColor[0],
-                    ImGuiColorEditFlags_PickerHueWheel |
-                        ImGuiColorEditFlags_NoSidePreview |
-                        ImGuiColorEditFlags_NoInputs);
+  ImGui::ColorPicker3("##clearcolor", &sceneSettings.clearColor[0],
+                      ImGuiColorEditFlags_PickerHueWheel |
+                          ImGuiColorEditFlags_NoSidePreview |
+                          ImGuiColorEditFlags_NoInputs);
   ImGui::Spacing();
-  ImGui::ColorEdit3("Clear Color", &sceneSettings.clearColor[0],
+  fieldLabel("Clear Color");
+  ImGui::ColorEdit3("##clearcolor_edit", &sceneSettings.clearColor[0],
                     ImGuiColorEditFlags_NoLabel);
 
   sectionHeader("Shading");
@@ -897,8 +1001,9 @@ ImGui::ColorPicker3("##clearcolor", &sceneSettings.clearColor[0],
   int currentShading =
       (mainPipeline->getShadingMode() == MainPipeline::ShadingMode::Phong) ? 0
                                                                            : 1;
+  fieldLabel("Shading Mode");
   ImGui::SetNextItemWidth(180.0f * s);
-  if (ImGui::Combo("Shading Mode", &currentShading, shadingItems,
+  if (ImGui::Combo("##shading", &currentShading, shadingItems,
                    IM_ARRAYSIZE(shadingItems))) {
     mainPipeline->setShadingMode(currentShading == 0
                                      ? MainPipeline::ShadingMode::Phong
@@ -911,8 +1016,9 @@ ImGui::ColorPicker3("##clearcolor", &sceneSettings.clearColor[0],
 
   const char* polygonItems[] = {"Fill", "Line", "Point"};
   static int currentPolygon = 0;
+  fieldLabel("Render Mode");
   ImGui::SetNextItemWidth(180.0f * s);
-  if (ImGui::Combo("Render Mode", &currentPolygon, polygonItems,
+  if (ImGui::Combo("##rendermode", &currentPolygon, polygonItems,
                    IM_ARRAYSIZE(polygonItems))) {
     VkPolygonMode mode = VK_POLYGON_MODE_FILL;
     if (currentPolygon == 1) mode = VK_POLYGON_MODE_LINE;
@@ -932,8 +1038,9 @@ void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
 
   sectionHeader("Color Grading");
 
+  fieldLabel("Hue");
   ImGui::SetNextItemWidth(sliderW);
-  if (ImGui::SliderFloat("Hue", &config.hue, -1.0f, 1.0f, "%.2f"))
+  if (ImGui::SliderFloat("##hue", &config.hue, -1.0f, 1.0f, "%.2f"))
     changed = true;
   ImGui::SameLine(0, 10 * s);
   if (ImGui::SmallButton("Reset##hue")) {
@@ -941,8 +1048,9 @@ void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
     changed = true;
   }
 
+  fieldLabel("Saturation");
   ImGui::SetNextItemWidth(sliderW);
-  if (ImGui::SliderFloat("Saturation", &config.saturation, 0.0f, 2.0f, "%.2f"))
+  if (ImGui::SliderFloat("##saturation", &config.saturation, 0.0f, 2.0f, "%.2f"))
     changed = true;
   ImGui::SameLine(0, 10 * s);
   if (ImGui::SmallButton("Reset##sat")) {
@@ -950,8 +1058,9 @@ void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
     changed = true;
   }
 
+  fieldLabel("Contrast");
   ImGui::SetNextItemWidth(sliderW);
-  if (ImGui::SliderFloat("Contrast", &config.contrast, 0.0f, 2.0f, "%.2f"))
+  if (ImGui::SliderFloat("##contrast", &config.contrast, 0.0f, 2.0f, "%.2f"))
     changed = true;
   ImGui::SameLine(0, 10 * s);
   if (ImGui::SmallButton("Reset##con")) {
@@ -984,14 +1093,15 @@ void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
   }
 }
 
-void Interface::renderSettingsMenu() {
+void Interface::renderSettingsMenu(SimulationState& simState) {
   const float s = currentScale;
   sectionHeader("Interface");
 
   const char* presetItems[] = {"Small", "Normal", "Large", "XL"};
   int currentPreset = static_cast<int>(generalSettings.scalePreset);
+  fieldLabel("UI Scale");
   ImGui::SetNextItemWidth(140.0f * s);
-  if (ImGui::Combo("UI Scale", &currentPreset, presetItems,
+  if (ImGui::Combo("##uiscale", &currentPreset, presetItems,
                    IM_ARRAYSIZE(presetItems))) {
     generalSettings.scalePreset = static_cast<UIScalePreset>(currentPreset);
     applyScalePreset();
@@ -1001,24 +1111,37 @@ void Interface::renderSettingsMenu() {
   keybadge("F1");
   ImGui::Checkbox("Show Light Gizmos", &generalSettings.showLightGizmos);
 
+  sectionHeader("Simulation");
+
+  bool prevSnapshots = generalSettings.snapshotsEnabled;
+  ImGui::Checkbox("Enable Snapshots", &generalSettings.snapshotsEnabled);
+  if (ImGui::IsItemHovered()) {
+    ImGui::SetTooltip("Disable to remove timeline/replay overhead.\nReloads the current scene.");
+  }
+  if (generalSettings.snapshotsEnabled != prevSnapshots) {
+    simState.reloadRequested = true;
+  }
+
   sectionHeader("Keyboard Shortcuts");
 
   const float keyColW = 120.0f * s;
 
   auto shortcutRow = [&](const char* key, const char* desc) {
-    ImGui::TextColored(ImVec4(0.50f, 0.52f, 0.58f, 1.0f), "%s", key);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.44f, 0.52f, 1.0f));
+    ImGui::Text("%s", key);
+    ImGui::PopStyleColor();
     ImGui::SameLine(keyColW);
     ImGui::Text("%s", desc);
   };
 
-  ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "General");
+  fieldLabel("General");
   ImGui::Spacing();
   shortcutRow("ESC", "Exit application");
   shortcutRow("F1", "Toggle FPS display");
   shortcutRow("F11", "Toggle fullscreen");
 
   ImGui::Spacing();
-  ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Simulation");
+  fieldLabel("Simulation");
   ImGui::Spacing();
   shortcutRow("Space", "Pause / Resume");
   shortcutRow(".", "Step forward");
@@ -1028,7 +1151,7 @@ void Interface::renderSettingsMenu() {
   shortcutRow("-", "Half speed");
 
   ImGui::Spacing();
-  ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Rendering");
+  fieldLabel("Rendering");
   ImGui::Spacing();
   shortcutRow("L", "Cycle shading mode");
   shortcutRow("K", "Toggle toon shader");
@@ -1036,7 +1159,7 @@ void Interface::renderSettingsMenu() {
   shortcutRow("G", "Toggle wireframe overlay");
 
   ImGui::Spacing();
-  ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Camera");
+  fieldLabel("Camera");
   ImGui::Spacing();
   shortcutRow("Enter", "Toggle Orbit / FPS");
   shortcutRow("W/A/S/D", "Move (FPS mode)");
@@ -1078,38 +1201,54 @@ void Interface::refreshWorldList() {
 
 void Interface::renderWorldsMenu() {
   if (worldFiles.empty()) {
-    ImGui::TextDisabled("No .world files found in '%s'",
-                        worldDirectory.c_str());
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
+    ImGui::Text("No .world files found in '%s'",
+                worldDirectory.c_str());
+    ImGui::PopStyleColor();
   } else {
     for (const auto& path : worldFiles) {
       std::string displayName = std::filesystem::path(path).stem().string();
+      bool isCurrent = (path == lastLoadedWorld);
 
       ImGui::PushID(path.c_str());
-      if (ImGui::Selectable(displayName.c_str(), false, 0, ImVec2(0, 0))) {
+      if (isCurrent) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.50f, 0.70f, 0.95f, 1.0f));
+      }
+      if (ImGui::Selectable(displayName.c_str(), isCurrent, 0, ImVec2(0, 0))) {
         if (worldLoadCallback) {
           worldLoadCallback(path);
+          lastLoadedWorld = path;
         }
+      }
+      if (isCurrent) {
+        ImGui::PopStyleColor();
       }
       ImGui::SameLine(200);
       auto it = worldFileStats.find(path);
       if (it != worldFileStats.end()) {
-        const auto& s = it->second;
-        ImGui::TextDisabled("%d obj  %d lit  %d tex  %d mat", s.objects,
-                            s.lights, s.textures, s.materials);
+        const auto& ws = it->second;
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
+        ImGui::Text("%d obj  %d lit  %d tex  %d mat", ws.objects,
+                    ws.lights, ws.textures, ws.materials);
+        ImGui::PopStyleColor();
       }
       ImGui::PopID();
     }
   }
 
   ImGui::Spacing();
+  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
   ImGui::Separator();
+  ImGui::PopStyleColor();
   ImGui::Spacing();
 
   if (ImGui::Button("Refresh", ImVec2(100 * currentScale, 28 * currentScale))) {
     refreshWorldList();
   }
   ImGui::SameLine(0, 12);
-  ImGui::TextDisabled("%d world(s)", static_cast<int>(worldFiles.size()));
+  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
+  ImGui::Text("%d world(s)", static_cast<int>(worldFiles.size()));
+  ImGui::PopStyleColor();
 }
 
 void Interface::draw(VkCommandBuffer commandBuffer, uint32_t imageIndex) {

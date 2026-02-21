@@ -65,6 +65,7 @@ ownedRegistry = std::make_unique<Registry>();
 
   simState = SimulationState{};
   simState.timeSpeed = worldSettings.timeSpeed;
+  lastLoadedWorldPath = filepath;
 
   Debug::log(Debug::Category::MAIN, "Application: Loaded world: ", filepath);
 }
@@ -164,19 +165,31 @@ while (!window->shouldClose()) {
   const float deltaTime = currentTime - lastFrameTime;
   lastFrameTime = currentTime;
 
+  if (simState.reloadRequested) {
+    simState.reloadRequested = false;
+    if (!lastLoadedWorldPath.empty()) {
+      loadWorld(lastLoadedWorldPath);
+    }
+  }
+
+  bool snapshotsOn = interface->getSnapshotsEnabled();
+
   if (simState.resetRequested) {
     simState.resetRequested = false;
-    timelineSystem->restoreInitialSnapshot();
-    timelineSystem->clearSnapshots();
+    if (snapshotsOn) {
+      timelineSystem->restoreInitialSnapshot();
+      timelineSystem->clearSnapshots();
+    }
     simState.timeHistory.clear();
     simState.currentTime = 0.0f;
     simState.historyIndex = -1;
     simState.rewinding = false;
     simState.reversePlay = false;
     simState.baked = false;
+    simState.scrubAccumulator = 0.0f;
   }
 
-  if (simState.bakeRequested) {
+  if (simState.bakeRequested && snapshotsOn) {
     simState.bakeRequested = false;
     if (!timelineSystem->hasInitialSnapshot()) {
       timelineSystem->saveInitialSnapshot();
@@ -200,38 +213,45 @@ while (!window->shouldClose()) {
     simState.historyIndex = 0;
     simState.currentTime = simState.timeHistory.front();
     timelineSystem->restoreSnapshot(0);
+  } else if (simState.bakeRequested) {
+    simState.bakeRequested = false;
   }
 
-  if (simState.snapshotScrubbed) {
+  if (simState.snapshotScrubbed && snapshotsOn) {
     simState.snapshotScrubbed = false;
     if (simState.historyIndex >= 0 &&
         simState.historyIndex < timelineSystem->getSnapshotCount()) {
       timelineSystem->restoreSnapshot(simState.historyIndex);
     }
+  } else if (simState.snapshotScrubbed) {
+    simState.snapshotScrubbed = false;
   }
 
-  if (simState.reversePlay && !simState.isPaused) {
+  if (simState.reversePlay && !simState.isPaused && snapshotsOn) {
     int snapshotCount = timelineSystem->getSnapshotCount();
     if (snapshotCount > 0) {
       if (simState.historyIndex < 0)
         simState.historyIndex = snapshotCount - 1;
 
       float rewindSpeed = deltaTime * simState.timeSpeed;
-      float framesBack = rewindSpeed / simState.stepSize;
-      int steps = glm::max(static_cast<int>(framesBack), 1);
+      simState.scrubAccumulator += rewindSpeed / simState.stepSize;
+      int steps = static_cast<int>(simState.scrubAccumulator);
+      simState.scrubAccumulator -= static_cast<float>(steps);
 
-      simState.historyIndex = glm::max(simState.historyIndex - steps, 0);
-      timelineSystem->restoreSnapshot(simState.historyIndex);
+      if (steps > 0) {
+        simState.historyIndex = glm::max(simState.historyIndex - steps, 0);
+        timelineSystem->restoreSnapshot(simState.historyIndex);
 
-      if (simState.historyIndex < static_cast<int>(simState.timeHistory.size()))
-        simState.currentTime = simState.timeHistory[simState.historyIndex];
+        if (simState.historyIndex < static_cast<int>(simState.timeHistory.size()))
+          simState.currentTime = simState.timeHistory[simState.historyIndex];
+      }
 
       if (simState.historyIndex <= 0) {
         simState.reversePlay = false;
         simState.isPaused = true;
       }
     }
-  } else if (simState.baked && (!simState.isPaused || simState.stepFrame)) {
+  } else if (simState.baked && snapshotsOn && (!simState.isPaused || simState.stepFrame)) {
     int snapshotCount = timelineSystem->getSnapshotCount();
     if (snapshotCount > 0) {
       if (simState.historyIndex < 0) simState.historyIndex = 0;
@@ -241,10 +261,13 @@ while (!window->shouldClose()) {
                                           snapshotCount - 1);
       } else {
         float playSpeed = deltaTime * simState.timeSpeed;
-        float framesForward = playSpeed / simState.stepSize;
-        int steps = glm::max(static_cast<int>(framesForward), 1);
-        simState.historyIndex = glm::min(simState.historyIndex + steps,
-                                          snapshotCount - 1);
+        simState.scrubAccumulator += playSpeed / simState.stepSize;
+        int steps = static_cast<int>(simState.scrubAccumulator);
+        simState.scrubAccumulator -= static_cast<float>(steps);
+        if (steps > 0) {
+          simState.historyIndex = glm::min(simState.historyIndex + steps,
+                                            snapshotCount - 1);
+        }
       }
 
       timelineSystem->restoreSnapshot(simState.historyIndex);
@@ -260,11 +283,11 @@ while (!window->shouldClose()) {
       }
     }
   } else if (!simState.isPaused || simState.stepFrame) {
-    if (!timelineSystem->hasInitialSnapshot()) {
+    if (snapshotsOn && !timelineSystem->hasInitialSnapshot()) {
       timelineSystem->saveInitialSnapshot();
     }
 
-    if (simState.historyIndex >= 0) {
+    if (snapshotsOn && simState.historyIndex >= 0) {
       int truncIdx = simState.historyIndex;
       timelineSystem->truncateAfter(truncIdx);
       if (truncIdx + 1 < static_cast<int>(simState.timeHistory.size()))
@@ -283,12 +306,15 @@ while (!window->shouldClose()) {
     simState.reversePlay = false;
 
     physicsSystem->update(advance);
-    timelineSystem->saveSnapshot();
-    simState.timeHistory.push_back(simState.currentTime);
 
-    while (static_cast<int>(simState.timeHistory.size()) >
-           timelineSystem->getSnapshotCount()) {
-      simState.timeHistory.erase(simState.timeHistory.begin());
+    if (snapshotsOn) {
+      timelineSystem->saveSnapshot();
+      simState.timeHistory.push_back(simState.currentTime);
+
+      while (static_cast<int>(simState.timeHistory.size()) >
+             timelineSystem->getSnapshotCount()) {
+        simState.timeHistory.erase(simState.timeHistory.begin());
+      }
     }
   }
 

@@ -129,6 +129,7 @@ class Application final {
 
   SimulationState simState;
   SceneSettings sceneSettings;
+  std::string lastLoadedWorldPath;
 
   MeshID gizmoMeshID = INVALID_MESH_ID;
   MaterialID gizmoMaterialID = INVALID_MATERIAL_ID;
