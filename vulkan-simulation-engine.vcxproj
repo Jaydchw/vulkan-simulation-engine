@@ -155,6 +155,7 @@
     <ClCompile Include="src\Resources\TextureManager.cpp" />
     <ClCompile Include="src\Scene\Shadow.cpp" />
     <ClCompile Include="src\Scene\Skybox.cpp" />
+    <ClCompile Include="src\Timeline\TimelineSystem.cpp" />
     <ClCompile Include="src\Util\ConfigParser.cpp" />
     <ClCompile Include="src\Util\Interface.cpp" />
     <ClCompile Include="src\Util\RenderUtils.cpp" />
@@ -200,6 +201,7 @@
     <ClInclude Include="src\Physics\PhysicsSystem.h" />
     <ClInclude Include="src\Rendering\MainPipeline.h" />
     <ClInclude Include="src\Resources\ProceduralTexture.h" />
+    <ClInclude Include="src\Timeline\TimelineSystem.h" />
     <ClInclude Include="src\Util\Interface.h" />
     <ClInclude Include="src\Util\RenderUtils.h" />
     <ClInclude Include="src\Rendering\Window.h" />

@@ -29,6 +29,10 @@ struct SimulationState {
   bool reversePlay = false;
   bool snapshotScrubbed = false;
   bool resetRequested = false;
+
+  bool bakeRequested = false;
+  float bakeDuration = 10.0f;
+  bool baked = false;
 };
 
 struct SceneSettings {
@@ -104,11 +108,14 @@ class Interface {
   };
   std::unordered_map<std::string, WorldFileStats> worldFileStats;
 
+  bool showSpeedPopup = false;
+  bool showBakePopup = false;
+
   void createDescriptorPool();
   void createImGuiRenderPass();
   void applyScalePreset();
   void renderWorldsMenu();
-  void renderSimulationMenu(SimulationState& simState);
+  void renderTransportBar(SimulationState& simState);
   void renderObjectsMenu(Registry& registry);
   void renderSceneMenu(SceneSettings& sceneSettings,
                        MainPipeline* mainPipeline);

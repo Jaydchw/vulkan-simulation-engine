@@ -12,98 +12,12 @@ PhysicsSystem::PhysicsSystem() {
 
 void PhysicsSystem::setRegistry(Registry* reg) {
   registry = reg;
-  clearSnapshots();
-  initialSnapshotValid = false;
 }
 
 void PhysicsSystem::update(float deltaTime) {
   if (!registry || deltaTime <= 0.0f) return;
   integrate(deltaTime);
   resolveCollisions();
-}
-
-FrameSnapshot PhysicsSystem::captureFrame() const {
-  FrameSnapshot snap;
-  if (!registry) return snap;
-  for (const auto& [entity, phys] : registry->allPhysics()) {
-    const auto* transform = registry->getComponent<TransformComponent>(entity);
-    if (!transform) continue;
-    snap[entity] = {transform->position, phys.velocity};
-  }
-  return snap;
-}
-
-void PhysicsSystem::applyFrame(const FrameSnapshot& snap) {
-  if (!registry) return;
-  for (const auto& [entity, state] : snap) {
-    auto* transform = registry->getComponent<TransformComponent>(entity);
-    auto* phys = registry->getComponent<PhysicsComponent>(entity);
-    if (transform) transform->position = state.position;
-    if (phys) phys->velocity = state.velocity;
-  }
-}
-
-void PhysicsSystem::saveInitialSnapshot() {
-  initialSnapshot = captureFrame();
-  initialSnapshotValid = true;
-}
-
-void PhysicsSystem::restoreInitialSnapshot() {
-  if (!initialSnapshotValid) return;
-  applyFrame(initialSnapshot);
-}
-
-void PhysicsSystem::saveSnapshot() {
-  snapshots.push_back(captureFrame());
-  framesSinceCondense++;
-  if (framesSinceCondense >= condensePassInterval) {
-    condenseOldFrames();
-    framesSinceCondense = 0;
-  }
-}
-
-void PhysicsSystem::restoreSnapshot(int index) {
-  if (!registry || index < 0 ||
-      index >= static_cast<int>(snapshots.size()))
-    return;
-  applyFrame(snapshots[index]);
-}
-
-void PhysicsSystem::truncateAfter(int index) {
-  if (index < 0 || index >= static_cast<int>(snapshots.size())) return;
-  snapshots.erase(snapshots.begin() + index + 1, snapshots.end());
-}
-
-void PhysicsSystem::clearSnapshots() {
-  snapshots.clear();
-  framesSinceCondense = 0;
-}
-
-int PhysicsSystem::getSnapshotCount() const {
-  return static_cast<int>(snapshots.size());
-}
-
-void PhysicsSystem::condenseOldFrames() {
-  int total = static_cast<int>(snapshots.size());
-  if (total <= fullResFrames) return;
-
-  int oldCount = total - fullResFrames;
-  if (oldCount < 4) return;
-
-  std::deque<FrameSnapshot> condensed;
-  int step = 2;
-  if (oldCount > 3600) step = 8;
-  else if (oldCount > 1800) step = 4;
-
-  for (int i = 0; i < oldCount; i += step) {
-    condensed.push_back(std::move(snapshots[i]));
-  }
-
-  for (int i = oldCount; i < total; i++) {
-    condensed.push_back(std::move(snapshots[i]));
-  }
-
-  snapshots = std::move(condensed);
 }
 
 void PhysicsSystem::integrate(float deltaTime) {

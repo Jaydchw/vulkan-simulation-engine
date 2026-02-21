@@ -260,10 +260,6 @@ PostProcessing* postProcessing) {
       renderWorldsMenu();
       ImGui::EndMenu();
     }
-    if (menuItem("Simulation")) {
-      renderSimulationMenu(simState);
-      ImGui::EndMenu();
-    }
     if (menuItem("Objects")) {
       renderObjectsMenu(registry);
       ImGui::EndMenu();
@@ -301,6 +297,8 @@ PostProcessing* postProcessing) {
     ImGui::EndMainMenuBar();
   }
 
+  renderTransportBar(simState);
+
   ImGui::Render();
 }
 
@@ -316,164 +314,358 @@ static void sectionHeader(const char* label) {
   ImGui::Spacing();
 }
 
-void Interface::renderSimulationMenu(SimulationState& simState) {
-sectionHeader("Transport");
+void Interface::renderTransportBar(SimulationState& simState) {
+  const ImGuiViewport* viewport = ImGui::GetMainViewport();
+  const float s = currentScale;
+  const float barHeight = 38.0f * s;
+  const float btnH = 24.0f * s;
+  const float btnW = 24.0f * s;
+  const float gap = 4.0f * s;
+  const float sepGap = 10.0f * s;
 
-const float s = currentScale;
-const float bw = 90.0f * s;
-const float bh = 28.0f * s;
-const float sliderW = 220.0f * s;
-const float gap = 16.0f * s;
+  ImGui::SetNextWindowPos(
+      ImVec2(viewport->WorkPos.x,
+             viewport->WorkPos.y + viewport->WorkSize.y - barHeight));
+  ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x, barHeight));
 
-  if (simState.isPaused) {
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.50f, 0.22f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          ImVec4(0.22f, 0.60f, 0.28f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          ImVec4(0.26f, 0.70f, 0.32f, 1.0f));
-  } else {
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          ImVec4(0.65f, 0.22f, 0.22f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          ImVec4(0.75f, 0.28f, 0.28f, 1.0f));
-  }
-  if (ImGui::Button(simState.isPaused ? "  Play  " : "  Pause  ",
-                    ImVec2(bw, bh))) {
-    simState.isPaused = !simState.isPaused;
-    simState.rewinding = false;
-    simState.reversePlay = false;
-  }
-  ImGui::PopStyleColor(3);
-  keybadge("Space");
-  ImGui::SameLine(0, gap);
-  if (simState.reversePlay && !simState.isPaused) {
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          ImVec4(0.65f, 0.22f, 0.22f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          ImVec4(0.75f, 0.28f, 0.28f, 1.0f));
-  } else {
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.30f, 0.18f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          ImVec4(0.60f, 0.38f, 0.22f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          ImVec4(0.70f, 0.45f, 0.28f, 1.0f));
-  }
-  if (ImGui::Button(simState.reversePlay && !simState.isPaused ? " Stop Rev "
-                                                               : " Reverse ",
-                    ImVec2(bw, bh))) {
-    if (simState.reversePlay && !simState.isPaused) {
-      simState.isPaused = true;
-      simState.reversePlay = false;
-    } else {
-      simState.isPaused = false;
-      simState.reversePlay = true;
-      simState.rewinding = true;
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
+                           ImGuiWindowFlags_NoMove |
+                           ImGuiWindowFlags_NoSavedSettings |
+                           ImGuiWindowFlags_NoBringToFrontOnFocus |
+                           ImGuiWindowFlags_NoFocusOnAppearing |
+                           ImGuiWindowFlags_NoScrollbar |
+                           ImGuiWindowFlags_NoScrollWithMouse;
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10 * s, 7 * s));
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(gap, 0));
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f * s);
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4 * s, 3 * s));
+
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.11f, 0.11f, 0.14f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.22f, 0.28f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.23f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.34f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.32f, 0.32f, 0.42f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.45f, 0.55f, 0.80f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(0.55f, 0.65f, 0.90f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.14f, 0.14f, 0.18f, 1.0f));
+  ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.18f, 0.18f, 0.24f, 1.0f));
+
+  if (ImGui::Begin("##transport_bar", nullptr, flags)) {
+    // --- Restart ---
+    if (ImGui::Button("##restart", ImVec2(btnW, btnH))) {
+      simState.resetRequested = true;
     }
-  }
-  ImGui::PopStyleColor(3);
-
-  ImGui::Spacing();
-
-  if (ImGui::Button("Step Fwd", ImVec2(bw, bh))) {
-    simState.isPaused = true;
-    simState.stepFrame = true;
-    simState.rewinding = false;
-    simState.reversePlay = false;
-  }
-  keybadge(".");
-  ImGui::SameLine(0, gap);
-  if (ImGui::Button("Step Back", ImVec2(bw, bh))) {
-    simState.isPaused = true;
-    simState.rewinding = true;
-    simState.reversePlay = false;
-    simState.snapshotScrubbed = true;
-    if (simState.historyIndex < 0)
-      simState.historyIndex =
-          static_cast<int>(simState.timeHistory.size()) - 1;
-    if (simState.historyIndex > 0) {
-      simState.historyIndex--;
-      if (simState.historyIndex <
-          static_cast<int>(simState.timeHistory.size()))
-        simState.currentTime = simState.timeHistory[simState.historyIndex];
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Restart [R]");
+    // Draw restart icon (square)
+    {
+      ImVec2 p = ImGui::GetItemRectMin();
+      ImVec2 sz = ImGui::GetItemRectSize();
+      float cx = p.x + sz.x * 0.5f, cy = p.y + sz.y * 0.5f;
+      float r = 4.0f * s;
+      ImGui::GetWindowDrawList()->AddRectFilled(
+          ImVec2(cx - r, cy - r), ImVec2(cx + r, cy + r),
+          IM_COL32(200, 200, 200, 220), 1.0f * s);
     }
-  }
-  keybadge(",");
+    ImGui::SameLine(0, gap);
 
-  ImGui::Spacing();
-
-  if (ImGui::Button("Restart", ImVec2(bw, bh))) {
-    simState.resetRequested = true;
-  }
-  keybadge("R");
-  ImGui::SameLine(0, gap);
-  if (ImGui::Button("Half Speed", ImVec2(bw, bh))) {
-    simState.timeSpeed = glm::max(simState.timeSpeed * 0.5f, 0.01f);
-  }
-  keybadge("-");
-  ImGui::SameLine(0, gap);
-  if (ImGui::Button("Double Spd", ImVec2(bw, bh))) {
-    simState.timeSpeed = glm::min(simState.timeSpeed * 2.0f, 10.0f);
-  }
-  keybadge("+");
-
-  sectionHeader("Time");
-
-  int minutes = static_cast<int>(simState.currentTime) / 60;
-  int seconds = static_cast<int>(simState.currentTime) % 60;
-  int millis = static_cast<int>(
-      (simState.currentTime - static_cast<int>(simState.currentTime)) * 100);
-  ImGui::Text("Elapsed:  %02d:%02d.%02d", minutes, seconds, millis);
-
-  ImGui::Spacing();
-
-  ImGui::SetNextItemWidth(sliderW);
-  ImGui::SliderFloat("Speed", &simState.timeSpeed, 0.0f, 10.0f, "%.2fx");
-  ImGui::SameLine(0, 10 * s);
-  if (ImGui::SmallButton("1x##spd")) simState.timeSpeed = 1.0f;
-
-  ImGui::SetNextItemWidth(sliderW);
-  ImGui::SliderFloat("Step Size", &simState.stepSize, 0.001f, 1.0f, "%.3fs");
-  ImGui::SameLine(0, 10 * s);
-  if (ImGui::SmallButton("16ms##step")) simState.stepSize = 0.016f;
-
-  if (!simState.timeHistory.empty()) {
-    sectionHeader("Timeline");
-
-    int histSize = static_cast<int>(simState.timeHistory.size());
-    int scrubIdx =
-        simState.historyIndex >= 0 ? simState.historyIndex : histSize - 1;
-    ImGui::SetNextItemWidth(-1);
-    if (ImGui::SliderInt("##timeline", &scrubIdx, 0, histSize - 1,
-                         "Frame %d")) {
+    // --- Step Back ---
+    if (ImGui::Button("##step_back", ImVec2(btnW, btnH))) {
       simState.isPaused = true;
       simState.rewinding = true;
       simState.reversePlay = false;
-      simState.historyIndex = scrubIdx;
-      simState.currentTime = simState.timeHistory[scrubIdx];
       simState.snapshotScrubbed = true;
+      if (simState.historyIndex < 0)
+        simState.historyIndex =
+            static_cast<int>(simState.timeHistory.size()) - 1;
+      if (simState.historyIndex > 0) {
+        simState.historyIndex--;
+        if (simState.historyIndex <
+            static_cast<int>(simState.timeHistory.size()))
+          simState.currentTime = simState.timeHistory[simState.historyIndex];
+      }
     }
-    ImGui::TextDisabled("History: %d frames (%.1fs)", histSize,
-                        simState.timeHistory.back());
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Step Back [,]");
+    {
+      ImVec2 p = ImGui::GetItemRectMin();
+      ImVec2 sz = ImGui::GetItemRectSize();
+      float cx = p.x + sz.x * 0.5f, cy = p.y + sz.y * 0.5f;
+      float r = 4.0f * s;
+      ImDrawList* dl = ImGui::GetWindowDrawList();
+      dl->AddRectFilled(ImVec2(cx - r, cy - r), ImVec2(cx - r + 2 * s, cy + r),
+                        IM_COL32(200, 200, 200, 220));
+      dl->AddTriangleFilled(ImVec2(cx + r, cy - r), ImVec2(cx + r, cy + r),
+                            ImVec2(cx - r + 3 * s, cy),
+                            IM_COL32(200, 200, 200, 220));
+    }
+    ImGui::SameLine(0, gap);
+
+    // --- Reverse ---
+    {
+      bool revActive = simState.reversePlay && !simState.isPaused;
+      if (revActive) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.30f, 0.18f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.38f, 0.22f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.70f, 0.45f, 0.28f, 1.0f));
+      }
+      if (ImGui::Button("##reverse", ImVec2(btnW, btnH))) {
+        if (revActive) {
+          simState.isPaused = true;
+          simState.reversePlay = false;
+        } else {
+          simState.isPaused = false;
+          simState.reversePlay = true;
+          simState.rewinding = true;
+        }
+      }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reverse Play");
+      {
+        ImVec2 p = ImGui::GetItemRectMin();
+        ImVec2 sz = ImGui::GetItemRectSize();
+        float cx = p.x + sz.x * 0.5f, cy = p.y + sz.y * 0.5f;
+        float r = 4.0f * s;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddTriangleFilled(ImVec2(cx + r * 0.4f, cy - r), ImVec2(cx + r * 0.4f, cy + r),
+                              ImVec2(cx - r, cy), IM_COL32(200, 200, 200, 220));
+        dl->AddTriangleFilled(ImVec2(cx + r, cy - r), ImVec2(cx + r, cy + r),
+                              ImVec2(cx + r * 0.3f - r, cy), IM_COL32(200, 200, 200, 220));
+      }
+      if (revActive) ImGui::PopStyleColor(3);
+    }
+    ImGui::SameLine(0, gap);
+
+    // --- Play / Pause ---
+    {
+      bool isPlaying = !simState.isPaused && !simState.reversePlay;
+      if (isPlaying) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.42f, 0.22f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.52f, 0.28f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.26f, 0.60f, 0.32f, 1.0f));
+      }
+      if (ImGui::Button("##playpause", ImVec2(btnW + 4 * s, btnH))) {
+        simState.isPaused = !simState.isPaused;
+        simState.rewinding = false;
+        simState.reversePlay = false;
+      }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip(simState.isPaused ? "Play [Space]" : "Pause [Space]");
+      {
+        ImVec2 p = ImGui::GetItemRectMin();
+        ImVec2 sz = ImGui::GetItemRectSize();
+        float cx = p.x + sz.x * 0.5f, cy = p.y + sz.y * 0.5f;
+        float r = 5.0f * s;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        if (simState.isPaused) {
+          dl->AddTriangleFilled(ImVec2(cx - r * 0.6f, cy - r), ImVec2(cx - r * 0.6f, cy + r),
+                                ImVec2(cx + r, cy), IM_COL32(220, 220, 220, 240));
+        } else {
+          float bw = 2.5f * s;
+          float g = 1.5f * s;
+          dl->AddRectFilled(ImVec2(cx - g - bw, cy - r), ImVec2(cx - g, cy + r),
+                            IM_COL32(220, 220, 220, 240), 1.0f * s);
+          dl->AddRectFilled(ImVec2(cx + g, cy - r), ImVec2(cx + g + bw, cy + r),
+                            IM_COL32(220, 220, 220, 240), 1.0f * s);
+        }
+      }
+      if (isPlaying) ImGui::PopStyleColor(3);
+    }
+    ImGui::SameLine(0, gap);
+
+    // --- Step Forward ---
+    if (ImGui::Button("##step_fwd", ImVec2(btnW, btnH))) {
+      simState.isPaused = true;
+      simState.stepFrame = true;
+      simState.rewinding = false;
+      simState.reversePlay = false;
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Step Forward [.]");
+    {
+      ImVec2 p = ImGui::GetItemRectMin();
+      ImVec2 sz = ImGui::GetItemRectSize();
+      float cx = p.x + sz.x * 0.5f, cy = p.y + sz.y * 0.5f;
+      float r = 4.0f * s;
+      ImDrawList* dl = ImGui::GetWindowDrawList();
+      dl->AddTriangleFilled(ImVec2(cx - r, cy - r), ImVec2(cx - r, cy + r),
+                            ImVec2(cx + r - 3 * s, cy),
+                            IM_COL32(200, 200, 200, 220));
+      dl->AddRectFilled(ImVec2(cx + r - 2 * s, cy - r), ImVec2(cx + r, cy + r),
+                        IM_COL32(200, 200, 200, 220));
+    }
+    ImGui::SameLine(0, sepGap);
+
+    // --- Timeline scrub ---
+    float rightControlsW = 240.0f * s;
+    float scrubWidth = ImGui::GetContentRegionAvail().x - rightControlsW;
+    if (scrubWidth < 60.0f * s) scrubWidth = 60.0f * s;
+
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.50f, 0.60f, 0.85f, 1.0f));
+    if (!simState.timeHistory.empty()) {
+      int histSize = static_cast<int>(simState.timeHistory.size());
+      int scrubIdx =
+          simState.historyIndex >= 0 ? simState.historyIndex : histSize - 1;
+      ImGui::SetNextItemWidth(scrubWidth);
+      if (ImGui::SliderInt("##timeline", &scrubIdx, 0, histSize - 1, "")) {
+        simState.isPaused = true;
+        simState.rewinding = true;
+        simState.reversePlay = false;
+        simState.historyIndex = scrubIdx;
+        simState.currentTime = simState.timeHistory[scrubIdx];
+        simState.snapshotScrubbed = true;
+      }
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Frame %d / %d", scrubIdx, histSize - 1);
+      }
+    } else {
+      int zero = 0;
+      ImGui::SetNextItemWidth(scrubWidth);
+      ImGui::SliderInt("##timeline_empty", &zero, 0, 0, "");
+    }
+    ImGui::PopStyleColor(1);
+    ImGui::SameLine(0, sepGap);
+
+    // --- Elapsed time ---
+    {
+      int minutes = static_cast<int>(simState.currentTime) / 60;
+      int seconds = static_cast<int>(simState.currentTime) % 60;
+      int millis = static_cast<int>(
+          (simState.currentTime - static_cast<int>(simState.currentTime)) * 100);
+      char timeBuf[16];
+      snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d.%02d", minutes, seconds, millis);
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.70f, 0.75f, 0.85f, 1.0f));
+      ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2 * s);
+      ImGui::Text("%s", timeBuf);
+      ImGui::PopStyleColor(1);
+    }
+    ImGui::SameLine(0, sepGap);
+
+    // --- Frame count ---
+    {
+      char frmBuf[24];
+      int frmCount = static_cast<int>(simState.timeHistory.size());
+      snprintf(frmBuf, sizeof(frmBuf), "%d frm", frmCount);
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.48f, 0.55f, 1.0f));
+      ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2 * s);
+      ImGui::Text("%s", frmBuf);
+      ImGui::PopStyleColor(1);
+    }
+    ImGui::SameLine(0, sepGap);
+
+    // --- Speed button (opens popup) ---
+    {
+      char speedLabel[16];
+      snprintf(speedLabel, sizeof(speedLabel), "%.2fx", simState.timeSpeed);
+      if (ImGui::Button(speedLabel, ImVec2(52 * s, btnH))) {
+        showSpeedPopup = !showSpeedPopup;
+      }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Playback Speed [+/-]");
+    }
+
+    if (showSpeedPopup) {
+      ImGui::SetNextWindowPos(
+          ImVec2(ImGui::GetItemRectMin().x,
+                 ImGui::GetItemRectMin().y - 140 * s));
+      ImGui::SetNextWindowSize(ImVec2(180 * s, 0));
+      ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.12f, 0.12f, 0.16f, 0.98f));
+      if (ImGui::Begin("##speed_popup", &showSpeedPopup,
+                       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.90f, 1.0f), "Speed");
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::SetNextItemWidth(-1);
+        ImGui::SliderFloat("##spd_slider", &simState.timeSpeed, 0.01f, 10.0f, "%.2fx");
+        ImGui::Spacing();
+        float presets[] = {0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f};
+        const char* presetLabels[] = {"0.25x", "0.5x", "1x", "2x", "4x", "8x"};
+        for (int i = 0; i < 6; i++) {
+          if (i > 0) ImGui::SameLine(0, gap);
+          bool active = (std::abs(simState.timeSpeed - presets[i]) < 0.01f);
+          if (active) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.38f, 0.58f, 1.0f));
+          }
+          if (ImGui::Button(presetLabels[i], ImVec2(0, btnH))) {
+            simState.timeSpeed = presets[i];
+          }
+          if (active) ImGui::PopStyleColor(1);
+        }
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.45f, 0.48f, 0.55f, 1.0f), "Step");
+        ImGui::SetNextItemWidth(-1);
+        ImGui::SliderFloat("##step_slider", &simState.stepSize, 0.001f, 0.1f, "%.3fs");
+      }
+      ImGui::End();
+      ImGui::PopStyleColor(1);
+    }
+    ImGui::SameLine(0, gap);
+
+    // --- Bake button (opens popup) ---
+    {
+      if (simState.baked) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.38f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.46f, 0.26f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.30f, 0.52f, 0.30f, 1.0f));
+      }
+      if (ImGui::Button("Bake", ImVec2(42 * s, btnH))) {
+        showBakePopup = !showBakePopup;
+      }
+      if (ImGui::IsItemHovered()) ImGui::SetTooltip("Bake Simulation");
+      if (simState.baked) ImGui::PopStyleColor(3);
+    }
+
+    if (showBakePopup) {
+      ImGui::SetNextWindowPos(
+          ImVec2(ImGui::GetItemRectMin().x,
+                 ImGui::GetItemRectMin().y - 130 * s));
+      ImGui::SetNextWindowSize(ImVec2(170 * s, 0));
+      ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.12f, 0.12f, 0.16f, 0.98f));
+      if (ImGui::Begin("##bake_popup", &showBakePopup,
+                       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.90f, 1.0f), "Bake Duration");
+        ImGui::Separator();
+        ImGui::Spacing();
+        struct BakePreset { const char* label; float duration; };
+        BakePreset presets[] = {
+            {"5s",  5.0f},
+            {"10s", 10.0f},
+            {"30s", 30.0f},
+            {"60s", 60.0f},
+        };
+        for (int i = 0; i < 4; i++) {
+          bool active = (std::abs(simState.bakeDuration - presets[i].duration) < 0.01f);
+          if (active) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.38f, 0.58f, 1.0f));
+          }
+          if (ImGui::Button(presets[i].label, ImVec2(-1, btnH))) {
+            simState.bakeDuration = presets[i].duration;
+          }
+          if (active) ImGui::PopStyleColor(1);
+        }
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.48f, 0.26f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.58f, 0.32f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.34f, 0.66f, 0.38f, 1.0f));
+        int estFrames = static_cast<int>(simState.bakeDuration / simState.stepSize);
+        char bakeLabel[48];
+        snprintf(bakeLabel, sizeof(bakeLabel), "Bake (%d frames)", estFrames);
+        if (ImGui::Button(bakeLabel, ImVec2(-1, btnH + 4 * s))) {
+          simState.bakeRequested = true;
+          showBakePopup = false;
+        }
+        ImGui::PopStyleColor(3);
+        if (simState.baked) {
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Baked");
+        }
+      }
+      ImGui::End();
+      ImGui::PopStyleColor(1);
+    }
   }
-
-  sectionHeader("Status");
-
-  ImVec4 statusColor = simState.isPaused
-                           ? ImVec4(1.0f, 0.6f, 0.2f, 1.0f)
-                           : (simState.reversePlay
-                                  ? ImVec4(1.0f, 0.5f, 0.3f, 1.0f)
-                                  : ImVec4(0.4f, 1.0f, 0.4f, 1.0f));
-  const char* statusText =
-      simState.isPaused
-          ? (simState.rewinding ? "Rewinding" : "Paused")
-          : (simState.reversePlay ? "Reverse" : "Running");
-  ImGui::Bullet();
-  ImGui::SameLine();
-  ImGui::TextColored(statusColor, "%s", statusText);
-  ImGui::SameLine(0, gap);
-  ImGui::TextDisabled("%.2fx", simState.timeSpeed);
+  ImGui::End();
+  ImGui::PopStyleColor(9);
+  ImGui::PopStyleVar(6);
 }
 
 void Interface::renderObjectsMenu(Registry& registry) {
