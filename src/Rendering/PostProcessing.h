@@ -10,7 +10,16 @@ struct PostProcessingConfig {
   float hue = 0.0f;
   float saturation = 1.0f;
   float contrast = 1.0f;
+  float chromaticAberration = 0.003f;
+  float vignetteStrength = 0.3f;
+  float sharpenStrength = 0.3f;
+  float exposure = 1.0f;
+  float gamma = 1.0f;
+  float filmGrain = 0.0f;
+  float temperature = 0.0f;
+  float pixelResolution = 4.0f;
   bool useToon = false;
+  bool usePixel = false;
 };
 
 class PostProcessing final {
@@ -40,6 +49,10 @@ class PostProcessing final {
   void setToonMode(bool enabled) { config.useToon = enabled; }
   bool isToonModeEnabled() const { return config.useToon; }
 
+  void togglePixelMode() { config.usePixel = !config.usePixel; }
+  void setPixelMode(bool enabled) { config.usePixel = enabled; }
+  bool isPixelModeEnabled() const { return config.usePixel; }
+
   PostProcessingConfig getConfig() const { return config; }
   void setConfig(const PostProcessingConfig& c) { config = c; }
 
@@ -58,6 +71,7 @@ class PostProcessing final {
   VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
   VkPipeline pipeline = VK_NULL_HANDLE;
   VkPipeline toonPipeline = VK_NULL_HANDLE;
+  VkPipeline pixelPipeline = VK_NULL_HANDLE;
   VkFormat swapchainFormat;
   VkFormat depthFormat;
   uint32_t width = 0;

@@ -47,6 +47,8 @@ void PostProcessing::cleanup() {
   if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
   if (toonPipeline != VK_NULL_HANDLE)
     vkDestroyPipeline(device, toonPipeline, nullptr);
+  if (pixelPipeline != VK_NULL_HANDLE)
+    vkDestroyPipeline(device, pixelPipeline, nullptr);
   if (pipelineLayout != VK_NULL_HANDLE)
     vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
   if (descriptorSetLayout != VK_NULL_HANDLE)
@@ -184,7 +186,8 @@ void PostProcessing::render(VkCommandBuffer commandBuffer,
 
   vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
-  const VkPipeline pipelineToBind = config.useToon ? toonPipeline : pipeline;
+  const VkPipeline pipelineToBind =
+      config.usePixel ? pixelPipeline : (config.useToon ? toonPipeline : pipeline);
   vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     pipelineToBind);
 
@@ -206,10 +209,26 @@ void PostProcessing::render(VkCommandBuffer commandBuffer,
     float hue;
     float saturation;
     float contrast;
+    float chromaticAberration;
+    float vignetteStrength;
+    float sharpenStrength;
+    float exposure;
+    float gamma;
+    float filmGrain;
+    float temperature;
+    float pixelResolution;
   } pushConstants;
   pushConstants.hue = config.hue;
   pushConstants.saturation = config.saturation;
   pushConstants.contrast = config.contrast;
+  pushConstants.chromaticAberration = config.chromaticAberration;
+  pushConstants.vignetteStrength = config.vignetteStrength;
+  pushConstants.sharpenStrength = config.sharpenStrength;
+  pushConstants.exposure = config.exposure;
+  pushConstants.gamma = config.gamma;
+  pushConstants.filmGrain = config.filmGrain;
+  pushConstants.temperature = config.temperature;
+  pushConstants.pixelResolution = config.pixelResolution;
 
   vkCmdPushConstants(commandBuffer, pipelineLayout,
                      VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants),
@@ -295,7 +314,7 @@ void PostProcessing::createPipelines() {
   dynamicState.pDynamicStates = dynamicStates.data();
   VkPushConstantRange pushConstantRange{};
   pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-  pushConstantRange.size = sizeof(float) * 3;
+  pushConstantRange.size = sizeof(float) * 11;
   VkPipelineLayoutCreateInfo pipelineLayoutInfo{
       VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   pipelineLayoutInfo.setLayoutCount = 1;
@@ -349,7 +368,9 @@ void PostProcessing::createPipelines() {
   createPipelineInstance("shaders/postprocess_vert.spv",
                          "shaders/postprocess_frag.spv", pipeline);
   createPipelineInstance("shaders/toon_vert.spv", "shaders/toon_frag.spv",
-                         toonPipeline);
+                          toonPipeline);
+  createPipelineInstance("shaders/postprocess_vert.spv",
+                          "shaders/pixel_frag.spv", pixelPipeline);
 }
 
 void PostProcessing::createDescriptorSets(VkDescriptorPool descriptorPool) {

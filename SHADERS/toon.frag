@@ -7,6 +7,14 @@ layout(push_constant) uniform PushConstants {
     float hue;
     float saturation;
     float contrast;
+    float chromaticAberration;
+    float vignetteStrength;
+    float sharpenStrength;
+    float exposure;
+    float gamma;
+    float filmGrain;
+    float temperature;
+    float pixelResolution;
 } pushConstants;
 
 layout(location = 0) in vec2 fragTexCoord;

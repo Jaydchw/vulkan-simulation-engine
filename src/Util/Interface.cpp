@@ -1070,11 +1070,108 @@ void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
 
   sectionHeader("Effects");
 
+  fieldLabel("Chromatic Aberration");
+  ImGui::SetNextItemWidth(sliderW);
+  if (ImGui::SliderFloat("##chromatic", &config.chromaticAberration, 0.0f, 0.05f, "%.4f"))
+    changed = true;
+  ImGui::SameLine(0, 10 * s);
+  if (ImGui::SmallButton("Reset##ca")) {
+    config.chromaticAberration = 0.003f;
+    changed = true;
+  }
+
+  fieldLabel("Vignette");
+  ImGui::SetNextItemWidth(sliderW);
+  if (ImGui::SliderFloat("##vignette", &config.vignetteStrength, 0.0f, 1.0f, "%.2f"))
+    changed = true;
+  ImGui::SameLine(0, 10 * s);
+  if (ImGui::SmallButton("Reset##vig")) {
+    config.vignetteStrength = 0.3f;
+    changed = true;
+  }
+
+  fieldLabel("Sharpen");
+  ImGui::SetNextItemWidth(sliderW);
+  if (ImGui::SliderFloat("##sharpen", &config.sharpenStrength, 0.0f, 1.0f, "%.2f"))
+    changed = true;
+  ImGui::SameLine(0, 10 * s);
+  if (ImGui::SmallButton("Reset##shp")) {
+    config.sharpenStrength = 0.3f;
+    changed = true;
+  }
+
+  fieldLabel("Exposure");
+  ImGui::SetNextItemWidth(sliderW);
+  if (ImGui::SliderFloat("##exposure", &config.exposure, 0.1f, 5.0f, "%.2f"))
+    changed = true;
+  ImGui::SameLine(0, 10 * s);
+  if (ImGui::SmallButton("Reset##exp")) {
+    config.exposure = 1.0f;
+    changed = true;
+  }
+
+  fieldLabel("Gamma");
+  ImGui::SetNextItemWidth(sliderW);
+  if (ImGui::SliderFloat("##gamma", &config.gamma, 0.5f, 3.0f, "%.2f"))
+    changed = true;
+  ImGui::SameLine(0, 10 * s);
+  if (ImGui::SmallButton("Reset##gam")) {
+    config.gamma = 1.0f;
+    changed = true;
+  }
+
+  fieldLabel("Film Grain");
+  ImGui::SetNextItemWidth(sliderW);
+  if (ImGui::SliderFloat("##filmgrain", &config.filmGrain, 0.0f, 0.3f, "%.3f"))
+    changed = true;
+  ImGui::SameLine(0, 10 * s);
+  if (ImGui::SmallButton("Reset##grain")) {
+    config.filmGrain = 0.0f;
+    changed = true;
+  }
+
+  fieldLabel("Temperature");
+  ImGui::SetNextItemWidth(sliderW);
+  if (ImGui::SliderFloat("##temperature", &config.temperature, -1.0f, 1.0f, "%.2f"))
+    changed = true;
+  ImGui::SameLine(0, 10 * s);
+  if (ImGui::SmallButton("Reset##temp")) {
+    config.temperature = 0.0f;
+    changed = true;
+  }
+
+  ImGui::Spacing();
+
   if (ImGui::Checkbox("Toon Shader", &config.useToon)) {
     postProcessing->setToonMode(config.useToon);
+    if (config.useToon) {
+      config.usePixel = false;
+      postProcessing->setPixelMode(false);
+    }
     changed = true;
   }
   keybadge("K");
+
+  if (ImGui::Checkbox("Pixel Art", &config.usePixel)) {
+    postProcessing->setPixelMode(config.usePixel);
+    if (config.usePixel) {
+      config.useToon = false;
+      postProcessing->setToonMode(false);
+    }
+    changed = true;
+  }
+
+  ImGui::BeginDisabled(!config.usePixel);
+  fieldLabel("Pixel Size");
+  ImGui::SetNextItemWidth(sliderW);
+  if (ImGui::SliderFloat("##pixelres", &config.pixelResolution, 1.0f, 16.0f, "%.0f"))
+    changed = true;
+  ImGui::SameLine(0, 10 * s);
+  if (ImGui::SmallButton("Reset##pxr")) {
+    config.pixelResolution = 4.0f;
+    changed = true;
+  }
+  ImGui::EndDisabled();
 
   ImGui::Spacing();
   ImGui::Spacing();
@@ -1083,8 +1180,18 @@ void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
     config.hue = 0.0f;
     config.saturation = 1.0f;
     config.contrast = 1.0f;
+    config.chromaticAberration = 0.003f;
+    config.vignetteStrength = 0.3f;
+    config.sharpenStrength = 0.3f;
+    config.exposure = 1.0f;
+    config.gamma = 1.0f;
+    config.filmGrain = 0.0f;
+    config.temperature = 0.0f;
+    config.pixelResolution = 4.0f;
     config.useToon = false;
+    config.usePixel = false;
     postProcessing->setToonMode(false);
+    postProcessing->setPixelMode(false);
     changed = true;
   }
 
