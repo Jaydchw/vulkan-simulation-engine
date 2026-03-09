@@ -299,6 +299,12 @@ PostProcessing* postProcessing) {
 
   renderTransportBar(simState);
 
+  // Auto-open stats window when a performance bake just completed
+  if (simState.bakePerformanceMode && simState.baked && simState.bakeStats.hasData &&
+      !simState.isBaking && simState.bakeCurrentStep == simState.bakeTotalSteps) {
+    showBakeStatsWindow = true;
+  }
+
   ImGui::Render();
 }
 
@@ -570,11 +576,11 @@ void Interface::renderTransportBar(SimulationState& simState) {
     }
 
     if (showSpeedPopup) {
-      float popW = 180 * s;
-      float autoH = 130 * s;
+      float popW = 220 * s;
       const ImGuiViewport* vp = ImGui::GetMainViewport();
-      float popX = ImGui::GetItemRectMin().x;
-      float popY = ImGui::GetItemRectMin().y - 8 * s - autoH;
+      ImVec2 btnMin = ImGui::GetItemRectMin();
+      float popX = btnMin.x;
+      float popY = btnMin.y - speedPopupHeight - 4 * s;
       popX = glm::clamp(popX, vp->WorkPos.x, vp->WorkPos.x + vp->WorkSize.x - popW);
       popY = glm::max(popY, vp->WorkPos.y);
       ImGui::SetNextWindowPos(ImVec2(popX, popY));
@@ -585,27 +591,34 @@ void Interface::renderTransportBar(SimulationState& simState) {
                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
         ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.90f, 1.0f), "Speed");
         ImGui::Separator();
-        ImGui::Spacing();
+        ImGui::Dummy(ImVec2(0, 6 * s));
         ImGui::SetNextItemWidth(-1);
         ImGui::SliderFloat("##spd_slider", &simState.timeSpeed, 0.01f, 10.0f, "%.2fx");
-        ImGui::Spacing();
-        float presets[] = {0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f};
-        const char* presetLabels[] = {"0.25x", "0.5x", "1x", "2x", "4x", "8x"};
+        ImGui::Dummy(ImVec2(0, 8 * s));
+        // Two rows of 3: 0.1 0.5 1.0 / 2.0 5.0 10.0
+        float presets[] = {0.1f, 0.5f, 1.0f, 2.0f, 5.0f, 10.0f};
+        const char* presetLabels[] = {"0.1x", "0.5x", "1x", "2x", "5x", "10x"};
+        float btnPresetW = (popW - ImGui::GetStyle().WindowPadding.x * 2.0f - gap * 2.0f) / 3.0f;
         for (int i = 0; i < 6; i++) {
-          if (i > 0) ImGui::SameLine(0, gap);
-          bool active = (std::abs(simState.timeSpeed - presets[i]) < 0.01f);
-          if (active) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.38f, 0.58f, 1.0f));
-          }
-          if (ImGui::Button(presetLabels[i], ImVec2(0, btnH))) {
+          if (i == 3) { ImGui::Dummy(ImVec2(0, 4 * s)); }
+          if (i > 0 && i != 3) ImGui::SameLine(0, gap);
+          bool active = (std::abs(simState.timeSpeed - presets[i]) < 0.005f);
+          if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.38f, 0.58f, 1.0f));
+          if (ImGui::Button(presetLabels[i], ImVec2(btnPresetW, btnH)))
             simState.timeSpeed = presets[i];
-          }
           if (active) ImGui::PopStyleColor(1);
         }
-        ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.45f, 0.48f, 0.55f, 1.0f), "Step");
+        ImGui::Dummy(ImVec2(0, 8 * s));
+        ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.50f));
+        ImGui::Separator();
+        ImGui::PopStyleColor();
+        ImGui::Dummy(ImVec2(0, 6 * s));
+        ImGui::TextColored(ImVec4(0.45f, 0.48f, 0.55f, 1.0f), "Step Size");
+        ImGui::Dummy(ImVec2(0, 2 * s));
         ImGui::SetNextItemWidth(-1);
         ImGui::SliderFloat("##step_slider", &simState.stepSize, 0.001f, 0.1f, "%.3fs");
+        ImGui::Dummy(ImVec2(0, 4 * s));
+        speedPopupHeight = ImGui::GetWindowSize().y;
       }
       ImGui::End();
       ImGui::PopStyleColor(1);
@@ -636,16 +649,15 @@ void Interface::renderTransportBar(SimulationState& simState) {
       if (simState.baked) ImGui::PopStyleColor(3);
 
       if (showBakePopup) {
-        float popW = 160 * s;
+        float popW = 220 * s;
         const ImGuiViewport* vp = ImGui::GetMainViewport();
-        float popX = ImGui::GetItemRectMin().x;
-        float popY = ImGui::GetItemRectMin().y - 12 * s;
-        ImGui::SetNextWindowSize(ImVec2(popW, 0));
-        float autoH = 130 * s;
-        popY -= autoH;
+        ImVec2 btnMin = ImGui::GetItemRectMin();
+        float popX = btnMin.x;
+        float popY = btnMin.y - bakePopupHeight - 4 * s;
         popX = glm::clamp(popX, vp->WorkPos.x, vp->WorkPos.x + vp->WorkSize.x - popW);
         popY = glm::max(popY, vp->WorkPos.y);
         ImGui::SetNextWindowPos(ImVec2(popX, popY));
+        ImGui::SetNextWindowSize(ImVec2(popW, 0));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.16f, 0.98f));
         if (ImGui::Begin("##bake_popup", &showBakePopup,
                          ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
@@ -654,10 +666,13 @@ void Interface::renderTransportBar(SimulationState& simState) {
           ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
           ImGui::Separator();
           ImGui::PopStyleColor();
-          ImGui::Spacing();
+
+          // --- Duration presets ---
+          ImGui::Dummy(ImVec2(0, 6 * s));
           struct BakePreset { float duration; };
           BakePreset presets[] = {{5.0f}, {10.0f}, {30.0f}, {60.0f}};
           for (int i = 0; i < 4; i++) {
+            if (i > 0) ImGui::Dummy(ImVec2(0, 4 * s));
             int frames = static_cast<int>(presets[i].duration / simState.stepSize);
             char label[48];
             snprintf(label, sizeof(label), "%.0fs  (%d frames)", presets[i].duration, frames);
@@ -665,14 +680,54 @@ void Interface::renderTransportBar(SimulationState& simState) {
               simState.bakeDuration = presets[i].duration;
               simState.bakeRequested = true;
               showBakePopup = false;
+              if (simState.bakeStats.hasData) showBakeStatsWindow = true;
             }
           }
-          if (simState.baked) {
-            ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.8f, 0.4f, 0.8f));
-            ImGui::Text("Baked");
-            ImGui::PopStyleColor();
+
+          // --- Load Bake ---
+          ImGui::Dummy(ImVec2(0, 10 * s));
+          ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+          ImGui::Separator();
+          ImGui::PopStyleColor();
+          ImGui::Dummy(ImVec2(0, 8 * s));
+          if (hasBakeFile) {
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.32f, 0.50f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.40f, 0.62f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.28f, 0.46f, 0.70f, 1.0f));
           }
+          ImGui::BeginDisabled(!hasBakeFile);
+          if (ImGui::Button("Load Bake", ImVec2(-1, btnH))) {
+            simState.loadBakeRequested = true;
+            showBakePopup = false;
+          }
+          ImGui::EndDisabled();
+          if (hasBakeFile) {
+            ImGui::PopStyleColor(3);
+            if (ImGui::IsItemHovered())
+              ImGui::SetTooltip("Load previously saved bake from disk.");
+          } else {
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+              ImGui::SetTooltip("No .worldbake file found for this world.");
+          }
+
+          // --- Performance Mode ---
+          ImGui::Dummy(ImVec2(0, 10 * s));
+          ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+          ImGui::Separator();
+          ImGui::PopStyleColor();
+          ImGui::Dummy(ImVec2(0, 8 * s));
+          ImGui::Checkbox("Performance Mode", &simState.bakePerformanceMode);
+          if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Bakes with no scene rendering for accurate\nphysics performance profiling.");
+          if (simState.baked && simState.bakeStats.hasData) {
+            ImGui::Dummy(ImVec2(0, 4 * s));
+            if (ImGui::SmallButton("View Last Stats")) {
+              showBakeStatsWindow = true;
+              showBakePopup = false;
+            }
+          }
+          ImGui::Dummy(ImVec2(0, 6 * s));
+          bakePopupHeight = ImGui::GetWindowSize().y;
         }
         ImGui::End();
         ImGui::PopStyleColor(1);
@@ -682,6 +737,219 @@ void Interface::renderTransportBar(SimulationState& simState) {
   ImGui::End();
   ImGui::PopStyleColor(9);
   ImGui::PopStyleVar(6);
+
+  if (simState.isBaking) {
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    float popW = 300.0f * s;
+    ImGui::SetNextWindowPos(
+        ImVec2(vp->WorkPos.x + (vp->WorkSize.x - popW) * 0.5f,
+               vp->WorkPos.y + vp->WorkSize.y * 0.42f));
+    ImGui::SetNextWindowSize(ImVec2(popW, 0));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.10f, 0.10f, 0.14f, 0.97f));
+    ImGui::Begin("##bake_progress", nullptr,
+                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                 ImGuiWindowFlags_NoScrollbar);
+
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.90f, 1.0f), "Baking Simulation...");
+    ImGui::Spacing();
+
+    float progress = (simState.bakeTotalSteps > 0)
+        ? static_cast<float>(simState.bakeCurrentStep) / static_cast<float>(simState.bakeTotalSteps)
+        : 0.0f;
+    char progressLabel[64];
+    snprintf(progressLabel, sizeof(progressLabel), "Frame %d / %d  (%.1f%%)",
+             simState.bakeCurrentStep, simState.bakeTotalSteps, progress * 100.0f);
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.30f, 0.48f, 0.78f, 1.0f));
+    ImGui::ProgressBar(progress, ImVec2(-1.0f, 18.0f * s), progressLabel);
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
+
+    ImGui::End();
+    ImGui::PopStyleColor(1);
+  }
+
+  if (showBakeStatsWindow && simState.bakeStats.hasData) {
+    const BakeStats& st = simState.bakeStats;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    float winW = 420.0f * s;
+    ImGui::SetNextWindowPos(
+        ImVec2(vp->WorkPos.x + (vp->WorkSize.x - winW) * 0.5f,
+               vp->WorkPos.y + vp->WorkSize.y * 0.12f),
+        ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(winW, 0), ImGuiCond_Appearing);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.10f, 0.10f, 0.14f, 0.98f));
+
+    if (ImGui::Begin("Bake Performance Stats", &showBakeStatsWindow,
+                     ImGuiWindowFlags_NoSavedSettings)) {
+
+      auto statRow = [&](const char* label, const char* value, ImVec4 col = ImVec4(0.80f, 0.85f, 1.0f, 1.0f)) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.58f, 0.68f, 1.0f));
+        ImGui::Text("%-30s", label);
+        ImGui::PopStyleColor();
+        ImGui::SameLine(190.0f * s);
+        ImGui::PushStyleColor(ImGuiCol_Text, col);
+        ImGui::Text("%s", value);
+        ImGui::PopStyleColor();
+      };
+
+      auto sectionHead = [&](const char* label) {
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.50f, 0.62f, 0.88f, 1.0f));
+        ImGui::Text("%s", label);
+        ImGui::PopStyleColor();
+        ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+        ImGui::Separator();
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
+      };
+
+      char buf[64];
+
+      sectionHead("Scene");
+      snprintf(buf, sizeof(buf), "%d", st.objectCount);
+      statRow("Physics Objects", buf);
+      snprintf(buf, sizeof(buf), "%d", st.totalSteps);
+      statRow("Total Steps", buf);
+      snprintf(buf, sizeof(buf), "%.3f s", st.stepSize);
+      statRow("Step Size", buf);
+      snprintf(buf, sizeof(buf), "%.1f s", st.simDuration);
+      statRow("Sim Duration", buf);
+
+      sectionHead("Wall Time");
+      snprintf(buf, sizeof(buf), "%.2f ms", st.totalWallTimeMs);
+      statRow("Total Bake Time", buf,
+              st.totalWallTimeMs < 500.0 ? ImVec4(0.4f, 1.0f, 0.4f, 1.0f) :
+              st.totalWallTimeMs < 2000.0 ? ImVec4(1.0f, 1.0f, 0.4f, 1.0f) :
+                                            ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+      snprintf(buf, sizeof(buf), "%.4f ms", st.avgStepMs);
+      statRow("Avg Step Time", buf);
+      snprintf(buf, sizeof(buf), "%.4f ms", st.minStepMs);
+      statRow("Min Step Time", buf, ImVec4(0.4f, 1.0f, 0.4f, 1.0f));
+      snprintf(buf, sizeof(buf), "%.4f ms", st.maxStepMs);
+      statRow("Max Step Time", buf, ImVec4(1.0f, 0.75f, 0.4f, 1.0f));
+      snprintf(buf, sizeof(buf), "%.4f ms", st.avgUiFrameMs);
+      statRow("Avg UI Frame Time", buf);
+
+      sectionHead("Throughput");
+      snprintf(buf, sizeof(buf), "%.1f steps/s", st.stepsPerSecond);
+      statRow("Steps / Second", buf, ImVec4(0.55f, 0.90f, 0.65f, 1.0f));
+      snprintf(buf, sizeof(buf), "%.2fx real-time", st.simSecondsPerWallSecond);
+      statRow("Sim Speed (vs real-time)", buf,
+              st.simSecondsPerWallSecond >= 1.0 ? ImVec4(0.4f, 1.0f, 0.4f, 1.0f) :
+                                                  ImVec4(1.0f, 0.5f, 0.4f, 1.0f));
+
+      sectionHead("Step Breakdown (avg per step)");
+      double totalAvg = st.avgSyncToMs + st.avgPhysStepMs + st.avgSyncFromMs + st.avgSnapshotMs;
+      auto pct = [&](double v) -> double { return totalAvg > 0.0 ? (v / totalAvg * 100.0) : 0.0; };
+
+      snprintf(buf, sizeof(buf), "%.5f ms  (%.1f%%)", st.avgSyncToMs, pct(st.avgSyncToMs));
+      statRow("  Sync To Physics", buf);
+      snprintf(buf, sizeof(buf), "%.5f ms  (%.1f%%)", st.avgPhysStepMs, pct(st.avgPhysStepMs));
+      statRow("  Physics Step", buf);
+      snprintf(buf, sizeof(buf), "%.5f ms  (%.1f%%)", st.avgSyncFromMs, pct(st.avgSyncFromMs));
+      statRow("  Sync From Physics", buf);
+      snprintf(buf, sizeof(buf), "%.5f ms  (%.1f%%)", st.avgSnapshotMs, pct(st.avgSnapshotMs));
+      statRow("  Snapshot Save", buf);
+
+      sectionHead("Collisions");
+      if (st.collisionPairs.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.48f, 0.55f, 1.0f));
+        ImGui::Text("  No collision pairs recorded.");
+        ImGui::PopStyleColor();
+      } else {
+        // Header row
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.48f, 0.55f, 1.0f));
+        ImGui::Text("  %-24s  %10s  %10s  %8s  %10s",
+                    "Pair", "Checks", "Resolved", "Hit%", "Chk/Step");
+        ImGui::PopStyleColor();
+        ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.40f));
+        ImGui::Separator();
+        ImGui::PopStyleColor();
+
+        long long grandChecks = 0, grandResolved = 0;
+        for (const auto& p : st.collisionPairs) { grandChecks += p.totalChecks; grandResolved += p.totalResolved; }
+
+        for (const auto& p : st.collisionPairs) {
+          double hitPct = p.totalChecks > 0
+              ? 100.0 * static_cast<double>(p.totalResolved) / static_cast<double>(p.totalChecks) : 0.0;
+          double chkPerStep = st.totalSteps > 0
+              ? static_cast<double>(p.totalChecks) / st.totalSteps : 0.0;
+          char rowbuf[128];
+          snprintf(rowbuf, sizeof(rowbuf), "  %-24s  %10lld  %10lld  %7.1f%%  %9.1f",
+                   p.pairName.c_str(), p.totalChecks, p.totalResolved, hitPct, chkPerStep);
+          ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.80f, 0.85f, 1.0f, 1.0f));
+          ImGui::TextUnformatted(rowbuf);
+          ImGui::PopStyleColor();
+        }
+
+        // Totals row
+        ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.40f));
+        ImGui::Separator();
+        ImGui::PopStyleColor();
+        double totalHitPct = grandChecks > 0
+            ? 100.0 * static_cast<double>(grandResolved) / static_cast<double>(grandChecks) : 0.0;
+        snprintf(buf, sizeof(buf), "%lld", grandChecks);
+        statRow("  Total Checks", buf);
+        snprintf(buf, sizeof(buf), "%lld", grandResolved);
+        statRow("  Total Resolved", buf);
+        snprintf(buf, sizeof(buf), "%.1f%%", totalHitPct);
+        statRow("  Overall Hit Rate", buf);
+      }
+
+      ImGui::Spacing();
+      ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+      ImGui::Separator();
+      ImGui::PopStyleColor();
+      ImGui::Spacing();
+
+      if (ImGui::Button("Copy to Clipboard", ImVec2(-1, btnH))) {
+        char clip[4096];
+        int n = 0;
+        n += snprintf(clip + n, sizeof(clip) - n, "=== Bake Performance Stats ===\n");
+        n += snprintf(clip + n, sizeof(clip) - n, "[Scene]\n");
+        n += snprintf(clip + n, sizeof(clip) - n, "Physics Objects:           %d\n", st.objectCount);
+        n += snprintf(clip + n, sizeof(clip) - n, "Total Steps:               %d\n", st.totalSteps);
+        n += snprintf(clip + n, sizeof(clip) - n, "Step Size:                 %.3f s\n", st.stepSize);
+        n += snprintf(clip + n, sizeof(clip) - n, "Sim Duration:              %.1f s\n", st.simDuration);
+        n += snprintf(clip + n, sizeof(clip) - n, "[Wall Time]\n");
+        n += snprintf(clip + n, sizeof(clip) - n, "Total Bake Time:           %.2f ms\n", st.totalWallTimeMs);
+        n += snprintf(clip + n, sizeof(clip) - n, "Avg Step Time:             %.4f ms\n", st.avgStepMs);
+        n += snprintf(clip + n, sizeof(clip) - n, "Min Step Time:             %.4f ms\n", st.minStepMs);
+        n += snprintf(clip + n, sizeof(clip) - n, "Max Step Time:             %.4f ms\n", st.maxStepMs);
+        n += snprintf(clip + n, sizeof(clip) - n, "Avg UI Frame Time:         %.4f ms\n", st.avgUiFrameMs);
+        n += snprintf(clip + n, sizeof(clip) - n, "[Throughput]\n");
+        n += snprintf(clip + n, sizeof(clip) - n, "Steps / Second:            %.1f\n", st.stepsPerSecond);
+        n += snprintf(clip + n, sizeof(clip) - n, "Sim Speed (vs real-time):  %.2fx\n", st.simSecondsPerWallSecond);
+        n += snprintf(clip + n, sizeof(clip) - n, "[Step Breakdown (avg per step)]\n");
+        n += snprintf(clip + n, sizeof(clip) - n, "Sync To Physics:           %.5f ms  (%.1f%%)\n", st.avgSyncToMs, pct(st.avgSyncToMs));
+        n += snprintf(clip + n, sizeof(clip) - n, "Physics Step:              %.5f ms  (%.1f%%)\n", st.avgPhysStepMs, pct(st.avgPhysStepMs));
+        n += snprintf(clip + n, sizeof(clip) - n, "Sync From Physics:         %.5f ms  (%.1f%%)\n", st.avgSyncFromMs, pct(st.avgSyncFromMs));
+        n += snprintf(clip + n, sizeof(clip) - n, "Snapshot Save:             %.5f ms  (%.1f%%)\n", st.avgSnapshotMs, pct(st.avgSnapshotMs));
+        n += snprintf(clip + n, sizeof(clip) - n, "[Collisions]\n");
+        n += snprintf(clip + n, sizeof(clip) - n, "%-26s  %10s  %10s  %8s  %10s\n",
+                      "Pair", "Checks", "Resolved", "Hit%", "Chk/Step");
+        long long gc = 0, gr = 0;
+        for (const auto& p : st.collisionPairs) {
+          gc += p.totalChecks; gr += p.totalResolved;
+          double hp = p.totalChecks > 0 ? 100.0 * static_cast<double>(p.totalResolved) / static_cast<double>(p.totalChecks) : 0.0;
+          double cs = st.totalSteps > 0 ? static_cast<double>(p.totalChecks) / st.totalSteps : 0.0;
+          n += snprintf(clip + n, sizeof(clip) - n, "%-26s  %10lld  %10lld  %7.1f%%  %9.1f\n",
+                        p.pairName.c_str(), p.totalChecks, p.totalResolved, hp, cs);
+        }
+        if (!st.collisionPairs.empty()) {
+          double gHitPct = gc > 0 ? 100.0 * static_cast<double>(gr) / static_cast<double>(gc) : 0.0;
+          n += snprintf(clip + n, sizeof(clip) - n, "%-26s  %10lld  %10lld  %7.1f%%\n",
+                        "TOTAL", gc, gr, gHitPct);
+        }
+        ImGui::SetClipboardText(clip);
+      }
+      ImGui::Spacing();
+    }
+    ImGui::End();
+    ImGui::PopStyleColor(1);
+  }
 }
 
 void Interface::renderObjectsMenu(Registry& registry) {
@@ -1287,6 +1555,16 @@ void Interface::setWorldLoadCallback(
 void Interface::setWorldDirectory(const std::string& dir) {
   worldDirectory = dir;
   refreshWorldList();
+}
+
+void Interface::setCurrentWorldPath(const std::string& path) {
+  // Check once for the bake file so the UI can enable/disable the button
+  hasBakeFile = std::filesystem::exists(
+      std::filesystem::path(path).replace_extension(".worldbake"));
+}
+
+void Interface::notifyBakeSaved() {
+  hasBakeFile = true;
 }
 
 void Interface::refreshWorldList() {

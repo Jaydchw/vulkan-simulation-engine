@@ -1,6 +1,7 @@
 #pragma once
 #include <deque>
 #include <unordered_map>
+#include <vector>
 
 #include <glm/glm.hpp>
 
@@ -32,6 +33,12 @@ class TimelineSystem final {
   void clearSnapshots();
   int getSnapshotCount() const;
 
+  // Read-only access to the snapshot deque (for serialization)
+  const std::deque<FrameSnapshot>& getSnapshots() const { return snapshots; }
+
+  // Replace all snapshots with the provided frames (for bake loading)
+  void loadFromBake(std::vector<FrameSnapshot> frames);
+
  private:
   Registry* registry = nullptr;
 
@@ -39,11 +46,6 @@ class TimelineSystem final {
   bool initialSnapshotValid = false;
 
   std::deque<FrameSnapshot> snapshots;
-
-  int fullResFrames = 600;
-  int condensePassInterval = 300;
-  int framesSinceCondense = 0;
-  void condenseOldFrames();
 
   FrameSnapshot captureFrame() const;
   void applyFrame(const FrameSnapshot& snap);

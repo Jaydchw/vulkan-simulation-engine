@@ -2,6 +2,7 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <chrono>
 #include <memory>
 #include <vector>
 
@@ -126,6 +127,10 @@ class Application final {
 
   uint32_t currentFrame = 0;
   bool framebufferResized = false;
+  bool skipSceneRendering = false;
+  std::chrono::high_resolution_clock::time_point bakeWallStart;
+  double bakeUiFrameTimeAccum = 0.0;
+  int bakeUiFrameCount = 0;
 
   SimulationState simState;
   SceneSettings sceneSettings;

@@ -11,6 +11,7 @@
 #include "Util/RenderUtils.h"
 #include "Physics/PhysicsSystem.h"
 #include "Timeline/TimelineSystem.h"
+#include "Timeline/WorldBakeSerializer.h"
 #include "Vulkan/VulkanCommandBuffer.h"
 #include "Vulkan/VulkanDepthBuffer.h"
 #include "Vulkan/VulkanDescriptors.h"
@@ -68,7 +69,12 @@ if (interface) interface->clearSelection();
 
   simState = SimulationState{};
   simState.timeSpeed = worldSettings.timeSpeed;
+  simState.physicsAccumulator = 0.0f;
   lastLoadedWorldPath = filepath;
+
+  if (interface) {
+    interface->setCurrentWorldPath(filepath);
+  }
 
   Debug::log(Debug::Category::MAIN, "Application: Loaded world: ", filepath);
 }
@@ -190,6 +196,28 @@ while (!window->shouldClose()) {
     simState.reversePlay = false;
     simState.baked = false;
     simState.scrubAccumulator = 0.0f;
+    simState.physicsAccumulator = 0.0f;
+  }
+
+  if (simState.loadBakeRequested && snapshotsOn && !lastLoadedWorldPath.empty()) {
+    simState.loadBakeRequested = false;
+    BakeStats loadedStats;
+    std::vector<float> loadedHistory;
+    if (WorldBakeSerializer::load(lastLoadedWorldPath, *timelineSystem,
+                                  loadedHistory, loadedStats)) {
+      simState.timeHistory    = std::move(loadedHistory);
+      simState.bakeStats      = loadedStats;
+      simState.baked          = true;
+      simState.isPaused       = true;
+      simState.historyIndex   = 0;
+      simState.currentTime    = simState.timeHistory.empty() ? 0.0f : simState.timeHistory.front();
+      simState.bakeTotalSteps = timelineSystem->getSnapshotCount();
+      simState.bakeCurrentStep = simState.bakeTotalSteps;
+      if (simState.historyIndex < timelineSystem->getSnapshotCount())
+        timelineSystem->restoreSnapshot(0);
+    }
+  } else if (simState.loadBakeRequested) {
+    simState.loadBakeRequested = false;
   }
 
   if (simState.bakeRequested && snapshotsOn) {
@@ -202,25 +230,140 @@ while (!window->shouldClose()) {
     simState.timeHistory.clear();
     simState.currentTime = 0.0f;
     simState.historyIndex = -1;
-
-    int totalSteps = static_cast<int>(simState.bakeDuration / simState.stepSize);
-    for (int i = 0; i < totalSteps; i++) {
-      physicsSystem->update(simState.stepSize);
-      timelineSystem->saveSnapshotUncompressed();
-      simState.currentTime += simState.stepSize;
-      simState.timeHistory.push_back(simState.currentTime);
-    }
-
-    simState.baked = true;
+    simState.baked = false;
     simState.isPaused = true;
-    simState.historyIndex = 0;
-    simState.currentTime = simState.timeHistory.front();
-    timelineSystem->restoreSnapshot(0);
+    simState.bakeStats = BakeStats{};
+
+    simState.bakeTimeSpeedSave = simState.timeSpeed;
+    simState.timeSpeed = 1.0f;
+    simState.bakeTotalSteps = static_cast<int>(simState.bakeDuration / simState.stepSize);
+    simState.bakeCurrentStep = 0;
+    simState.isBaking = true;
+
+    if (simState.bakePerformanceMode) {
+      skipSceneRendering = true;
+      bakeWallStart = std::chrono::high_resolution_clock::now();
+      bakeUiFrameTimeAccum = 0.0;
+      bakeUiFrameCount = 0;
+    }
   } else if (simState.bakeRequested) {
     simState.bakeRequested = false;
   }
 
-  if (simState.snapshotScrubbed && snapshotsOn) {
+  if (simState.isBaking && snapshotsOn) {
+    using clock = std::chrono::high_resolution_clock;
+
+    if (simState.bakePerformanceMode) {
+      // In performance mode: run a batch of steps per frame, timing each one.
+      // Accumulate into bakeStats as we go; UI is still rendered each frame.
+      constexpr int stepsPerFrame = 16;
+      int end = glm::min(simState.bakeCurrentStep + stepsPerFrame, simState.bakeTotalSteps);
+
+      for (int i = simState.bakeCurrentStep; i < end; i++) {
+        auto stepStart = clock::now();
+        PhysicsStepTimings t = physicsSystem->timedUpdate(simState.stepSize);
+        auto snapStart = clock::now();
+        timelineSystem->saveSnapshotUncompressed();
+        auto snapEnd = clock::now();
+
+        simState.currentTime += simState.stepSize;
+        simState.timeHistory.push_back(simState.currentTime);
+
+        double stepMs = std::chrono::duration<double, std::milli>(snapEnd - stepStart).count();
+        double snapMs = std::chrono::duration<double, std::milli>(snapEnd - snapStart).count();
+
+        BakeStats& st = simState.bakeStats;
+        if (i == 0) {
+          st.minStepMs = stepMs;
+          st.maxStepMs = stepMs;
+        } else {
+          st.minStepMs = std::min(st.minStepMs, stepMs);
+          st.maxStepMs = std::max(st.maxStepMs, stepMs);
+        }
+        st.avgStepMs    += stepMs;
+        st.avgSyncToMs  += t.syncToMs;
+        st.avgPhysStepMs += t.physStepMs;
+        st.avgSyncFromMs += t.syncFromMs;
+        st.avgSnapshotMs += snapMs;
+
+        // Accumulate per-pair collision stats
+        for (const auto& pair : t.collisionStats) {
+          bool found = false;
+          for (auto& bp : st.collisionPairs) {
+            if (bp.pairName == pair.pairName) {
+              bp.totalChecks   += pair.checks;
+              bp.totalResolved += pair.resolved;
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            st.collisionPairs.push_back({pair.pairName, pair.checks, pair.resolved});
+          }
+        }
+      }
+      simState.bakeCurrentStep = end;
+    } else {
+      // Normal mode: no timing, just step
+      constexpr int stepsPerFrame = 4;
+      int end = glm::min(simState.bakeCurrentStep + stepsPerFrame, simState.bakeTotalSteps);
+      for (int i = simState.bakeCurrentStep; i < end; i++) {
+        physicsSystem->update(simState.stepSize);
+        timelineSystem->saveSnapshotUncompressed();
+        simState.currentTime += simState.stepSize;
+        simState.timeHistory.push_back(simState.currentTime);
+      }
+      simState.bakeCurrentStep = end;
+    }
+
+    if (simState.bakeCurrentStep >= simState.bakeTotalSteps) {
+      simState.isBaking = false;
+      simState.timeSpeed = simState.bakeTimeSpeedSave;
+      simState.baked = true;
+      simState.historyIndex = 0;
+      simState.currentTime = simState.timeHistory.front();
+      timelineSystem->restoreSnapshot(0);
+      skipSceneRendering = false;
+
+      if (simState.bakePerformanceMode && simState.bakeTotalSteps > 0) {
+        BakeStats& st = simState.bakeStats;
+        st.totalWallTimeMs = std::chrono::duration<double, std::milli>(
+            std::chrono::high_resolution_clock::now() - bakeWallStart).count();
+        st.avgUiFrameMs  = (bakeUiFrameCount > 0)
+            ? (bakeUiFrameTimeAccum / bakeUiFrameCount) : 0.0;
+        st.avgStepMs     /= simState.bakeTotalSteps;
+        st.avgSyncToMs   /= simState.bakeTotalSteps;
+        st.avgPhysStepMs /= simState.bakeTotalSteps;
+        st.avgSyncFromMs /= simState.bakeTotalSteps;
+        st.avgSnapshotMs /= simState.bakeTotalSteps;
+        st.stepsPerSecond = (st.totalWallTimeMs > 0.0)
+            ? (simState.bakeTotalSteps / (st.totalWallTimeMs / 1000.0)) : 0.0;
+        st.simSecondsPerWallSecond = (st.totalWallTimeMs > 0.0)
+            ? (simState.bakeDuration / (st.totalWallTimeMs / 1000.0)) : 0.0;
+        st.objectCount  = physicsSystem->getObjectCount();
+        st.totalSteps   = simState.bakeTotalSteps;
+        st.simDuration  = simState.bakeDuration;
+        st.stepSize     = simState.stepSize;
+        st.hasData      = true;
+      }
+
+      // Save bake to disk for both modes
+      if (!lastLoadedWorldPath.empty()) {
+        BakeStats saveStats = simState.bakeStats;
+        if (!saveStats.hasData) {
+          saveStats.totalSteps  = simState.bakeTotalSteps;
+          saveStats.simDuration = simState.bakeDuration;
+          saveStats.stepSize    = simState.stepSize;
+          saveStats.objectCount = physicsSystem->getObjectCount();
+        }
+        WorldBakeSerializer::save(lastLoadedWorldPath, *timelineSystem,
+                                  simState.timeHistory, saveStats);
+        if (interface) interface->notifyBakeSaved();
+      }
+    }
+  }
+
+  if (simState.snapshotScrubbed && snapshotsOn && !simState.isBaking) {
     simState.snapshotScrubbed = false;
     if (simState.historyIndex >= 0 &&
         simState.historyIndex < timelineSystem->getSnapshotCount()) {
@@ -230,6 +373,7 @@ while (!window->shouldClose()) {
     simState.snapshotScrubbed = false;
   }
 
+  if (!simState.isBaking) {
   if (simState.reversePlay && !simState.isPaused && snapshotsOn) {
     int snapshotCount = timelineSystem->getSnapshotCount();
     if (snapshotCount > 0) {
@@ -301,40 +445,71 @@ while (!window->shouldClose()) {
       simState.baked = false;
     }
 
-    float advance = simState.stepFrame ? simState.stepSize
-                                       : deltaTime * simState.timeSpeed;
-    simState.currentTime += advance;
-    simState.stepFrame = false;
     simState.rewinding = false;
     simState.reversePlay = false;
 
-    physicsSystem->update(advance);
+    if (simState.stepFrame) {
+      simState.stepFrame = false;
+      physicsSystem->update(simState.stepSize);
+      simState.currentTime += simState.stepSize;
 
-    if (snapshotsOn) {
-      timelineSystem->saveSnapshot();
-      simState.timeHistory.push_back(simState.currentTime);
+      if (snapshotsOn) {
+        timelineSystem->saveSnapshot();
+        simState.timeHistory.push_back(simState.currentTime);
 
-      while (static_cast<int>(simState.timeHistory.size()) >
-             timelineSystem->getSnapshotCount()) {
-        simState.timeHistory.erase(simState.timeHistory.begin());
+        while (static_cast<int>(simState.timeHistory.size()) >
+               timelineSystem->getSnapshotCount()) {
+          simState.timeHistory.erase(simState.timeHistory.begin());
+        }
+      }
+    } else {
+      simState.physicsAccumulator += deltaTime * simState.timeSpeed;
+
+      while (simState.physicsAccumulator >= simState.stepSize) {
+        physicsSystem->update(simState.stepSize);
+        simState.physicsAccumulator -= simState.stepSize;
+        simState.currentTime += simState.stepSize;
+
+        if (snapshotsOn) {
+          timelineSystem->saveSnapshot();
+          simState.timeHistory.push_back(simState.currentTime);
+
+          while (static_cast<int>(simState.timeHistory.size()) >
+                 timelineSystem->getSnapshotCount()) {
+            simState.timeHistory.erase(simState.timeHistory.begin());
+          }
+        }
       }
     }
   }
+  } // end !isBaking
 
-    interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
-                       postProcessing.get());
-
-    if (!ImGui::GetIO().WantCaptureMouse &&
-        !ImGui::GetIO().WantCaptureKeyboard) {
-      input.update();
-      camera.update(input, deltaTime);
-      camera.setCursorMode(window->getHandle());
+    if (simState.isBaking && simState.bakePerformanceMode) {
+      auto uiStart = std::chrono::high_resolution_clock::now();
+      interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
+                         postProcessing.get());
+      input.endFrame();
+      drawFrame();
+      double uiMs = std::chrono::duration<double, std::milli>(
+          std::chrono::high_resolution_clock::now() - uiStart).count();
+      bakeUiFrameTimeAccum += uiMs;
+      ++bakeUiFrameCount;
     } else {
-      glfwSetInputMode(window->getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    }
+      interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
+                         postProcessing.get());
 
-    input.endFrame();
-    drawFrame();
+      if (!ImGui::GetIO().WantCaptureMouse &&
+          !ImGui::GetIO().WantCaptureKeyboard) {
+        input.update();
+        camera.update(input, deltaTime);
+        camera.setCursorMode(window->getHandle());
+      } else {
+        glfwSetInputMode(window->getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+      }
+
+      input.endFrame();
+      drawFrame();
+    }
   }
   vkDeviceWaitIdle(device);
 }
@@ -866,6 +1041,42 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
 
   if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
     throw std::runtime_error("Failed to begin recording command buffer!");
+
+  if (skipSceneRendering) {
+    // Performance bake: skip all scene/shadow/postprocessing work.
+    // Just transition the swapchain image and let ImGui draw into it.
+    VkImageMemoryBarrier2 toColorBarrier{};
+    toColorBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    toColorBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+    toColorBarrier.srcAccessMask = 0;
+    toColorBarrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    toColorBarrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    toColorBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    toColorBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    toColorBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toColorBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toColorBarrier.image = swapChainImages[imageIndex];
+    toColorBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    VkDependencyInfo depInfo{};
+    depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    depInfo.imageMemoryBarrierCount = 1;
+    depInfo.pImageMemoryBarriers = &toColorBarrier;
+    vkCmdPipelineBarrier2(commandBuffer, &depInfo);
+
+    interface->draw(commandBuffer, imageIndex);
+
+    toColorBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    toColorBarrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    toColorBarrier.dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+    toColorBarrier.dstAccessMask = 0;
+    toColorBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    toColorBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    vkCmdPipelineBarrier2(commandBuffer, &depInfo);
+
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
+      throw std::runtime_error("Failed to record command buffer!");
+    return;
+  }
 
   std::vector<ShadowMapData> shadowMaps;
   lightManager->getShadowSystem()->getShadowMaps(shadowMaps);

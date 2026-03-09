@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 namespace jphys {
 
@@ -46,7 +47,34 @@ void PhysicsWorld::integrate(float deltaTime) {
   }
 }
 
+long long PhysicsWorld::getLastCollisionChecks() const {
+  long long total = 0;
+  for (const auto& p : lastCollisionStats) total += p.checks;
+  return total;
+}
+
+long long PhysicsWorld::getLastCollisionsResolved() const {
+  long long total = 0;
+  for (const auto& p : lastCollisionStats) total += p.resolved;
+  return total;
+}
+
+void PhysicsWorld::recordCollision(const char* pairName, bool resolved) {
+  auto it = pairIndex.find(pairName);
+  if (it == pairIndex.end()) {
+    pairIndex[pairName] = lastCollisionStats.size();
+    lastCollisionStats.push_back({pairName, 1, resolved ? 1LL : 0LL});
+  } else {
+    auto& stat = lastCollisionStats[it->second];
+    ++stat.checks;
+    if (resolved) ++stat.resolved;
+  }
+}
+
 void PhysicsWorld::resolveCollisions() {
+  lastCollisionStats.clear();
+  pairIndex.clear();
+
   for (size_t i = 0; i < objects.size(); ++i) {
     PhysicsObject* objA = objects[i];
     if (!objA || objA->isStatic()) continue;
@@ -64,27 +92,24 @@ void PhysicsWorld::resolveCollisions() {
       if (colA.getType() == ColliderType::Sphere &&
           colB.getType() == ColliderType::Plane) {
         CollisionResult result = testSpherePlane(*objA, *objB);
-        if (result.collided) {
-          resolveSpherePlane(*objA, *objB, result);
-        }
+        recordCollision("Sphere / Plane", result.collided);
+        if (result.collided) resolveSpherePlane(*objA, *objB, result);
       }
 
       // Sphere vs Sphere
       if (colA.getType() == ColliderType::Sphere &&
           colB.getType() == ColliderType::Sphere) {
         CollisionResult result = testSphereSphere(*objA, *objB);
-        if (result.collided) {
-          resolveSphereSphere(*objA, *objB, result);
-        }
+        recordCollision("Sphere / Sphere", result.collided);
+        if (result.collided) resolveSphereSphere(*objA, *objB, result);
       }
 
       // Sphere vs AABB
       if (colA.getType() == ColliderType::Sphere &&
           colB.getType() == ColliderType::AABB) {
         CollisionResult result = testSphereAABB(*objA, *objB);
-        if (result.collided) {
-          resolveSphereAABB(*objA, *objB, result);
-        }
+        recordCollision("Sphere / AABB", result.collided);
+        if (result.collided) resolveSphereAABB(*objA, *objB, result);
       }
     }
   }

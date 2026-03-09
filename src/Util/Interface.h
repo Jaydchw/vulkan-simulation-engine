@@ -13,9 +13,44 @@
 
 #include "../ECS/Entity.h"
 #include "../ECS/Registry.h"
+#include "../Physics/PhysicsSystem.h"
 
 class MainPipeline;
 class PostProcessing;
+
+struct BakeCollisionPairStats {
+  std::string pairName;
+  long long totalChecks = 0;
+  long long totalResolved = 0;
+};
+
+struct BakeStats {
+  // Timing (milliseconds)
+  double totalWallTimeMs = 0.0;
+  double avgStepMs = 0.0;
+  double minStepMs = 0.0;
+  double maxStepMs = 0.0;
+  double avgSyncToMs = 0.0;
+  double avgPhysStepMs = 0.0;
+  double avgSyncFromMs = 0.0;
+  double avgSnapshotMs = 0.0;
+  double avgUiFrameMs = 0.0;
+
+  // Throughput
+  double stepsPerSecond = 0.0;
+  double simSecondsPerWallSecond = 0.0;
+
+  // Scene info
+  int objectCount = 0;
+  int totalSteps = 0;
+  float simDuration = 0.0f;
+  float stepSize = 0.0f;
+
+  // Per-pair collision stats (expandable — one entry per pair type seen)
+  std::vector<BakeCollisionPairStats> collisionPairs;
+
+  bool hasData = false;
+};
 
 struct SimulationState {
   bool isPaused = false;
@@ -33,9 +68,19 @@ struct SimulationState {
   bool bakeRequested = false;
   float bakeDuration = 10.0f;
   bool baked = false;
+  bool bakePerformanceMode = false;
+
+  bool isBaking = false;
+  int bakeTotalSteps = 0;
+  int bakeCurrentStep = 0;
+  float bakeTimeSpeedSave = 1.0f;
+
+  BakeStats bakeStats;
 
   bool reloadRequested = false;
+  bool loadBakeRequested = false;
   float scrubAccumulator = 0.0f;
+  float physicsAccumulator = 0.0f;
 };
 
 struct SceneSettings {
@@ -78,6 +123,8 @@ class Interface {
   void setWorldLoadCallback(std::function<void(const std::string&)> callback);
   void setWorldDirectory(const std::string& dir);
   void refreshWorldList();
+  void setCurrentWorldPath(const std::string& path);
+  void notifyBakeSaved();   // call after a bake file has been written
 
  private:
   GLFWwindow* window;
@@ -116,7 +163,11 @@ class Interface {
 
   bool showSpeedPopup = false;
   bool showBakePopup = false;
+  bool showBakeStatsWindow = false;
   bool scaleLinked = true;
+  bool hasBakeFile = false;
+  float speedPopupHeight = 0.0f;
+  float bakePopupHeight  = 0.0f;
 
   void createDescriptorPool();
   void createImGuiRenderPass();

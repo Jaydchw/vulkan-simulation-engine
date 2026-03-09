@@ -47,11 +47,6 @@ void TimelineSystem::restoreInitialSnapshot() {
 
 void TimelineSystem::saveSnapshot() {
   snapshots.push_back(captureFrame());
-  framesSinceCondense++;
-  if (framesSinceCondense >= condensePassInterval) {
-    condenseOldFrames();
-    framesSinceCondense = 0;
-  }
 }
 
 void TimelineSystem::saveSnapshotUncompressed() {
@@ -72,32 +67,14 @@ void TimelineSystem::truncateAfter(int index) {
 
 void TimelineSystem::clearSnapshots() {
   snapshots.clear();
-  framesSinceCondense = 0;
 }
 
 int TimelineSystem::getSnapshotCount() const {
   return static_cast<int>(snapshots.size());
 }
 
-void TimelineSystem::condenseOldFrames() {
-  int total = static_cast<int>(snapshots.size());
-  if (total <= fullResFrames) return;
-
-  int oldCount = total - fullResFrames;
-  if (oldCount < 4) return;
-
-  std::deque<FrameSnapshot> condensed;
-  int step = 2;
-  if (oldCount > 3600) step = 8;
-  else if (oldCount > 1800) step = 4;
-
-  for (int i = 0; i < oldCount; i += step) {
-    condensed.push_back(std::move(snapshots[i]));
-  }
-
-  for (int i = oldCount; i < total; i++) {
-    condensed.push_back(std::move(snapshots[i]));
-  }
-
-  snapshots = std::move(condensed);
+void TimelineSystem::loadFromBake(std::vector<FrameSnapshot> frames) {
+  snapshots.clear();
+  for (auto& f : frames)
+    snapshots.push_back(std::move(f));
 }
