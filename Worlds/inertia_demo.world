@@ -1,8 +1,6 @@
 BeginSettings
   ClearColor = 0.04, 0.05, 0.08, 1.0
   TimeSpeed = 1.0
-  SimulationHz = 120
-  MaxFps = 30
 EndSettings
 
 BeginTexture
