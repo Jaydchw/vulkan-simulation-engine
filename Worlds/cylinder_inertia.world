@@ -1,0 +1,206 @@
+BeginSettings
+  ClearColor = 0.03, 0.04, 0.07, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 60
+  MaxFps = 60
+EndSettings
+
+BeginTexture
+  Name = CylStripeA
+  Type = stripe
+  ColorA = 0.9, 0.2, 0.1
+  ColorB = 0.95, 0.85, 0.1
+  Size = 256
+  StripeCount = 10
+  Vertical = false
+EndTexture
+
+BeginTexture
+  Name = CylStripeB
+  Type = stripe
+  ColorA = 0.1, 0.4, 0.9
+  ColorB = 0.9, 0.9, 0.9
+  Size = 256
+  StripeCount = 10
+  Vertical = false
+EndTexture
+
+BeginTexture
+  Name = CylStripeC
+  Type = stripe
+  ColorA = 0.1, 0.8, 0.2
+  ColorB = 0.9, 0.9, 0.9
+  Size = 256
+  StripeCount = 10
+  Vertical = false
+EndTexture
+
+BeginTexture
+  Name = SphereChecker
+  Type = checker
+  ColorA = 0.8, 0.5, 0.9
+  ColorB = 0.3, 0.1, 0.4
+  Size = 256
+  Divisions = 8
+EndTexture
+
+BeginTexture
+  Name = GroundTex
+  Type = checker
+  ColorA = 0.25, 0.25, 0.28
+  ColorB = 0.16, 0.16, 0.18
+  Size = 512
+  Divisions = 20
+EndTexture
+
+BeginMaterial
+  Name = MatA
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = CylStripeA
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = MatB
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = CylStripeB
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = MatC
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = CylStripeC
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = MatSphere
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = SphereChecker
+  Roughness = 0.3
+  Metallic = 0.2
+EndMaterial
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = GroundTex
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Cylinder
+  Type = cylinder
+  Radius = 1.0
+  Height = 3.0
+  Segments = 36
+EndMesh
+
+BeginMesh
+  Name = Sphere
+  Type = sphere
+  Radius = 1.0
+  Segments = 32
+EndMesh
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 40.0
+  Height = 40.0
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, -4.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 20.0, 0.0, 20.0
+EndObject
+
+BeginObject
+  Name = A - Along axis (fast)
+  Position = -9.0, 0.0, 0.0
+  Rotation = 0.0, 0.0, 0.0
+  Mesh = Cylinder
+  Material = MatA
+  Mass = 1.0
+  Restitution = 0.4
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 0.0, 0.0, 5.0
+  Collider = cylinder
+  ColliderRadius = 1.0
+  ColliderHeight = 3.0
+EndObject
+
+BeginObject
+  Name = B - Perp to axis (slow)
+  Position = -3.0, 0.0, 0.0
+  Rotation = 90.0, 0.0, 0.0
+  Mesh = Cylinder
+  Material = MatB
+  Mass = 1.0
+  Restitution = 0.4
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 0.0, 0.0, 5.0
+  Collider = cylinder
+  ColliderRadius = 1.0
+  ColliderHeight = 3.0
+EndObject
+
+BeginObject
+  Name = C - Mixed (medium)
+  Position = 3.0, 0.0, 0.0
+  Rotation = 45.0, 0.0, 0.0
+  Mesh = Cylinder
+  Material = MatC
+  Mass = 1.0
+  Restitution = 0.4
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 0.0, 0.0, 5.0
+  Collider = cylinder
+  ColliderRadius = 1.0
+  ColliderHeight = 3.0
+EndObject
+
+BeginObject
+  Name = D - Sphere (isotropic)
+  Position = 9.0, 0.0, 0.0
+  Mesh = Sphere
+  Material = MatSphere
+  Mass = 1.0
+  Restitution = 0.4
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 0.0, 0.0, 5.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = -0.3, -1.0, 0.5
+  Color = 1.0, 0.96, 0.88
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 6.0, 8.0
+  Color = 0.45, 0.55, 1.0
+  Intensity = 2.5
+  CastsShadows = false
+EndLight

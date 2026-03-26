@@ -1,11 +1,10 @@
 ﻿  Application.cpp
-  TimelineSystem.cpp
   WorldBakeSerializer.cpp
   Interface.cpp
   main.cpp
   Generating code
-  39 of 8489 functions ( 0.5%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    105 functions had inline decision re-evaluated but remain unchanged
+  5 of 8530 functions (<0.1%) were compiled, the rest were copied from previous compilation.
+    1 functions were new in current compilation
+    69 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
   vulkan-simulation-engine.vcxproj -> D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\x64\Release\vulkan-simulation-engine.exe

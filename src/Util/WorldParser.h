@@ -11,6 +11,8 @@
 struct WorldSettings {
   glm::vec4 clearColor = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
   float timeSpeed = 1.0f;
+  int simulationHz = 60;   // Physics steps per second (step size = 1/Hz)
+  int maxFps = 0;          // Render frame rate cap (0 = unlimited)
 };
 
 class WorldParser final {

@@ -6,6 +6,8 @@
 #include <cmath>
 #include <string>
 
+#include <glm/gtc/quaternion.hpp>
+
 namespace jphys {
 
 PhysicsWorld::PhysicsWorld() {}
@@ -44,6 +46,22 @@ void PhysicsWorld::integrate(float deltaTime) {
 
     obj->setVelocity(vel);
     obj->setPosition(obj->getPosition() + vel * deltaTime);
+
+    {
+      glm::mat3 Iinv = obj->getWorldInverseInertiaTensor();
+      glm::vec3 alpha = Iinv * obj->getTorque();
+      glm::vec3 omega = obj->getAngularVelocity() + alpha * deltaTime;
+      omega *= std::pow(obj->getDamping(), deltaTime);
+      obj->setAngularVelocity(omega);
+
+      float angle = glm::length(omega) * deltaTime;
+      if (angle > 0.0001f) {
+        glm::vec3 axis = omega / glm::length(omega);
+        glm::quat dq = glm::angleAxis(angle, axis);
+        obj->setOrientation(glm::normalize(dq * obj->getOrientation()));
+      }
+    }
+    obj->clearTorque();
   }
 }
 
@@ -88,7 +106,6 @@ void PhysicsWorld::resolveCollisions() {
 
       const Collider& colB = objB->getCollider();
 
-      // Sphere vs Plane
       if (colA.getType() == ColliderType::Sphere &&
           colB.getType() == ColliderType::Plane) {
         CollisionResult result = testSpherePlane(*objA, *objB);
@@ -96,7 +113,6 @@ void PhysicsWorld::resolveCollisions() {
         if (result.collided) resolveSpherePlane(*objA, *objB, result);
       }
 
-      // Sphere vs Sphere
       if (colA.getType() == ColliderType::Sphere &&
           colB.getType() == ColliderType::Sphere) {
         CollisionResult result = testSphereSphere(*objA, *objB);
@@ -104,12 +120,18 @@ void PhysicsWorld::resolveCollisions() {
         if (result.collided) resolveSphereSphere(*objA, *objB, result);
       }
 
-      // Sphere vs AABB
       if (colA.getType() == ColliderType::Sphere &&
           colB.getType() == ColliderType::AABB) {
         CollisionResult result = testSphereAABB(*objA, *objB);
         recordCollision("Sphere / AABB", result.collided);
         if (result.collided) resolveSphereAABB(*objA, *objB, result);
+      }
+
+      if (colA.getType() == ColliderType::Cylinder &&
+          colB.getType() == ColliderType::Plane) {
+        CollisionResult result = testCylinderPlane(*objA, *objB);
+        recordCollision("Cylinder / Plane", result.collided);
+        if (result.collided) resolveCylinderPlane(*objA, *objB, result);
       }
     }
   }
@@ -248,6 +270,71 @@ void PhysicsWorld::resolveSphereAABB(PhysicsObject& sphere, PhysicsObject& aabb,
     sphere.setVelocity(sphere.getVelocity() -
                        result.normal * velAlongNormal *
                            (1.0f + sphere.getRestitution()));
+  }
+}
+
+CollisionResult PhysicsWorld::testCylinderPlane(const PhysicsObject& cylinder,
+                                                const PhysicsObject& plane) {
+  CollisionResult result;
+
+  glm::vec3 n = plane.getCollider().getNormal();
+  glm::vec3 relPos = cylinder.getPosition() - plane.getPosition();
+
+  glm::mat3 R = glm::mat3_cast(cylinder.getOrientation());
+  glm::vec3 axis = R[2];
+
+  float r = cylinder.getCollider().getRadius();
+  float halfH = cylinder.getCollider().getHeight() * 0.5f;
+
+  float axisDot = glm::dot(axis, n);
+  float radialExtent = r * std::sqrt(std::max(0.0f, 1.0f - axisDot * axisDot));
+  float extent = std::abs(axisDot) * halfH + radialExtent;
+
+  float dist = glm::dot(relPos, n);
+  float penetration = extent - dist;
+
+  if (penetration > 0.0f) {
+    if (plane.getCollider().isFinite()) {
+      glm::vec3 contact = cylinder.getPosition() - n * dist;
+      glm::vec3 localContact = contact - plane.getPosition();
+      glm::vec3 he = plane.getCollider().getHalfExtents() * plane.getScale();
+      glm::vec3 absN = glm::abs(n);
+      glm::vec3 tangent1, tangent2;
+      if (absN.y > 0.5f) {
+        tangent1 = glm::vec3(1, 0, 0);
+        tangent2 = glm::vec3(0, 0, 1);
+      } else if (absN.x > 0.5f) {
+        tangent1 = glm::vec3(0, 1, 0);
+        tangent2 = glm::vec3(0, 0, 1);
+      } else {
+        tangent1 = glm::vec3(1, 0, 0);
+        tangent2 = glm::vec3(0, 1, 0);
+      }
+      float proj1 = glm::dot(localContact, tangent1);
+      float proj2 = glm::dot(localContact, tangent2);
+      float lim1 = glm::dot(he, glm::abs(tangent1));
+      float lim2 = glm::dot(he, glm::abs(tangent2));
+      if (std::abs(proj1) > lim1 + r || std::abs(proj2) > lim2 + r)
+        return result;
+    }
+    result.collided = true;
+    result.normal = n;
+    result.penetration = penetration;
+    result.contactPoint = cylinder.getPosition() - n * dist;
+  }
+  return result;
+}
+
+void PhysicsWorld::resolveCylinderPlane(PhysicsObject& cylinder,
+                                        PhysicsObject& plane,
+                                        const CollisionResult& result) {
+  cylinder.setPosition(cylinder.getPosition() +
+                       result.normal * result.penetration);
+  float velAlongNormal = glm::dot(cylinder.getVelocity(), result.normal);
+  if (velAlongNormal < 0.0f) {
+    cylinder.setVelocity(cylinder.getVelocity() -
+                         result.normal * velAlongNormal *
+                             (1.0f + cylinder.getRestitution()));
   }
 }
 

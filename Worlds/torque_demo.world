@@ -1,0 +1,190 @@
+BeginSettings
+  ClearColor = 0.04, 0.04, 0.08, 1.0
+  TimeSpeed = 1.0
+EndSettings
+
+BeginTexture
+  Name = StripeRed
+  Type = stripe
+  ColorA = 0.9, 0.15, 0.1
+  ColorB = 0.95, 0.95, 0.95
+  Size = 256
+  StripeCount = 8
+  Vertical = false
+EndTexture
+
+BeginTexture
+  Name = StripeBlue
+  Type = stripe
+  ColorA = 0.1, 0.3, 0.9
+  ColorB = 0.9, 0.9, 0.9
+  Size = 256
+  StripeCount = 8
+  Vertical = true
+EndTexture
+
+BeginTexture
+  Name = StripeGreen
+  Type = stripe
+  ColorA = 0.1, 0.8, 0.2
+  ColorB = 0.9, 0.9, 0.9
+  Size = 256
+  StripeCount = 6
+  Vertical = false
+EndTexture
+
+BeginTexture
+  Name = CheckerYellow
+  Type = checker
+  ColorA = 0.95, 0.85, 0.1
+  ColorB = 0.3, 0.2, 0.0
+  Size = 256
+  Divisions = 8
+EndTexture
+
+BeginTexture
+  Name = GroundTex
+  Type = checker
+  ColorA = 0.3, 0.3, 0.35
+  ColorB = 0.2, 0.2, 0.25
+  Size = 512
+  Divisions = 16
+EndTexture
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = GroundTex
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = RedSpinMat
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = StripeRed
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = BlueSpinMat
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = StripeBlue
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = GreenSpinMat
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = StripeGreen
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = YellowSpinMat
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = CheckerYellow
+  Roughness = 0.4
+  Metallic = 0.2
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 40.0
+  Height = 40.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 1.0
+  Segments = 32
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 20.0, 0.0, 20.0
+EndObject
+
+BeginObject
+  Name = Torque-Y (red)
+  Position = -6.0, 2.0, 0.0
+  Mesh = Ball
+  Material = RedSpinMat
+  Mass = 1.0
+  Restitution = 0.5
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 0.0, 5.0, 0.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Torque-X (blue)
+  Position = -2.0, 2.0, 0.0
+  Mesh = Ball
+  Material = BlueSpinMat
+  Mass = 1.0
+  Restitution = 0.5
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 5.0, 0.0, 0.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Torque-Z (green)
+  Position = 2.0, 2.0, 0.0
+  Mesh = Ball
+  Material = GreenSpinMat
+  Mass = 1.0
+  Restitution = 0.5
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 0.0, 0.0, 5.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Torque-Multi (yellow)
+  Position = 6.0, 2.0, 0.0
+  Mesh = Ball
+  Material = YellowSpinMat
+  Mass = 1.0
+  Restitution = 0.5
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 3.0, 4.0, 2.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.3, -1.0, 0.4
+  Color = 1.0, 0.97, 0.9
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 8.0, 8.0
+  Color = 0.5, 0.6, 1.0
+  Intensity = 2.0
+  CastsShadows = false
+EndLight

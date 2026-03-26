@@ -3,7 +3,7 @@
 
 namespace jphys {
 
-enum class ColliderType { Sphere, AABB, Plane };
+enum class ColliderType { Sphere, AABB, Plane, Cylinder };
 
 class Collider {
  public:
@@ -41,8 +41,17 @@ class Collider {
     return c;
   }
 
+  static Collider createCylinder(float radius, float height) {
+    Collider c;
+    c.type = ColliderType::Cylinder;
+    c.radius = radius;
+    c.height = height;
+    return c;
+  }
+
   ColliderType getType() const { return type; }
   float getRadius() const { return radius; }
+  float getHeight() const { return height; }
   const glm::vec3& getHalfExtents() const { return halfExtents; }
   const glm::vec3& getNormal() const { return normal; }
   bool isFinite() const { return finite; }
@@ -54,6 +63,7 @@ class Collider {
  private:
   ColliderType type = ColliderType::Sphere;
   float radius = 1.0f;
+  float height = 1.0f;
   glm::vec3 halfExtents = glm::vec3(0.5f);
   glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
   bool finite = false;

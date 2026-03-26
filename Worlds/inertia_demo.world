@@ -1,0 +1,141 @@
+BeginSettings
+  ClearColor = 0.04, 0.05, 0.08, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+  MaxFps = 30
+EndSettings
+
+BeginTexture
+  Name = StripeLight
+  Type = stripe
+  ColorA = 0.95, 0.95, 0.95
+  ColorB = 0.15, 0.15, 0.15
+  Size = 256
+  StripeCount = 10
+  Vertical = true
+EndTexture
+
+BeginTexture
+  Name = GroundTex
+  Type = checker
+  ColorA = 0.28, 0.28, 0.32
+  ColorB = 0.18, 0.18, 0.22
+  Size = 512
+  Divisions = 20
+EndTexture
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 1.0, 1.0, 1.0
+  AlbedoTexture = GroundTex
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = LightMat
+  AlbedoColor = 0.2, 0.8, 0.3
+  AlbedoTexture = StripeLight
+  Roughness = 0.25
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = MedMat
+  AlbedoColor = 0.3, 0.5, 0.95
+  AlbedoTexture = StripeLight
+  Roughness = 0.25
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = HeavyMat
+  AlbedoColor = 0.9, 0.3, 0.2
+  AlbedoTexture = StripeLight
+  Roughness = 0.25
+  Metallic = 0.05
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 40.0
+  Height = 40.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 1.0
+  Segments = 32
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 20.0, 0.0, 20.0
+EndObject
+
+BeginObject
+  Name = Light (m=1)
+  Position = -5.0, 2.0, 0.0
+  Mesh = Ball
+  Material = LightMat
+  Mass = 1.0
+  Restitution = 0.3
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 0.0, 10.0, 0.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Medium (m=2)
+  Position = 0.0, 2.0, 0.0
+  Mesh = Ball
+  Material = MedMat
+  Mass = 2.0
+  Restitution = 0.3
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 0.0, 10.0, 0.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Heavy (m=4)
+  Position = 5.0, 2.0, 0.0
+  Mesh = Ball
+  Material = HeavyMat
+  Mass = 4.0
+  Restitution = 0.3
+  Damping = 0.1
+  UseGravity = false
+  ConstantTorque = 0.0, 10.0, 0.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.2, -1.0, 0.4
+  Color = 1.0, 0.97, 0.9
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 8.0, 6.0
+  Color = 0.5, 0.6, 1.0
+  Intensity = 2.0
+  CastsShadows = false
+EndLight

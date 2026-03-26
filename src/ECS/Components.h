@@ -59,17 +59,20 @@ struct LightComponent {
 struct PhysicsComponent {
   glm::vec3 velocity = glm::vec3(0.0f);
   glm::vec3 acceleration = glm::vec3(0.0f);
+  glm::vec3 angularVelocity = glm::vec3(0.0f);
+  glm::vec3 constantTorque = glm::vec3(0.0f);
   float mass = 1.0f;
   float restitution = 0.5f;
   float damping = 0.99f;
   bool useGravity = true;
 };
 
-enum class ColliderType { Sphere, AABB, Plane };
+enum class ColliderType { Sphere, AABB, Plane, Cylinder };
 
 struct ColliderComponent {
   ColliderType type = ColliderType::Sphere;
   float radius = 1.0f;
+  float height = 1.0f;
   glm::vec3 halfExtents = glm::vec3(0.5f);
   glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
   bool finite = false;

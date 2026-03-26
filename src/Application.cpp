@@ -70,6 +70,9 @@ if (interface) interface->clearSelection();
   simState = SimulationState{};
   simState.timeSpeed = worldSettings.timeSpeed;
   simState.physicsAccumulator = 0.0f;
+  if (worldSettings.simulationHz > 0)
+    simState.stepSize = 1.0f / static_cast<float>(worldSettings.simulationHz);
+  simState.maxFps = worldSettings.maxFps;
   lastLoadedWorldPath = filepath;
 
   if (interface) {
@@ -172,6 +175,13 @@ while (!window->shouldClose()) {
   window->pollEvents();
   const float currentTime = static_cast<float>(glfwGetTime());
   const float deltaTime = currentTime - lastFrameTime;
+
+  // FPS cap: if maxFps > 0, spin-wait until the minimum frame interval has elapsed
+  if (simState.maxFps > 0) {
+    const float minFrameTime = 1.0f / static_cast<float>(simState.maxFps);
+    if (deltaTime < minFrameTime) continue;
+  }
+
   lastFrameTime = currentTime;
 
   if (simState.reloadRequested) {

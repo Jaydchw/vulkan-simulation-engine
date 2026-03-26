@@ -242,7 +242,6 @@ PostProcessing* postProcessing) {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
-  // Clear selection if entity no longer exists
   if (selectedEntity != INVALID_ENTITY &&
       !registry.hasComponent<NameComponent>(selectedEntity)) {
     selectedEntity = INVALID_ENTITY;
@@ -268,7 +267,7 @@ PostProcessing* postProcessing) {
       hoveredEntity = INVALID_ENTITY;
     }
     if (menuItem("Scene")) {
-      renderSceneMenu(sceneSettings, mainPipeline);
+      renderSceneMenu(sceneSettings, mainPipeline, simState);
       ImGui::EndMenu();
     }
     if (menuItem("Post Processing")) {
@@ -299,7 +298,6 @@ PostProcessing* postProcessing) {
 
   renderTransportBar(simState);
 
-  // Auto-open stats window when a performance bake just completed
   if (simState.bakePerformanceMode && simState.baked && simState.bakeStats.hasData &&
       !simState.isBaking && simState.bakeCurrentStep == simState.bakeTotalSteps) {
     showBakeStatsWindow = true;
@@ -373,7 +371,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
   ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.18f, 0.18f, 0.24f, 1.0f));
 
   if (ImGui::Begin("##transport_bar", nullptr, flags)) {
-    // --- Restart ---
     if (ImGui::Button("##restart", ImVec2(btnW, btnH))) {
       simState.resetRequested = true;
     }
@@ -389,7 +386,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
     }
     ImGui::SameLine(0, gap);
 
-    // --- Step Back (snapshots only) ---
     if (snapshotsOn) {
       if (ImGui::Button("##step_back", ImVec2(btnW, btnH))) {
         simState.isPaused = true;
@@ -421,7 +417,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
       }
       ImGui::SameLine(0, gap);
 
-      // --- Reverse (snapshots only) ---
       {
         bool revActive = simState.reversePlay && !simState.isPaused;
         if (revActive) {
@@ -457,7 +452,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
       ImGui::SameLine(0, gap);
     }
 
-    // --- Play / Pause ---
     {
       bool isPlaying = !simState.isPaused && !simState.reversePlay;
       if (isPlaying) {
@@ -494,7 +488,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
     }
     ImGui::SameLine(0, gap);
 
-    // --- Step Forward ---
     if (ImGui::Button("##step_fwd", ImVec2(btnW, btnH))) {
       simState.isPaused = true;
       simState.stepFrame = true;
@@ -516,8 +509,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
     }
     ImGui::SameLine(0, sepGap);
 
-    // --- Timeline scrub ---
-    // Compute right-side width: sepGap + time + sepGap + speed button + [gap + bake button]
     float timeTextW = ImGui::CalcTextSize("00:00.00").x;
     float speedBtnW = 52.0f * s;
     float rightControlsW = sepGap + timeTextW + sepGap + speedBtnW;
@@ -550,7 +541,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
     ImGui::PopStyleColor(1);
     ImGui::SameLine(0, sepGap);
 
-    // --- Elapsed time ---
     {
       int minutes = static_cast<int>(simState.currentTime) / 60;
       int seconds = static_cast<int>(simState.currentTime) % 60;
@@ -565,7 +555,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
     }
     ImGui::SameLine(0, sepGap);
 
-    // --- Speed button (opens popup) ---
     {
       char speedLabel[16];
       snprintf(speedLabel, sizeof(speedLabel), "%.2fx", simState.timeSpeed);
@@ -595,7 +584,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
         ImGui::SetNextItemWidth(-1);
         ImGui::SliderFloat("##spd_slider", &simState.timeSpeed, 0.01f, 10.0f, "%.2fx");
         ImGui::Dummy(ImVec2(0, 8 * s));
-        // Two rows of 3: 0.1 0.5 1.0 / 2.0 5.0 10.0
         float presets[] = {0.1f, 0.5f, 1.0f, 2.0f, 5.0f, 10.0f};
         const char* presetLabels[] = {"0.1x", "0.5x", "1x", "2x", "5x", "10x"};
         float btnPresetW = (popW - ImGui::GetStyle().WindowPadding.x * 2.0f - gap * 2.0f) / 3.0f;
@@ -624,7 +612,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
       ImGui::PopStyleColor(1);
     }
 
-    // --- Bake button (snapshots only) ---
     if (snapshotsOn) {
       ImGui::SameLine(0, gap);
       if (simState.baked) {
@@ -667,7 +654,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
           ImGui::Separator();
           ImGui::PopStyleColor();
 
-          // --- Duration presets ---
           ImGui::Dummy(ImVec2(0, 6 * s));
           struct BakePreset { float duration; };
           BakePreset presets[] = {{5.0f}, {10.0f}, {30.0f}, {60.0f}};
@@ -684,7 +670,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
             }
           }
 
-          // --- Load Bake ---
           ImGui::Dummy(ImVec2(0, 10 * s));
           ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
           ImGui::Separator();
@@ -710,7 +695,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
               ImGui::SetTooltip("No .worldbake file found for this world.");
           }
 
-          // --- Performance Mode ---
           ImGui::Dummy(ImVec2(0, 10 * s));
           ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
           ImGui::Separator();
@@ -859,7 +843,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
         ImGui::Text("  No collision pairs recorded.");
         ImGui::PopStyleColor();
       } else {
-        // Header row
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.48f, 0.55f, 1.0f));
         ImGui::Text("  %-24s  %10s  %10s  %8s  %10s",
                     "Pair", "Checks", "Resolved", "Hit%", "Chk/Step");
@@ -884,7 +867,6 @@ void Interface::renderTransportBar(SimulationState& simState) {
           ImGui::PopStyleColor();
         }
 
-        // Totals row
         ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.40f));
         ImGui::Separator();
         ImGui::PopStyleColor();
@@ -977,7 +959,6 @@ void Interface::renderObjectsMenu(Registry& registry) {
   const float menuW = listW + 8 * s + inspectorW;
   const float totalH = 340.0f * s;
 
-  // Force a minimum width for the menu popup
   ImGui::Dummy(ImVec2(menuW, 0));
 
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.42f, 0.44f, 0.52f, 1.0f));
@@ -1000,7 +981,6 @@ void Interface::renderObjectsMenu(Registry& registry) {
 
   hoveredEntity = INVALID_ENTITY;
 
-  // --- Side-by-side: list left, inspector right ---
   ImGui::BeginChild("##obj_list_pane", ImVec2(listW, totalH), false);
   {
     if (!meshEntities.empty()) {
@@ -1017,7 +997,6 @@ void Interface::renderObjectsMenu(Registry& registry) {
         ImGui::PushID(static_cast<int>(e));
         bool isSelected = (selectedEntity == e);
 
-        // Draw cube icon
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.60f, 0.40f, 0.8f));
         ImGui::Text("#");
         ImGui::PopStyleColor();
@@ -1049,7 +1028,6 @@ void Interface::renderObjectsMenu(Registry& registry) {
         ImGui::PushID(static_cast<int>(e));
         bool isSelected = (selectedEntity == e);
 
-        // Sun/point icon
         if (light && light->type == LightType::Sun) {
           ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.75f, 0.30f, 0.8f));
           ImGui::Text("*");
@@ -1074,7 +1052,6 @@ void Interface::renderObjectsMenu(Registry& registry) {
 
   ImGui::SameLine(0, 8 * s);
 
-  // --- Inspector pane ---
   ImGui::BeginChild("##obj_inspector_pane", ImVec2(inspectorW, totalH), false);
   {
     if (selectedEntity == INVALID_ENTITY) {
@@ -1115,11 +1092,9 @@ void Interface::renderObjectsMenu(Registry& registry) {
         }
 
         if (!isLight) {
-          // Scale with link toggle
           fieldLabel("Scale");
           ImGui::SameLine(0, 4 * s);
 
-          // Link icon button
           ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2 * s, 2 * s));
           ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
           ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.35f, 1.0f));
@@ -1132,7 +1107,6 @@ void Interface::renderObjectsMenu(Registry& registry) {
               scaleLinked = !scaleLinked;
             }
             if (ImGui::IsItemHovered()) ImGui::SetTooltip(scaleLinked ? "Uniform Scale (linked)" : "Per-axis Scale (unlinked)");
-            // Draw link icon
             ImVec2 p = ImGui::GetItemRectMin();
             ImVec2 sz = ImGui::GetItemRectSize();
             float icx = p.x + sz.x * 0.5f, icy = p.y + sz.y * 0.5f;
@@ -1216,7 +1190,6 @@ void Interface::renderObjectsMenu(Registry& registry) {
         }
       }
 
-      // --- Info row for mesh objects ---
       if (registry.hasComponent<MeshComponent>(selectedEntity) ||
           registry.hasComponent<MaterialComponent>(selectedEntity) ||
           registry.hasComponent<RenderComponent>(selectedEntity)) {
@@ -1250,8 +1223,10 @@ void Interface::renderObjectsMenu(Registry& registry) {
 }
 
 void Interface::renderSceneMenu(SceneSettings& sceneSettings,
-                              MainPipeline* mainPipeline) {
+                              MainPipeline* mainPipeline,
+                              SimulationState& simState) {
   const float s = currentScale;
+  const float sliderW = 220.0f * s;
   sectionHeader("Background");
 
   ImGui::ColorPicker3("##clearcolor", &sceneSettings.clearColor[0],
@@ -1295,6 +1270,23 @@ void Interface::renderSceneMenu(SceneSettings& sceneSettings,
     mainPipeline->recreate();
   }
   keybadge("Tab");
+
+  sectionHeader("Simulation");
+
+  fieldLabel("Sim Rate (Hz)");
+  ImGui::SetNextItemWidth(sliderW);
+  int simHz = (simState.stepSize > 0.0f)
+                  ? static_cast<int>(1.0f / simState.stepSize + 0.5f)
+                  : 60;
+  if (ImGui::SliderInt("##simhz", &simHz, 10, 500, "%d Hz")) {
+    if (simHz > 0)
+      simState.stepSize = 1.0f / static_cast<float>(simHz);
+  }
+
+  fieldLabel("Max FPS");
+  ImGui::SetNextItemWidth(sliderW);
+  ImGui::SliderInt("##maxfps", &simState.maxFps, 0, 300,
+                   simState.maxFps == 0 ? "Unlimited" : "%d");
 }
 
 void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
@@ -1558,7 +1550,6 @@ void Interface::setWorldDirectory(const std::string& dir) {
 }
 
 void Interface::setCurrentWorldPath(const std::string& path) {
-  // Check once for the bake file so the UI can enable/disable the button
   hasBakeFile = std::filesystem::exists(
       std::filesystem::path(path).replace_extension(".worldbake"));
 }

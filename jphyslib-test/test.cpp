@@ -6,10 +6,6 @@
 
 using namespace jphys;
 
-// ============================================================================
-// Collider construction tests
-// ============================================================================
-
 TEST(Collider, CreateSphere) {
   Collider c = Collider::createSphere(2.5f);
   EXPECT_EQ(c.getType(), ColliderType::Sphere);
@@ -51,10 +47,6 @@ TEST(Collider, DefaultIsSphere) {
   EXPECT_FLOAT_EQ(c.getRadius(), 1.0f);
 }
 
-// ============================================================================
-// PhysicsObject construction tests
-// ============================================================================
-
 TEST(PhysicsObject, DefaultValues) {
   PhysicsObject obj;
   EXPECT_FLOAT_EQ(obj.getPosition().x, 0.0f);
@@ -93,10 +85,6 @@ TEST(PhysicsObject, SettersWork) {
   EXPECT_FALSE(obj.getUseGravity());
   EXPECT_TRUE(obj.isStatic());
 }
-
-// ============================================================================
-// PhysicsWorld integration tests
-// ============================================================================
 
 TEST(PhysicsWorld, GravityDefault) {
   PhysicsWorld world;
@@ -229,10 +217,6 @@ TEST(PhysicsWorld, DampingReducesVelocity) {
   EXPECT_LT(ball.getVelocity().x, 100.0f);
 }
 
-// ============================================================================
-// Sphere vs Plane collision detection
-// ============================================================================
-
 TEST(SpherePlane, DetectsCollision) {
   PhysicsObject sphere(glm::vec3(0.0f, 0.5f, 0.0f),
                        Collider::createSphere(1.0f));
@@ -325,10 +309,6 @@ TEST(SpherePlane, AngledPlane) {
   EXPECT_TRUE(result.collided);
 }
 
-// ============================================================================
-// Sphere vs Sphere collision detection
-// ============================================================================
-
 TEST(SphereSphere, DetectsOverlap) {
   PhysicsObject a(glm::vec3(0.0f, 0.0f, 0.0f),
                   Collider::createSphere(1.0f));
@@ -403,10 +383,6 @@ TEST(SphereSphere, DiagonalOverlap) {
   EXPECT_TRUE(result.collided);
   EXPECT_NEAR(result.penetration, 2.0f - dist, 0.001f);
 }
-
-// ============================================================================
-// Sphere vs AABB collision detection
-// ============================================================================
 
 TEST(SphereAABB, DetectsOverlap) {
   PhysicsObject sphere(glm::vec3(1.4f, 0.0f, 0.0f),
@@ -483,10 +459,6 @@ TEST(SphereAABB, InsideSphereNoCollision) {
   CollisionResult result = PhysicsWorld::testSphereAABB(sphere, box);
   EXPECT_FALSE(result.collided);
 }
-
-// ============================================================================
-// Collision resolution tests
-// ============================================================================
 
 TEST(Resolution, SphereBounceOffPlane) {
   PhysicsWorld world;
@@ -623,10 +595,6 @@ TEST(Resolution, HeavyObjectPushesLightObject) {
   EXPECT_GT(light.getVelocity().x, heavy.getVelocity().x);
 }
 
-// ============================================================================
-// Intersection / trigger tests (detection without resolution)
-// ============================================================================
-
 TEST(Intersection, TwoSpheresOverlapping) {
   PhysicsObject a(glm::vec3(0.0f), Collider::createSphere(2.0f));
   PhysicsObject b(glm::vec3(3.0f, 0.0f, 0.0f), Collider::createSphere(2.0f));
@@ -676,10 +644,6 @@ TEST(Intersection, MultipleSpheresSamePosition) {
   EXPECT_FALSE(ab.collided);
   EXPECT_FALSE(ac.collided);
 }
-
-// ============================================================================
-// Full simulation scenario tests
-// ============================================================================
 
 TEST(Simulation, BallDropOntoPlane) {
   PhysicsWorld world;
@@ -732,4 +696,152 @@ TEST(Simulation, TwoSpheresHeadOn) {
 
   EXPECT_LT(a.getPosition().x, -4.0f);
   EXPECT_GT(b.getPosition().x, 4.0f);
+}
+
+TEST(Torque, PerpendicularForceProducesTorque) {
+  PhysicsObject obj;
+  obj.applyForceAtPoint(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+  EXPECT_NEAR(obj.getTorque().z, 1.0f, 0.001f);
+  EXPECT_NEAR(obj.getTorque().x, 0.0f, 0.001f);
+  EXPECT_NEAR(obj.getTorque().y, 0.0f, 0.001f);
+}
+
+TEST(Torque, ParallelForceProducesNoTorque) {
+  PhysicsObject obj;
+  obj.applyForceAtPoint(glm::vec3(5.0f, 0.0f, 0.0f), glm::vec3(2.0f, 0.0f, 0.0f));
+  EXPECT_NEAR(glm::length(obj.getTorque()), 0.0f, 0.001f);
+}
+
+TEST(Torque, MagnitudeScalesWithDistance) {
+  PhysicsObject near_obj, far_obj;
+  near_obj.applyForceAtPoint(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+  far_obj.applyForceAtPoint(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(2.0f, 0.0f, 0.0f));
+  EXPECT_NEAR(glm::length(far_obj.getTorque()), 2.0f * glm::length(near_obj.getTorque()), 0.001f);
+}
+
+TEST(Torque, AccumulatesAngularVelocity) {
+  PhysicsWorld world;
+  world.setGravity(glm::vec3(0.0f));
+
+  PhysicsObject obj(glm::vec3(0.0f), Collider::createSphere(1.0f));
+  obj.setUseGravity(false);
+  obj.setDamping(1.0f);
+  obj.addTorque(glm::vec3(0.0f, 1.0f, 0.0f));
+  world.addObject(&obj);
+  world.step(1.0f);
+
+  EXPECT_GT(obj.getAngularVelocity().y, 0.0f);
+}
+
+TEST(Torque, ClearedAfterStep) {
+  PhysicsWorld world;
+  world.setGravity(glm::vec3(0.0f));
+
+  PhysicsObject obj(glm::vec3(0.0f), Collider::createSphere(1.0f));
+  obj.setUseGravity(false);
+  obj.addTorque(glm::vec3(1.0f, 0.0f, 0.0f));
+  world.addObject(&obj);
+  world.step(0.016f);
+
+  EXPECT_NEAR(glm::length(obj.getTorque()), 0.0f, 0.001f);
+}
+
+TEST(SphereInertia, FormulaIsCorrect) {
+  PhysicsObject obj(glm::vec3(0.0f), Collider::createSphere(1.0f));
+  obj.setMass(1.0f);
+  EXPECT_NEAR(obj.getMomentOfInertia(), 0.4f, 0.001f);
+}
+
+TEST(SphereInertia, HeavierSphereSlowerAngularAccel) {
+  PhysicsWorld worldLight, worldHeavy;
+  worldLight.setGravity(glm::vec3(0.0f));
+  worldHeavy.setGravity(glm::vec3(0.0f));
+
+  PhysicsObject light(glm::vec3(0.0f), Collider::createSphere(1.0f));
+  light.setMass(1.0f);
+  light.setUseGravity(false);
+  light.setDamping(1.0f);
+  light.addTorque(glm::vec3(0.0f, 1.0f, 0.0f));
+
+  PhysicsObject heavy(glm::vec3(0.0f), Collider::createSphere(1.0f));
+  heavy.setMass(4.0f);
+  heavy.setUseGravity(false);
+  heavy.setDamping(1.0f);
+  heavy.addTorque(glm::vec3(0.0f, 1.0f, 0.0f));
+
+  worldLight.addObject(&light);
+  worldHeavy.addObject(&heavy);
+  worldLight.step(1.0f);
+  worldHeavy.step(1.0f);
+
+  EXPECT_GT(light.getAngularVelocity().y, heavy.getAngularVelocity().y);
+}
+
+TEST(SphereInertia, AngularVelocityMatchesTauOverI) {
+  PhysicsWorld world;
+  world.setGravity(glm::vec3(0.0f));
+
+  PhysicsObject obj(glm::vec3(0.0f), Collider::createSphere(1.0f));
+  obj.setMass(1.0f);
+  obj.setUseGravity(false);
+  obj.setDamping(1.0f);
+  obj.addTorque(glm::vec3(0.0f, 1.0f, 0.0f));
+  world.addObject(&obj);
+  world.step(1.0f);
+
+  EXPECT_NEAR(obj.getAngularVelocity().y, 2.5f, 0.01f);
+}
+
+TEST(CylinderInertia, BodySpaceValuesCorrect) {
+  PhysicsObject obj(glm::vec3(0.0f), Collider::createCylinder(1.0f, 3.0f));
+  obj.setMass(1.0f);
+  glm::vec3 bodyInvI = obj.getBodyInverseInertia();
+  EXPECT_NEAR(bodyInvI.x, 1.0f, 0.001f);
+  EXPECT_NEAR(bodyInvI.z, 2.0f, 0.001f);
+}
+
+TEST(CylinderInertia, IdentityOrientationWorldMatchesBody) {
+  PhysicsObject obj(glm::vec3(0.0f), Collider::createCylinder(1.0f, 3.0f));
+  obj.setMass(1.0f);
+  glm::mat3 worldInvI = obj.getWorldInverseInertiaTensor();
+  glm::vec3 bodyInvI = obj.getBodyInverseInertia();
+  EXPECT_NEAR(worldInvI[0][0], bodyInvI.x, 0.001f);
+  EXPECT_NEAR(worldInvI[1][1], bodyInvI.y, 0.001f);
+  EXPECT_NEAR(worldInvI[2][2], bodyInvI.z, 0.001f);
+}
+
+TEST(CylinderInertia, AlongAxisFasterThanPerp) {
+  PhysicsWorld worldAlong, worldPerp;
+  worldAlong.setGravity(glm::vec3(0.0f));
+  worldPerp.setGravity(glm::vec3(0.0f));
+
+  PhysicsObject cylAlong(glm::vec3(0.0f), Collider::createCylinder(1.0f, 3.0f));
+  cylAlong.setMass(1.0f);
+  cylAlong.setUseGravity(false);
+  cylAlong.setDamping(1.0f);
+  cylAlong.addTorque(glm::vec3(0.0f, 0.0f, 1.0f));
+
+  PhysicsObject cylPerp(glm::vec3(0.0f), Collider::createCylinder(1.0f, 3.0f));
+  cylPerp.setMass(1.0f);
+  cylPerp.setUseGravity(false);
+  cylPerp.setDamping(1.0f);
+  cylPerp.addTorque(glm::vec3(1.0f, 0.0f, 0.0f));
+
+  worldAlong.addObject(&cylAlong);
+  worldPerp.addObject(&cylPerp);
+  worldAlong.step(1.0f);
+  worldPerp.step(1.0f);
+
+  EXPECT_GT(glm::length(cylAlong.getAngularVelocity()),
+            glm::length(cylPerp.getAngularVelocity()));
+}
+
+TEST(CylinderInertia, NinetyDegRotationChangesResponse) {
+  PhysicsObject cyl(glm::vec3(0.0f), Collider::createCylinder(1.0f, 3.0f));
+  cyl.setMass(1.0f);
+  glm::quat rot90x = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+  cyl.setOrientation(rot90x);
+  glm::mat3 worldInvI = cyl.getWorldInverseInertiaTensor();
+  glm::vec3 bodyInvI = cyl.getBodyInverseInertia();
+  EXPECT_NEAR(worldInvI[2][2], bodyInvI.x, 0.001f);
 }

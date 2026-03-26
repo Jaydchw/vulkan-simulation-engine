@@ -4,3 +4,7 @@
 /.vs
 *.tlog
 *.pch
+/.claude
+x64/Release/jphyslib.pdb
+x64/Release/jphyslib.pdb
+*.pdb

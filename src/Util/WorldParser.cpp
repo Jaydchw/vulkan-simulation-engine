@@ -68,6 +68,10 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
           settings.clearColor = parseVec4(val);
         else if (key == "TimeSpeed")
           settings.timeSpeed = parseFloat(val);
+        else if (key == "SimulationHz")
+          settings.simulationHz = parseInt(val);
+        else if (key == "MaxFps")
+          settings.maxFps = parseInt(val);
       }
       continue;
     }
@@ -260,6 +264,8 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
       bool visible = true;
       bool hasPhysics = false;
       glm::vec3 velocity(0.0f);
+      glm::vec3 angularVelocity(0.0f);
+      glm::vec3 constantTorque(0.0f);
       float mass = 1.0f;
       float restitution = 0.5f;
       float physicsDamping = 0.99f;
@@ -267,6 +273,7 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
       bool hasCollider = false;
       std::string colliderType;
       float colliderRadius = 1.0f;
+      float colliderHeight = 1.0f;
       glm::vec3 colliderHalfExtents(0.5f);
       glm::vec3 colliderNormal(0.0f, 1.0f, 0.0f);
 
@@ -311,12 +318,21 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
         } else if (key == "UseGravity") {
           hasPhysics = true;
           useGravity = parseBool(val);
+        } else if (key == "AngularVelocity") {
+          hasPhysics = true;
+          angularVelocity = parseVec3(val);
+        } else if (key == "ConstantTorque") {
+          hasPhysics = true;
+          constantTorque = parseVec3(val);
         } else if (key == "Collider") {
           hasCollider = true;
           colliderType = val;
         } else if (key == "ColliderRadius") {
           hasCollider = true;
           colliderRadius = parseFloat(val);
+        } else if (key == "ColliderHeight") {
+          hasCollider = true;
+          colliderHeight = parseFloat(val);
         } else if (key == "ColliderHalfExtents") {
           hasCollider = true;
           colliderHalfExtents = parseVec3(val);
@@ -347,6 +363,10 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
         builder.useGravity(useGravity);
         if (velocity != glm::vec3(0.0f))
           builder.velocity(velocity);
+        if (angularVelocity != glm::vec3(0.0f))
+          builder.angularVelocity(angularVelocity);
+        if (constantTorque != glm::vec3(0.0f))
+          builder.constantTorque(constantTorque);
       }
 
       if (hasCollider) {
@@ -359,7 +379,8 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
             builder.planeCollider(colliderNormal, colliderHalfExtents);
           else
             builder.planeCollider(colliderNormal);
-        }
+        } else if (colliderType == "cylinder")
+          builder.cylinderCollider(colliderRadius, colliderHeight);
       }
 
       builder.build(registry);

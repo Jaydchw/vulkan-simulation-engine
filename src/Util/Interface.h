@@ -25,7 +25,6 @@ struct BakeCollisionPairStats {
 };
 
 struct BakeStats {
-  // Timing (milliseconds)
   double totalWallTimeMs = 0.0;
   double avgStepMs = 0.0;
   double minStepMs = 0.0;
@@ -36,17 +35,14 @@ struct BakeStats {
   double avgSnapshotMs = 0.0;
   double avgUiFrameMs = 0.0;
 
-  // Throughput
   double stepsPerSecond = 0.0;
   double simSecondsPerWallSecond = 0.0;
 
-  // Scene info
   int objectCount = 0;
   int totalSteps = 0;
   float simDuration = 0.0f;
   float stepSize = 0.0f;
 
-  // Per-pair collision stats (expandable — one entry per pair type seen)
   std::vector<BakeCollisionPairStats> collisionPairs;
 
   bool hasData = false;
@@ -81,6 +77,7 @@ struct SimulationState {
   bool loadBakeRequested = false;
   float scrubAccumulator = 0.0f;
   float physicsAccumulator = 0.0f;
+  int maxFps = 0;
 };
 
 struct SceneSettings {
@@ -124,7 +121,7 @@ class Interface {
   void setWorldDirectory(const std::string& dir);
   void refreshWorldList();
   void setCurrentWorldPath(const std::string& path);
-  void notifyBakeSaved();   // call after a bake file has been written
+  void notifyBakeSaved();
 
  private:
   GLFWwindow* window;
@@ -176,7 +173,8 @@ class Interface {
   void renderTransportBar(SimulationState& simState);
   void renderObjectsMenu(Registry& registry);
   void renderSceneMenu(SceneSettings& sceneSettings,
-                       MainPipeline* mainPipeline);
+                       MainPipeline* mainPipeline,
+                       SimulationState& simState);
   void renderPostProcessingMenu(PostProcessing* postProcessing);
   void renderSettingsMenu(SimulationState& simState);
 };

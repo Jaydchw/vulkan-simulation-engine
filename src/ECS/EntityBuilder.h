@@ -120,10 +120,43 @@ class EntityBuilder final {
     return *this;
   }
 
+  EntityBuilder& angularVelocity(const glm::vec3& av) {
+    hasPhysics = true;
+    physicsComp.angularVelocity = av;
+    return *this;
+  }
+
+  EntityBuilder& angularVelocity(float x, float y, float z) {
+    hasPhysics = true;
+    physicsComp.angularVelocity = glm::vec3(x, y, z);
+    return *this;
+  }
+
+  EntityBuilder& constantTorque(const glm::vec3& t) {
+    hasPhysics = true;
+    physicsComp.constantTorque = t;
+    return *this;
+  }
+
+  EntityBuilder& constantTorque(float x, float y, float z) {
+    hasPhysics = true;
+    physicsComp.constantTorque = glm::vec3(x, y, z);
+    return *this;
+  }
+
   EntityBuilder& sphereCollider(float radius) {
     hasCollider = true;
     colliderComp.type = ColliderType::Sphere;
     colliderComp.radius = radius;
+    return *this;
+  }
+
+  // Cylinder with symmetry axis along local Z. height is the full height.
+  EntityBuilder& cylinderCollider(float radius, float height) {
+    hasCollider = true;
+    colliderComp.type = ColliderType::Cylinder;
+    colliderComp.radius = radius;
+    colliderComp.height = height;
     return *this;
   }
 

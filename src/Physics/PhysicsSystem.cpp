@@ -58,11 +58,9 @@ void PhysicsSystem::syncToLibrary() {
 
     auto* obj = &registry->getPhysicsObject(e);
 
-    // Sync transform -> physics object
     obj->setPosition(transform->position);
     obj->setScale(transform->scale);
 
-    // Sync collider
     switch (collider->type) {
       case ColliderType::Sphere:
         obj->setCollider(jphys::Collider::createSphere(collider->radius));
@@ -77,9 +75,12 @@ void PhysicsSystem::syncToLibrary() {
         else
           obj->setCollider(jphys::Collider::createPlane(collider->normal));
         break;
+      case ColliderType::Cylinder:
+        obj->setCollider(
+            jphys::Collider::createCylinder(collider->radius, collider->height));
+        break;
     }
 
-    // Sync physics properties
     if (phys) {
       obj->setVelocity(phys->velocity);
       obj->setAcceleration(phys->acceleration);
@@ -87,7 +88,12 @@ void PhysicsSystem::syncToLibrary() {
       obj->setRestitution(phys->restitution);
       obj->setDamping(phys->damping);
       obj->setUseGravity(phys->useGravity);
+      obj->setAngularVelocity(phys->angularVelocity);
+      obj->setOrientation(transform->rotation);
       obj->setStatic(false);
+
+      if (phys->constantTorque != glm::vec3(0.0f))
+        obj->addTorque(phys->constantTorque);
     } else {
       obj->setStatic(true);
     }
@@ -106,10 +112,12 @@ void PhysicsSystem::syncFromLibrary() {
     const auto& obj = registry->getPhysicsObject(e);
 
     transform->position = obj.getPosition();
+    transform->rotation = obj.getOrientation();
 
     auto* phys = registry->getComponent<PhysicsComponent>(e);
     if (phys) {
       phys->velocity = obj.getVelocity();
+      phys->angularVelocity = obj.getAngularVelocity();
     }
   }
 }
