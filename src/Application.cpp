@@ -12,6 +12,7 @@
 #include "Physics/PhysicsSystem.h"
 #include "Timeline/TimelineSystem.h"
 #include "Timeline/WorldBakeSerializer.h"
+#include "Network/NetworkManager.h"
 #include "Vulkan/VulkanCommandBuffer.h"
 #include "Vulkan/VulkanDepthBuffer.h"
 #include "Vulkan/VulkanDescriptors.h"
@@ -66,6 +67,17 @@ if (interface) interface->clearSelection();
   physicsSystem->setRegistry(registry);
   timelineSystem->setRegistry(registry);
   timelineSystem->saveInitialSnapshot();
+
+  // Let the network manager know about the new registry and distribute ownership
+  if (networkManager) {
+    networkManager->init(registry);
+    networkManager->assignObjectOwnership();
+  }
+
+  // Reset owner-colour state for the new scene
+  savedMaterialIDs.clear();
+  lastColorByOwner = false;
+  if (networkManager) networkManager->colorByOwner = false;
 
   simState = SimulationState{};
   simState.timeSpeed = worldSettings.timeSpeed;
@@ -164,9 +176,19 @@ void Application::initVulkan() {
                                               textureManager.get());
   physicsSystem = std::make_unique<PhysicsSystem>();
   timelineSystem = std::make_unique<TimelineSystem>();
+
+  // Networking
+  networkManager = std::make_unique<NetworkManager>();
+  networkManager->init(nullptr); // registry not available yet; set after world load
+  physicsSystem->setNetworkManager(networkManager.get());
+
   interface->setWorldDirectory("Worlds");
-  interface->setWorldLoadCallback(
-      [this](const std::string& path) { loadWorld(path); });
+  interface->setWorldLoadCallback([this](const std::string& path) {
+    loadWorld(path);
+    // Broadcast scene change to all peers (unless we're applying a remote one)
+    if (networkManager && !applyingRemoteSceneLoad)
+      networkManager->sendLoadScene(path);
+  });
 }
 
 void Application::mainLoop() {
@@ -188,6 +210,8 @@ while (!window->shouldClose()) {
     simState.reloadRequested = false;
     if (!lastLoadedWorldPath.empty()) {
       loadWorld(lastLoadedWorldPath);
+      if (networkManager && !applyingRemoteSceneLoad)
+        networkManager->sendLoadScene(lastLoadedWorldPath);
     }
   }
 
@@ -207,6 +231,8 @@ while (!window->shouldClose()) {
     simState.baked = false;
     simState.scrubAccumulator = 0.0f;
     simState.physicsAccumulator = 0.0f;
+    if (networkManager && !lastLoadedWorldPath.empty() && !applyingRemoteSceneLoad)
+      networkManager->sendLoadScene(lastLoadedWorldPath);
   }
 
   if (simState.loadBakeRequested && snapshotsOn && !lastLoadedWorldPath.empty()) {
@@ -384,6 +410,92 @@ while (!window->shouldClose()) {
   }
 
   if (!simState.isBaking) {
+
+  if (networkManager) {
+    networkManager->tickReceive();
+
+    if (networkManager->pollNewPeerConnected() && !lastLoadedWorldPath.empty()) {
+      networkManager->assignObjectOwnership();
+      networkManager->sendLoadScene(lastLoadedWorldPath);
+    }
+
+    std::string remotePath;
+    if (networkManager->pollPendingSceneLoad(remotePath) && !remotePath.empty()) {
+      applyingRemoteSceneLoad = true;
+      loadWorld(remotePath);
+      applyingRemoteSceneLoad = false;
+    }
+
+    bool receivedStepForward = false;
+    PendingSimState remoteSimState{};
+    if (networkManager->pollPendingSimState(remoteSimState)) {
+      simState.isPaused  = remoteSimState.isPaused;
+      simState.timeSpeed = remoteSimState.timeSpeed;
+      lastBroadcastPaused    = simState.isPaused;
+      lastBroadcastTimeSpeed = simState.timeSpeed;
+
+      if (remoteSimState.historyIndex >= 0) {
+        simState.historyIndex = remoteSimState.historyIndex;
+        if (snapshotsOn && simState.historyIndex < timelineSystem->getSnapshotCount())
+          timelineSystem->restoreSnapshot(simState.historyIndex);
+        lastBroadcastHistoryIndex = simState.historyIndex;
+      }
+      if (remoteSimState.stepForward) {
+        receivedStepForward = true;
+      }
+      if (remoteSimState.reversePlay >= 0) {
+        simState.reversePlay = (remoteSimState.reversePlay == 1);
+        if (!simState.reversePlay) simState.isPaused = true;
+        lastBroadcastReversePlay = simState.reversePlay;
+      }
+      if (remoteSimState.colorByOwner >= 0) {
+        networkManager->colorByOwner = (remoteSimState.colorByOwner == 1);
+        lastBroadcastColorByOwner = networkManager->colorByOwner;
+      }
+    }
+
+    {
+      int32_t bHistIdx    = -1;
+      bool    bStepFwd    = false;
+      int8_t  bRevPlay    = -1;
+      int8_t  bColor      = -1;
+      bool    needBcast   = (simState.isPaused != lastBroadcastPaused ||
+                              simState.timeSpeed != lastBroadcastTimeSpeed);
+
+      if (simState.historyIndex != lastBroadcastHistoryIndex) {
+        bHistIdx = simState.historyIndex;
+        lastBroadcastHistoryIndex = simState.historyIndex;
+        needBcast = true;
+      }
+      if (simState.stepFrame && !receivedStepForward) {
+        bStepFwd = true;
+        needBcast = true;
+      }
+      if (simState.reversePlay != lastBroadcastReversePlay) {
+        bRevPlay = simState.reversePlay ? 1 : 0;
+        lastBroadcastReversePlay = simState.reversePlay;
+        needBcast = true;
+      }
+      bool curColor = networkManager->colorByOwner;
+      if (curColor != lastBroadcastColorByOwner) {
+        bColor = curColor ? 1 : 0;
+        lastBroadcastColorByOwner = curColor;
+        needBcast = true;
+      }
+
+      if (needBcast) {
+        networkManager->sendSimState(simState.isPaused, simState.timeSpeed,
+                                     bHistIdx, bStepFwd, bRevPlay, bColor);
+        lastBroadcastPaused    = simState.isPaused;
+        lastBroadcastTimeSpeed = simState.timeSpeed;
+      }
+    }
+
+    if (receivedStepForward) {
+      simState.stepFrame = true;
+    }
+  }
+
   if (simState.reversePlay && !simState.isPaused && snapshotsOn) {
     int snapshotCount = timelineSystem->getSnapshotCount();
     if (snapshotCount > 0) {
@@ -440,6 +552,7 @@ while (!window->shouldClose()) {
       }
     }
   } else if (!simState.isPaused || simState.stepFrame) {
+
     if (snapshotsOn && !timelineSystem->hasInitialSnapshot()) {
       timelineSystem->saveInitialSnapshot();
     }
@@ -491,13 +604,21 @@ while (!window->shouldClose()) {
         }
       }
     }
+
+    if (networkManager) {
+      networkSendAccumulator += deltaTime;
+      if (networkSendAccumulator >= kNetworkSendInterval) {
+        networkSendAccumulator -= kNetworkSendInterval;
+        networkManager->tickSend();
+      }
+    }
   }
   } // end !isBaking
 
     if (simState.isBaking && simState.bakePerformanceMode) {
       auto uiStart = std::chrono::high_resolution_clock::now();
       interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
-                         postProcessing.get());
+                         postProcessing.get(), networkManager.get());
       input.endFrame();
       drawFrame();
       double uiMs = std::chrono::duration<double, std::milli>(
@@ -506,7 +627,15 @@ while (!window->shouldClose()) {
       ++bakeUiFrameCount;
     } else {
       interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
-                         postProcessing.get());
+                         postProcessing.get(), networkManager.get());
+
+      if (networkManager && registry) {
+        bool want = networkManager->colorByOwner;
+        if (want != lastColorByOwner) {
+          applyOwnerColors(want);
+          lastColorByOwner = want;
+        }
+      }
 
       if (!ImGui::GetIO().WantCaptureMouse &&
           !ImGui::GetIO().WantCaptureKeyboard) {
@@ -1352,4 +1481,57 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
 
   if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
     throw std::runtime_error("Failed to record command buffer!");
+}
+
+// ============================================================================
+// Owner-colour material system
+// ============================================================================
+
+void Application::initOwnerMaterials() {
+  if (!materialManager) return;
+  if (ownerMaterialIDs[0] != INVALID_MATERIAL_ID) return; // already created
+
+  // Peer colours: Red, Green, Blue, Yellow
+  static const glm::vec3 colors[4] = {
+      {0.85f, 0.20f, 0.20f}, // Peer 1 – Red
+      {0.20f, 0.80f, 0.25f}, // Peer 2 – Green
+      {0.20f, 0.35f, 0.90f}, // Peer 3 – Blue
+      {0.90f, 0.85f, 0.15f}, // Peer 4 – Yellow
+  };
+  static const char* names[4] = {
+      "_net_owner_peer1", "_net_owner_peer2",
+      "_net_owner_peer3", "_net_owner_peer4"};
+
+  for (int i = 0; i < 4; ++i) {
+    MaterialBuilder b;
+    b.name(names[i]).albedoColor(colors[i]).roughness(0.7f);
+    ownerMaterialIDs[i] = materialManager->registerMaterial(b);
+  }
+}
+
+void Application::applyOwnerColors(bool enable) {
+  if (!registry || !materialManager || !networkManager) return;
+
+  if (enable) {
+    initOwnerMaterials();
+
+    for (const auto& [e, _] : registry->allPhysics()) {
+      uint8_t ownerID = networkManager->getOwnerPeerID(e);
+      if (ownerID == 0 || ownerID > 4) continue;
+      auto* matComp = registry->getComponent<MaterialComponent>(e);
+      if (!matComp) continue;
+
+      if (savedMaterialIDs.find(e) == savedMaterialIDs.end())
+        savedMaterialIDs[e] = matComp->materialID;
+
+      matComp->materialID = ownerMaterialIDs[ownerID - 1];
+    }
+  } else {
+    // Restore original materials
+    for (auto& [e, origID] : savedMaterialIDs) {
+      auto* matComp = registry->getComponent<MaterialComponent>(e);
+      if (matComp) matComp->materialID = origID;
+    }
+    savedMaterialIDs.clear();
+  }
 }

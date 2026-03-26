@@ -1,0 +1,365 @@
+# Network Test World
+# 16 physics spheres — 4 per peer colour (red, green, blue, yellow)
+# Peer 1 owns sphere 1,5,9,13 | Peer 2 owns 2,6,10,14 | etc. (round-robin)
+# Use Network > Colour Objects by Owner to visualise the distribution.
+
+BeginSettings
+  ClearColor = 0.06, 0.07, 0.10, 1.0
+  TimeSpeed = 1.0
+EndSettings
+
+# ---- Materials ----
+
+BeginMaterial
+  Name = FloorMat
+  AlbedoColor = 0.30, 0.30, 0.35
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = WallMat
+  AlbedoColor = 0.22, 0.22, 0.28
+  Roughness = 0.85
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = PeerRed
+  AlbedoColor = 0.90, 0.18, 0.18
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = PeerGreen
+  AlbedoColor = 0.18, 0.82, 0.28
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = PeerBlue
+  AlbedoColor = 0.22, 0.38, 0.95
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = PeerYellow
+  AlbedoColor = 0.95, 0.88, 0.15
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+# ---- Meshes ----
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 30.0
+  Height = 30.0
+EndMesh
+
+BeginMesh
+  Name = WallN
+  Type = plane
+  Width = 30.0
+  Height = 8.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 1.0
+  Segments = 24
+EndMesh
+
+# ---- Static geometry ----
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = FloorMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 15.0, 0.0, 15.0
+EndObject
+
+BeginObject
+  Name = Wall North
+  Position = 0.0, 4.0, -15.0
+  Rotation = -90.0, 0.0, 0.0
+  Mesh = WallN
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 15.0, 4.0, 0.4
+EndObject
+
+BeginObject
+  Name = Wall South
+  Position = 0.0, 4.0, 15.0
+  Rotation = 90.0, 0.0, 0.0
+  Mesh = WallN
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 15.0, 4.0, 0.4
+EndObject
+
+BeginObject
+  Name = Wall West
+  Position = -15.0, 4.0, 0.0
+  Rotation = 0.0, 0.0, 90.0
+  Mesh = WallN
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 0.4, 4.0, 15.0
+EndObject
+
+BeginObject
+  Name = Wall East
+  Position = 15.0, 4.0, 0.0
+  Rotation = 0.0, 0.0, -90.0
+  Mesh = WallN
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 0.4, 4.0, 15.0
+EndObject
+
+# ---- Physics balls ----
+# 16 balls, round-robin ownership: 1=Red, 2=Green, 3=Blue, 4=Yellow
+# Ball indices (1-based) map to: 1,5,9,13→Red  2,6,10,14→Green  3,7,11,15→Blue  4,8,12,16→Yellow
+# Pre-coloured to match the peer colours for easier visual without the toggle.
+
+# ---- Ball 1 (Peer 1 – Red) ----
+BeginObject
+  Name = Ball 01
+  Position = -6.0, 14.0, -6.0
+  Mesh = Ball
+  Material = PeerRed
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.65
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 2 (Peer 2 – Green) ----
+BeginObject
+  Name = Ball 02
+  Position = -2.0, 16.0, -6.0
+  Mesh = Ball
+  Material = PeerGreen
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.65
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 3 (Peer 3 – Blue) ----
+BeginObject
+  Name = Ball 03
+  Position = 2.0, 18.0, -6.0
+  Mesh = Ball
+  Material = PeerBlue
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.65
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 4 (Peer 4 – Yellow) ----
+BeginObject
+  Name = Ball 04
+  Position = 6.0, 20.0, -6.0
+  Mesh = Ball
+  Material = PeerYellow
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.65
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 5 (Peer 1 – Red) ----
+BeginObject
+  Name = Ball 05
+  Position = -6.0, 22.0, -2.0
+  Mesh = Ball
+  Material = PeerRed
+  Physics = true
+  Mass = 1.2
+  Restitution = 0.55
+  Velocity = 2.0, 0.0, 1.5
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 6 (Peer 2 – Green) ----
+BeginObject
+  Name = Ball 06
+  Position = -2.0, 24.0, -2.0
+  Mesh = Ball
+  Material = PeerGreen
+  Physics = true
+  Mass = 1.2
+  Restitution = 0.55
+  Velocity = -1.5, 0.0, 2.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 7 (Peer 3 – Blue) ----
+BeginObject
+  Name = Ball 07
+  Position = 2.0, 26.0, -2.0
+  Mesh = Ball
+  Material = PeerBlue
+  Physics = true
+  Mass = 1.2
+  Restitution = 0.55
+  Velocity = 1.0, 0.0, -2.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 8 (Peer 4 – Yellow) ----
+BeginObject
+  Name = Ball 08
+  Position = 6.0, 28.0, -2.0
+  Mesh = Ball
+  Material = PeerYellow
+  Physics = true
+  Mass = 1.2
+  Restitution = 0.55
+  Velocity = -2.0, 0.0, -1.5
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 9 (Peer 1 – Red) ----
+BeginObject
+  Name = Ball 09
+  Position = -6.0, 12.0, 2.0
+  Mesh = Ball
+  Material = PeerRed
+  Physics = true
+  Mass = 0.8
+  Restitution = 0.80
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 10 (Peer 2 – Green) ----
+BeginObject
+  Name = Ball 10
+  Position = -2.0, 14.0, 2.0
+  Mesh = Ball
+  Material = PeerGreen
+  Physics = true
+  Mass = 0.8
+  Restitution = 0.80
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 11 (Peer 3 – Blue) ----
+BeginObject
+  Name = Ball 11
+  Position = 2.0, 16.0, 2.0
+  Mesh = Ball
+  Material = PeerBlue
+  Physics = true
+  Mass = 0.8
+  Restitution = 0.80
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 12 (Peer 4 – Yellow) ----
+BeginObject
+  Name = Ball 12
+  Position = 6.0, 18.0, 2.0
+  Mesh = Ball
+  Material = PeerYellow
+  Physics = true
+  Mass = 0.8
+  Restitution = 0.80
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 13 (Peer 1 – Red) – heavy ----
+BeginObject
+  Name = Ball 13
+  Position = -6.0, 10.0, 6.0
+  Mesh = Ball
+  Material = PeerRed
+  Physics = true
+  Mass = 3.0
+  Restitution = 0.40
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 14 (Peer 2 – Green) – heavy ----
+BeginObject
+  Name = Ball 14
+  Position = -2.0, 12.0, 6.0
+  Mesh = Ball
+  Material = PeerGreen
+  Physics = true
+  Mass = 3.0
+  Restitution = 0.40
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 15 (Peer 3 – Blue) – heavy ----
+BeginObject
+  Name = Ball 15
+  Position = 2.0, 14.0, 6.0
+  Mesh = Ball
+  Material = PeerBlue
+  Physics = true
+  Mass = 3.0
+  Restitution = 0.40
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Ball 16 (Peer 4 – Yellow) – heavy ----
+BeginObject
+  Name = Ball 16
+  Position = 6.0, 16.0, 6.0
+  Mesh = Ball
+  Material = PeerYellow
+  Physics = true
+  Mass = 3.0
+  Restitution = 0.40
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# ---- Lighting ----
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.35, -1.0, 0.45
+  Color = 1.0, 0.97, 0.90
+  Intensity = 2.8
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 20.0, 0.0
+  Color = 0.5, 0.6, 0.9
+  Intensity = 1.2
+  CastsShadows = false
+EndLight

@@ -1,4 +1,9 @@
 #pragma once
+// Winsock2 must come before any Windows.h (e.g. pulled in by vulkan.h)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
 #include <vulkan/vulkan.h>
 
 #include <array>
@@ -18,10 +23,13 @@
 #include "Scene/LightManager.h"
 #include "Physics/PhysicsSystem.h"
 #include "Timeline/TimelineSystem.h"
+#include "Network/NetworkManager.h"
 #include "Util/Camera.h"
 #include "Util/Input.h"
 #include "Util/Interface.h"
 #include "Util/WorldParser.h"
+
+#include <unordered_map>
 
 constexpr uint32_t WIDTH = 1280;
 constexpr uint32_t HEIGHT = 720;
@@ -98,6 +106,18 @@ class Application final {
   std::unique_ptr<Interface> interface;
   std::unique_ptr<PhysicsSystem> physicsSystem;
   std::unique_ptr<TimelineSystem> timelineSystem;
+  std::unique_ptr<NetworkManager> networkManager;
+
+  // --- Owner-colour material system ---
+  // Created once; IDs indexed [0]=peer1(red) [1]=peer2(green) [2]=peer3(blue) [3]=peer4(yellow)
+  std::array<MaterialID, 4> ownerMaterialIDs = {
+      INVALID_MATERIAL_ID, INVALID_MATERIAL_ID,
+      INVALID_MATERIAL_ID, INVALID_MATERIAL_ID};
+  std::unordered_map<Entity, MaterialID> savedMaterialIDs; // original material per entity
+  bool lastColorByOwner = false;
+
+  void initOwnerMaterials();
+  void applyOwnerColors(bool enable);
 
   VkInstance instance = VK_NULL_HANDLE;
   VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
@@ -135,6 +155,18 @@ class Application final {
   SimulationState simState;
   SceneSettings sceneSettings;
   std::string lastLoadedWorldPath;
+
+  bool applyingRemoteSceneLoad = false;
+
+  bool    lastBroadcastPaused        = false;
+  float   lastBroadcastTimeSpeed     = 1.0f;
+  int32_t lastBroadcastHistoryIndex  = -1;
+  bool    lastBroadcastReversePlay   = false;
+  bool    lastBroadcastColorByOwner  = false;
+
+  float networkSendAccumulator               = 0.0f;
+  static constexpr float kNetworkSendHz      = 20.0f;
+  static constexpr float kNetworkSendInterval = 1.0f / kNetworkSendHz;
 
   MeshID gizmoMeshID = INVALID_MESH_ID;
   MaterialID gizmoMaterialID = INVALID_MATERIAL_ID;

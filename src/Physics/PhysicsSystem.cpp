@@ -5,6 +5,7 @@
 
 #include "ECS/Components.h"
 #include "ECS/Registry.h"
+#include "Network/NetworkManager.h"
 #include "Util/Debug.h"
 
 PhysicsSystem::PhysicsSystem() {
@@ -51,10 +52,16 @@ void PhysicsSystem::syncToLibrary() {
 
   auto entities = registry->getEntities();
   for (Entity e : entities) {
-    auto* phys = registry->getComponent<PhysicsComponent>(e);
+    auto* phys     = registry->getComponent<PhysicsComponent>(e);
     auto* collider = registry->getComponent<ColliderComponent>(e);
     auto* transform = registry->getComponent<TransformComponent>(e);
     if (!collider || !transform) continue;
+
+    // Dynamic (has PhysicsComponent) but not locally owned → skip simulation.
+    // Static objects (no PhysicsComponent) are always added so that locally-
+    // owned objects can collide with them.
+    if (phys && networkManager && !networkManager->isLocallyOwned(e))
+      continue;
 
     auto* obj = &registry->getPhysicsObject(e);
 
@@ -105,18 +112,23 @@ void PhysicsSystem::syncToLibrary() {
 void PhysicsSystem::syncFromLibrary() {
   auto entities = registry->getEntities();
   for (Entity e : entities) {
-    auto* collider = registry->getComponent<ColliderComponent>(e);
+    auto* collider  = registry->getComponent<ColliderComponent>(e);
     auto* transform = registry->getComponent<TransformComponent>(e);
+    auto* phys      = registry->getComponent<PhysicsComponent>(e);
     if (!collider || !transform) continue;
+
+    // Only write back locally-owned dynamic objects; remote ones are updated
+    // by NetworkManager::applyRemoteStates() instead.
+    if (phys && networkManager && !networkManager->isLocallyOwned(e))
+      continue;
 
     const auto& obj = registry->getPhysicsObject(e);
 
     transform->position = obj.getPosition();
     transform->rotation = obj.getOrientation();
 
-    auto* phys = registry->getComponent<PhysicsComponent>(e);
     if (phys) {
-      phys->velocity = obj.getVelocity();
+      phys->velocity        = obj.getVelocity();
       phys->angularVelocity = obj.getAngularVelocity();
     }
   }

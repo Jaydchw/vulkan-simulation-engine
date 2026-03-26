@@ -64,12 +64,16 @@ class Registry final {
   const std::unordered_map<Entity, ColliderComponent>& allColliders() const {
     return colliders;
   }
-
   jphys::PhysicsObject& getPhysicsObject(Entity entity) {
     return physicsObjects[entity];
   }
   const jphys::PhysicsObject& getPhysicsObject(Entity entity) const {
     return physicsObjects.at(entity);
+  }
+  // Returns nullptr if the entity has no PhysicsObject (safe alternative to at())
+  jphys::PhysicsObject* getPhysicsObjectPtr(Entity entity) {
+    auto it = physicsObjects.find(entity);
+    return it != physicsObjects.end() ? &it->second : nullptr;
   }
 
   std::vector<Entity> getEntities() const {
@@ -261,3 +265,4 @@ template <>
 inline bool Registry::hasComponent<ColliderComponent>(Entity entity) const {
   return colliders.count(entity) > 0;
 }
+

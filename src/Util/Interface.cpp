@@ -237,7 +237,8 @@ void Interface::createImGuiRenderPass() {
 
 void Interface::render(SimulationState& simState, SceneSettings& sceneSettings,
 Registry& registry, MainPipeline* mainPipeline,
-PostProcessing* postProcessing) {
+PostProcessing* postProcessing,
+NetworkManager* networkManager) {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
@@ -276,6 +277,10 @@ PostProcessing* postProcessing) {
     }
     if (menuItem("Settings")) {
       renderSettingsMenu(simState);
+      ImGui::EndMenu();
+    }
+    if (menuItem("Network")) {
+      renderNetworkMenu(networkManager, simState);
       ImGui::EndMenu();
     }
 
@@ -1576,6 +1581,28 @@ void Interface::refreshWorldList() {
 }
 
 void Interface::renderWorldsMenu() {
+  const float s = currentScale;
+
+  if (!lastLoadedWorld.empty()) {
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.22f, 0.36f, 0.22f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.46f, 0.28f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.35f, 0.55f, 0.35f, 1.0f));
+    if (ImGui::Button("  Reload Current Scene  ", ImVec2(-1, 28 * s))) {
+      if (worldLoadCallback) {
+        worldLoadCallback(lastLoadedWorld);
+      }
+    }
+    ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Reload '%s'\nApplies to all connected peers.",
+                        std::filesystem::path(lastLoadedWorld).stem().string().c_str());
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+    ImGui::Separator();
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
+  }
+
   if (worldFiles.empty()) {
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
     ImGui::Text("No .world files found in '%s'",
@@ -1625,6 +1652,212 @@ void Interface::renderWorldsMenu() {
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
   ImGui::Text("%d world(s)", static_cast<int>(worldFiles.size()));
   ImGui::PopStyleColor();
+}
+
+// ---------------------------------------------------------------------------
+// Network menu
+// ---------------------------------------------------------------------------
+
+void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState) {
+  if (!nm) {
+    ImGui::TextDisabled("NetworkManager not initialised");
+    return;
+  }
+
+  const float s = currentScale;
+
+  static const ImVec4 peerColors[5] = {
+      {0.6f, 0.6f, 0.6f, 1.0f},
+      {1.0f, 0.3f, 0.3f, 1.0f},
+      {0.3f, 1.0f, 0.3f, 1.0f},
+      {0.3f, 0.5f, 1.0f, 1.0f},
+      {1.0f, 1.0f, 0.3f, 1.0f},
+  };
+  static const char* peerNames[5] = {
+      "Unassigned", "Peer 1 (Red)", "Peer 2 (Green)", "Peer 3 (Blue)", "Peer 4 (Yellow)"
+  };
+
+  const bool   connected  = nm->isConnected();
+  const int    peerCount  = nm->getConnectedPeerCount();
+  const uint8_t pid       = nm->getLocalPeerID();
+  const uint8_t safeId    = (pid < 5) ? pid : 0;
+
+  // ---- Status ----
+  sectionHeader("Status");
+  {
+    ImVec4 sc = connected ? ImVec4(0.30f,0.90f,0.40f,1.0f) : ImVec4(0.80f,0.40f,0.40f,1.0f);
+    ImGui::TextColored(sc, connected ? "Connected" : "Searching for peers...");
+    ImGui::SameLine(0, 10*s);
+    ImGui::TextDisabled("(%d peer%s)", peerCount, peerCount == 1 ? "" : "s");
+
+    ImGui::Spacing();
+    fieldLabel("This Instance");
+    ImGui::SameLine();
+    ImGui::TextColored(peerColors[safeId], "%s", peerNames[safeId]);
+
+    fieldLabel("Local IP");
+    ImGui::SameLine();
+    ImGui::Text("%s", nm->getLocalIP().c_str());
+
+    fieldLabel("TCP Port");
+    ImGui::SameLine();
+    ImGui::Text("%d", (int)nm->getLocalTCPPort());
+
+    fieldLabel("Instance ID");
+    ImGui::SameLine();
+    ImGui::TextDisabled("0x%08X", nm->getInstanceId());
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Unique random ID generated at startup.\n"
+                        "Used to assign deterministic Peer IDs across all instances.");
+  }
+
+  // ---- Ownership ----
+  sectionHeader("Ownership");
+  {
+    const int owned = nm->getLocalOwnedCount();
+    const int total = nm->getTotalManagedCount();
+    fieldLabel("Simulating");
+    ImGui::SameLine();
+    if (total == 0) {
+      ImGui::TextDisabled("(no scene loaded)");
+    } else {
+      ImGui::TextColored(peerColors[safeId], "%d", owned);
+      ImGui::SameLine(0, 4*s);
+      ImGui::TextDisabled("of %d physics objects", total);
+    }
+    if (peerCount > 0 && total > 0) {
+      ImGui::SameLine(0, 12*s);
+      ImGui::TextDisabled("(%d other%s simulating the rest)",
+                          peerCount, peerCount == 1 ? "" : "s");
+    }
+  }
+
+  // ---- Actions ----
+  sectionHeader("Actions");
+  {
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.22f, 0.36f, 0.22f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.46f, 0.28f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.35f, 0.55f, 0.35f, 1.0f));
+    if (ImGui::Button("Reload Scene", ImVec2(130*s, 26*s)))
+      simState.reloadRequested = true;
+    ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Reload the current world file on ALL connected peers.\n"
+                        "Resets all physics objects to their starting positions.");
+
+    ImGui::SameLine(0, 8*s);
+
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.18f, 0.23f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.34f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.32f, 0.32f, 0.42f, 1.0f));
+    if (simState.isPaused) {
+      if (ImGui::Button("Resume All", ImVec2(110*s, 26*s)))
+        simState.isPaused = false;
+    } else {
+      if (ImGui::Button("Pause All", ImVec2(110*s, 26*s)))
+        simState.isPaused = true;
+    }
+    ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Pause or resume simulation on ALL connected peers.");
+  }
+
+  // ---- Peers ----
+  sectionHeader("Peers");
+  {
+    auto peerList = nm->getPeerSnapshot();
+    if (peerList.empty()) {
+      ImGui::TextDisabled("  (none discovered yet)");
+    }
+    for (const auto& peer : peerList) {
+      uint8_t sid = (peer.id < 5) ? peer.id : 0;
+
+      ImDrawList* dl = ImGui::GetWindowDrawList();
+      ImVec2 p = ImGui::GetCursorScreenPos();
+      float sq = 10.0f * s;
+      ImVec4 c = peerColors[sid];
+      dl->AddRectFilled(p, {p.x+sq, p.y+sq},
+                        IM_COL32((int)(c.x*255),(int)(c.y*255),(int)(c.z*255),255));
+      ImGui::Dummy({sq+4*s, sq});
+      ImGui::SameLine(0, 4*s);
+
+      ImVec4 textCol = peer.connected
+          ? ImVec4(0.85f,0.85f,0.85f,1.0f)
+          : ImVec4(0.5f,0.5f,0.5f,1.0f);
+      ImGui::TextColored(textCol, "Peer %d — %s:%d",
+                         (int)peer.id, peer.ip.c_str(), (int)peer.tcpPort);
+      if (!peer.connected) {
+        ImGui::SameLine(0, 6*s);
+        ImGui::TextDisabled("[disconnected]");
+      }
+
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f,0.48f,0.55f,1.0f));
+      ImGui::Text("  Objects: %d   TX: %.1f KB   RX: %.1f KB",
+                  peer.ownedObjects,
+                  peer.bytesSent    / 1024.0f,
+                  peer.bytesReceived / 1024.0f);
+      ImGui::PopStyleColor();
+    }
+  }
+
+  // ---- Visualisation ----
+  sectionHeader("Visualisation");
+  ImGui::Checkbox("Colour objects by owner", &nm->colorByOwner);
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Override each object's material with its owner's colour.\n"
+                      "Red=Peer1  Green=Peer2  Blue=Peer3  Yellow=Peer4\n"
+                      "Syncs to all connected peers.");
+
+  if (nm->colorByOwner) {
+    ImGui::Spacing();
+    static const ImVec4 legend[4] = {
+        {1.0f,0.3f,0.3f,1.0f},
+        {0.3f,1.0f,0.3f,1.0f},
+        {0.3f,0.5f,1.0f,1.0f},
+        {1.0f,1.0f,0.3f,1.0f},
+    };
+    static const char* lbl[4] = {"Peer 1","Peer 2","Peer 3","Peer 4"};
+    for (int i = 0; i < 4; ++i) {
+      ImDrawList* dl = ImGui::GetWindowDrawList();
+      ImVec2 p = ImGui::GetCursorScreenPos();
+      float sq = 12.0f * s;
+      ImVec4 c = legend[i];
+      dl->AddRectFilled(p,{p.x+sq,p.y+sq},
+                        IM_COL32((int)(c.x*255),(int)(c.y*255),(int)(c.z*255),255));
+      ImGui::Dummy({sq+4*s, sq});
+      ImGui::SameLine(0,4*s);
+      ImGui::TextColored(c, "%s", lbl[i]);
+      if (i < 3) ImGui::SameLine(0, 16*s);
+    }
+    ImGui::Spacing();
+  }
+
+  // ---- Stats ----
+  sectionHeader("Stats");
+  {
+    auto peerList = nm->getPeerSnapshot();
+    uint64_t totalSent = 0, totalRecv = 0;
+    for (const auto& p : peerList) { totalSent += p.bytesSent; totalRecv += p.bytesReceived; }
+
+    auto fmtBytes = [](uint64_t b) -> std::string {
+      char buf[32];
+      if (b < 1024)            snprintf(buf, sizeof(buf), "%llu B",   (unsigned long long)b);
+      else if (b < 1024*1024)  snprintf(buf, sizeof(buf), "%.2f KB",  b / 1024.0);
+      else                     snprintf(buf, sizeof(buf), "%.2f MB",  b / (1024.0*1024.0));
+      return buf;
+    };
+
+    fieldLabel("Total TX");
+    ImGui::SameLine(); ImGui::Text("%s", fmtBytes(totalSent).c_str());
+    fieldLabel("Total RX");
+    ImGui::SameLine(); ImGui::Text("%s", fmtBytes(totalRecv).c_str());
+
+    ImGui::Spacing();
+    fieldLabel("Protocol");
+    ImGui::SameLine(); ImGui::TextDisabled("UDP/45000 discovery + TCP/45001-45020 data");
+    fieldLabel("Send rate");
+    ImGui::SameLine(); ImGui::TextDisabled("20 Hz  (position + orientation, owned objects only)");
+  }
 }
 
 void Interface::draw(VkCommandBuffer commandBuffer, uint32_t imageIndex) {

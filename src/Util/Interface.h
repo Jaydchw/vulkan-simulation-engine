@@ -1,4 +1,8 @@
 #pragma once
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -14,6 +18,7 @@
 #include "../ECS/Entity.h"
 #include "../ECS/Registry.h"
 #include "../Physics/PhysicsSystem.h"
+#include "../Network/NetworkManager.h"
 
 class MainPipeline;
 class PostProcessing;
@@ -107,7 +112,8 @@ class Interface {
 
   void render(SimulationState& simState, SceneSettings& sceneSettings,
               Registry& registry, MainPipeline* mainPipeline,
-              PostProcessing* postProcessing);
+              PostProcessing* postProcessing,
+              NetworkManager* networkManager = nullptr);
 
   void draw(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
@@ -177,4 +183,5 @@ class Interface {
                        SimulationState& simState);
   void renderPostProcessingMenu(PostProcessing* postProcessing);
   void renderSettingsMenu(SimulationState& simState);
+  void renderNetworkMenu(NetworkManager* networkManager, SimulationState& simState);
 };

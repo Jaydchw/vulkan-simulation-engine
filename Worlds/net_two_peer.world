@@ -1,0 +1,228 @@
+BeginSettings
+  ClearColor = 0.04, 0.05, 0.08, 1.0
+  TimeSpeed = 1.0
+EndSettings
+
+BeginMaterial
+  Name = FloorMat
+  AlbedoColor = 0.20, 0.20, 0.24
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = WallMat
+  AlbedoColor = 0.16, 0.16, 0.20
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = DividerMat
+  AlbedoColor = 0.30, 0.30, 0.35
+  Roughness = 0.85
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = PeerRed
+  AlbedoColor = 0.95, 0.20, 0.20
+  Roughness = 0.25
+  Metallic = 0.15
+EndMaterial
+
+BeginMaterial
+  Name = PeerGreen
+  AlbedoColor = 0.18, 0.88, 0.30
+  Roughness = 0.25
+  Metallic = 0.15
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 24.0
+  Height = 24.0
+EndMesh
+
+BeginMesh
+  Name = WallMesh
+  Type = plane
+  Width = 24.0
+  Height = 10.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 1.0
+  Segments = 28
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = FloorMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 12.0, 0.0, 12.0
+EndObject
+
+BeginObject
+  Name = Wall North
+  Position = 0.0, 5.0, -12.0
+  Rotation = -90.0, 0.0, 0.0
+  Mesh = WallMesh
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 12.0, 5.0, 0.4
+EndObject
+
+BeginObject
+  Name = Wall South
+  Position = 0.0, 5.0, 12.0
+  Rotation = 90.0, 0.0, 0.0
+  Mesh = WallMesh
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 12.0, 5.0, 0.4
+EndObject
+
+BeginObject
+  Name = Wall West
+  Position = -12.0, 5.0, 0.0
+  Rotation = 0.0, 0.0, 90.0
+  Mesh = WallMesh
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 0.4, 5.0, 12.0
+EndObject
+
+BeginObject
+  Name = Wall East
+  Position = 12.0, 5.0, 0.0
+  Rotation = 0.0, 0.0, -90.0
+  Mesh = WallMesh
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 0.4, 5.0, 12.0
+EndObject
+
+BeginObject
+  Name = Red 1
+  Position = -5.0, 8.0, -4.0
+  Mesh = Ball
+  Material = PeerRed
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.75
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Green 1
+  Position = 5.0, 8.0, -4.0
+  Mesh = Ball
+  Material = PeerGreen
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.75
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Red 2
+  Position = -5.0, 12.0, 0.0
+  Mesh = Ball
+  Material = PeerRed
+  Physics = true
+  Mass = 1.5
+  Restitution = 0.65
+  Velocity = 3.0, 0.0, 2.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Green 2
+  Position = 5.0, 12.0, 0.0
+  Mesh = Ball
+  Material = PeerGreen
+  Physics = true
+  Mass = 1.5
+  Restitution = 0.65
+  Velocity = -3.0, 0.0, 2.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Red 3
+  Position = -5.0, 16.0, 4.0
+  Mesh = Ball
+  Material = PeerRed
+  Physics = true
+  Mass = 0.7
+  Restitution = 0.85
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Green 3
+  Position = 5.0, 16.0, 4.0
+  Mesh = Ball
+  Material = PeerGreen
+  Physics = true
+  Mass = 0.7
+  Restitution = 0.85
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Red 4
+  Position = -3.0, 20.0, -2.0
+  Mesh = Ball
+  Material = PeerRed
+  Physics = true
+  Mass = 2.5
+  Restitution = 0.45
+  Velocity = 1.5, 0.0, -3.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Green 4
+  Position = 3.0, 20.0, 2.0
+  Mesh = Ball
+  Material = PeerGreen
+  Physics = true
+  Mass = 2.5
+  Restitution = 0.45
+  Velocity = -1.5, 0.0, 3.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.4, -1.0, 0.5
+  Color = 1.0, 0.96, 0.88
+  Intensity = 3.0
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 18.0, 0.0
+  Color = 0.4, 0.5, 0.9
+  Intensity = 1.5
+  CastsShadows = false
+EndLight

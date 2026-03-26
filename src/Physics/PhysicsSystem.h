@@ -5,6 +5,7 @@
 #include <PhysicsWorld.h>
 
 class Registry;
+class NetworkManager;
 
 struct PhysicsStepTimings {
   double syncToMs = 0.0;
@@ -18,6 +19,10 @@ class PhysicsSystem final {
   PhysicsSystem();
 
   void setRegistry(Registry* reg);
+  // Optional: provide a NetworkManager so only locally-owned objects are simulated.
+  // Pass nullptr to simulate all objects (single-player / no network).
+  void setNetworkManager(NetworkManager* nm) { networkManager = nm; }
+
   void update(float deltaTime);
   PhysicsStepTimings timedUpdate(float deltaTime);
 
@@ -28,6 +33,7 @@ class PhysicsSystem final {
 
  private:
   Registry* registry = nullptr;
+  NetworkManager* networkManager = nullptr;
   jphys::PhysicsWorld world;
 
   void syncToLibrary();
