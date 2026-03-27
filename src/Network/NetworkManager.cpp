@@ -2,6 +2,8 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
+#include "../Util/ThreadAffinity.h"
+
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -56,6 +58,7 @@ void NetworkManager::init(Registry* reg) {
 
   running = true;
   networkThread = std::thread(&NetworkManager::networkThreadFunc, this);
+  ThreadAffinity::setThread(networkThread, ThreadAffinity::NETWORKING_MASK, "Networking");
 
   std::cout << "[Network] Started. IP=" << localIP << "  TCP=" << localTCPPort
             << "  instanceId=" << myInstanceId

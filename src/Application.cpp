@@ -12,6 +12,7 @@
 
 #include "Util/Debug.h"
 #include "Util/RenderUtils.h"
+#include "Util/ThreadAffinity.h"
 #include "Physics/PhysicsSystem.h"
 #include "Spawning/SpawnerSystem.h"
 #include "Timeline/TimelineSystem.h"
@@ -104,8 +105,138 @@ if (interface) interface->clearSelection();
 }
 
 void Application::run() {
+  // ── Process affinity: pin this (render/UI) thread to Core 1 ──────────────
+  ThreadAffinity::setCurrentThread(ThreadAffinity::VISUALISATION_MASK, "Visualisation");
+  ThreadAffinity::logAvailableCores();
+
+  // ── Launch the simulation thread (pinned to Core 4+ inside the func) ─────
+  simRunning = true;
+  simulationThread = std::thread(&Application::simulationThreadFunc, this);
+
   mainLoop();
+
+  // ── Tear down simulation thread ───────────────────────────────────────────
+  simRunning = false;
+  if (simulationThread.joinable()) simulationThread.join();
+
   cleanup();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Simulation thread  (Core 4+)
+//
+// Runs the live physics simulation independently of the render loop, allowing
+// simulation Hz and render Hz to be controlled separately via ImGui.
+//
+// Ownership of simState.physicsAccumulator, physicsSystem, spawnerSystem,
+// timelineSystem, and the network-send accumulator lives here.
+//
+// simMutex is held while any registry-writing work is done so that the render
+// thread (which reads transforms during recordCommandBuffer) cannot observe a
+// partially-updated state.
+// ─────────────────────────────────────────────────────────────────────────────
+void Application::simulationThreadFunc() {
+  ThreadAffinity::setCurrentThread(ThreadAffinity::SIMULATION_MASK, "Simulation");
+
+  using Clock = std::chrono::steady_clock;
+  auto lastTime = Clock::now();
+
+  while (simRunning) {
+    auto stepStart = Clock::now();
+    float dt = std::chrono::duration<float>(stepStart - lastTime).count();
+    lastTime = stepStart;
+    // Clamp to avoid a "spiral of death" after pauses or debug breaks
+    dt = std::min(dt, 0.1f);
+
+    bool didWork = false;
+    {
+      std::lock_guard<std::mutex> lock(simMutex);
+
+      // ── Skip: let the main loop handle baking, reverse-play, and baked scrub
+      const bool liveMode = !simState.isBaking
+                         && !simState.reversePlay
+                         && !simState.baked
+                         && registry != nullptr;
+
+      if (liveMode && (!simState.isPaused || simState.stepFrame)) {
+        bool snapshotsOn = interface ? interface->getSnapshotsEnabled() : false;
+
+        if (snapshotsOn && !timelineSystem->hasInitialSnapshot())
+          timelineSystem->saveInitialSnapshot();
+
+        // If the user scrubbed back into history then resumed, truncate the
+        // future portion of the timeline before adding new snapshots.
+        if (snapshotsOn && simState.historyIndex >= 0) {
+          int truncIdx = simState.historyIndex;
+          timelineSystem->truncateAfter(truncIdx);
+          if (truncIdx + 1 < static_cast<int>(simState.timeHistory.size()))
+            simState.timeHistory.erase(
+                simState.timeHistory.begin() + truncIdx + 1,
+                simState.timeHistory.end());
+          simState.historyIndex = -1;
+          simState.baked        = false;
+        }
+
+        simState.rewinding   = false;
+        simState.reversePlay = false;
+
+        if (spawnerSystem)
+          spawnerSystem->update(dt * simState.timeSpeed);
+
+        if (simState.stepFrame) {
+          // Single-step advance (triggered by the ImGui "Step" button)
+          simState.stepFrame = false;
+          physicsSystem->update(simState.stepSize);
+          simState.currentTime += simState.stepSize;
+
+          if (snapshotsOn) {
+            timelineSystem->saveSnapshot();
+            simState.timeHistory.push_back(simState.currentTime);
+            while (static_cast<int>(simState.timeHistory.size()) >
+                   timelineSystem->getSnapshotCount())
+              simState.timeHistory.erase(simState.timeHistory.begin());
+          }
+        } else {
+          // Fixed-timestep accumulator — keeps physics deterministic regardless
+          // of how fast the render loop or this thread happen to run.
+          simState.physicsAccumulator += dt * simState.timeSpeed;
+          while (simState.physicsAccumulator >= simState.stepSize) {
+            physicsSystem->update(simState.stepSize);
+            simState.physicsAccumulator -= simState.stepSize;
+            simState.currentTime        += simState.stepSize;
+
+            if (snapshotsOn) {
+              timelineSystem->saveSnapshot();
+              simState.timeHistory.push_back(simState.currentTime);
+              while (static_cast<int>(simState.timeHistory.size()) >
+                     timelineSystem->getSnapshotCount())
+                simState.timeHistory.erase(simState.timeHistory.begin());
+            }
+          }
+        }
+
+        // Network send: queue owned-object states for the network thread to
+        // transmit.  tickSend() is internally thread-safe (uses deferredMutex).
+        if (networkManager) {
+          networkSendAccumulator += dt;
+          const float sendInterval = 1.0f / networkManager->networkSendHz;
+          if (networkSendAccumulator >= sendInterval) {
+            networkSendAccumulator -= sendInterval;
+            networkManager->tickSend();
+          }
+        }
+
+        didWork = true;
+      }
+    } // unlock simMutex
+
+    // If no physics work was done this iteration, back off so we don't burn a
+    // core spinning while paused or during baking.
+    if (!didWork)
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    else
+      std::this_thread::yield(); // let the render thread in between steps
+  }
 }
 
 void Application::initWindow() {
@@ -543,126 +674,68 @@ while (!window->shouldClose()) {
     }
   }
 
-  if (simState.reversePlay && !simState.isPaused && snapshotsOn) {
-    int snapshotCount = timelineSystem->getSnapshotCount();
-    if (snapshotCount > 0) {
-      if (simState.historyIndex < 0)
-        simState.historyIndex = snapshotCount - 1;
+  // Reverse-play and baked-scrub modify the registry (timeline restore), so
+  // they must be protected against the simulation thread with simMutex.
+  // Live simulation has been moved to simulationThreadFunc() on Core 4+.
+  {
+    std::lock_guard<std::mutex> lock(simMutex);
+    if (simState.reversePlay && !simState.isPaused && snapshotsOn) {
+      int snapshotCount = timelineSystem->getSnapshotCount();
+      if (snapshotCount > 0) {
+        if (simState.historyIndex < 0)
+          simState.historyIndex = snapshotCount - 1;
 
-      float rewindSpeed = deltaTime * simState.timeSpeed;
-      simState.scrubAccumulator += rewindSpeed / simState.stepSize;
-      int steps = static_cast<int>(simState.scrubAccumulator);
-      simState.scrubAccumulator -= static_cast<float>(steps);
-
-      if (steps > 0) {
-        simState.historyIndex = glm::max(simState.historyIndex - steps, 0);
-        timelineSystem->restoreSnapshot(simState.historyIndex);
-
-        if (simState.historyIndex < static_cast<int>(simState.timeHistory.size()))
-          simState.currentTime = simState.timeHistory[simState.historyIndex];
-      }
-
-      if (simState.historyIndex <= 0) {
-        simState.reversePlay = false;
-        simState.isPaused = true;
-      }
-    }
-  } else if (simState.baked && snapshotsOn && (!simState.isPaused || simState.stepFrame)) {
-    int snapshotCount = timelineSystem->getSnapshotCount();
-    if (snapshotCount > 0) {
-      if (simState.historyIndex < 0) simState.historyIndex = 0;
-
-      if (simState.stepFrame) {
-        simState.historyIndex = glm::min(simState.historyIndex + 1,
-                                          snapshotCount - 1);
-      } else {
-        float playSpeed = deltaTime * simState.timeSpeed;
-        simState.scrubAccumulator += playSpeed / simState.stepSize;
+        float rewindSpeed = deltaTime * simState.timeSpeed;
+        simState.scrubAccumulator += rewindSpeed / simState.stepSize;
         int steps = static_cast<int>(simState.scrubAccumulator);
         simState.scrubAccumulator -= static_cast<float>(steps);
+
         if (steps > 0) {
-          simState.historyIndex = glm::min(simState.historyIndex + steps,
+          simState.historyIndex = glm::max(simState.historyIndex - steps, 0);
+          timelineSystem->restoreSnapshot(simState.historyIndex);
+
+          if (simState.historyIndex < static_cast<int>(simState.timeHistory.size()))
+            simState.currentTime = simState.timeHistory[simState.historyIndex];
+        }
+
+        if (simState.historyIndex <= 0) {
+          simState.reversePlay = false;
+          simState.isPaused = true;
+        }
+      }
+    } else if (simState.baked && snapshotsOn && (!simState.isPaused || simState.stepFrame)) {
+      int snapshotCount = timelineSystem->getSnapshotCount();
+      if (snapshotCount > 0) {
+        if (simState.historyIndex < 0) simState.historyIndex = 0;
+
+        if (simState.stepFrame) {
+          simState.historyIndex = glm::min(simState.historyIndex + 1,
                                             snapshotCount - 1);
-        }
-      }
-
-      timelineSystem->restoreSnapshot(simState.historyIndex);
-      if (simState.historyIndex < static_cast<int>(simState.timeHistory.size()))
-        simState.currentTime = simState.timeHistory[simState.historyIndex];
-
-      simState.stepFrame = false;
-      simState.rewinding = false;
-      simState.reversePlay = false;
-
-      if (simState.historyIndex >= snapshotCount - 1) {
-        simState.isPaused = true;
-      }
-    }
-  } else if (!simState.isPaused || simState.stepFrame) {
-
-    if (snapshotsOn && !timelineSystem->hasInitialSnapshot()) {
-      timelineSystem->saveInitialSnapshot();
-    }
-
-    if (snapshotsOn && simState.historyIndex >= 0) {
-      int truncIdx = simState.historyIndex;
-      timelineSystem->truncateAfter(truncIdx);
-      if (truncIdx + 1 < static_cast<int>(simState.timeHistory.size()))
-        simState.timeHistory.erase(
-            simState.timeHistory.begin() + truncIdx + 1,
-            simState.timeHistory.end());
-      simState.historyIndex = -1;
-      simState.baked = false;
-    }
-
-    simState.rewinding = false;
-    simState.reversePlay = false;
-
-    if (spawnerSystem)
-      spawnerSystem->update(deltaTime * simState.timeSpeed);
-
-    if (simState.stepFrame) {
-      simState.stepFrame = false;
-      physicsSystem->update(simState.stepSize);
-      simState.currentTime += simState.stepSize;
-
-      if (snapshotsOn) {
-        timelineSystem->saveSnapshot();
-        simState.timeHistory.push_back(simState.currentTime);
-
-        while (static_cast<int>(simState.timeHistory.size()) >
-               timelineSystem->getSnapshotCount()) {
-          simState.timeHistory.erase(simState.timeHistory.begin());
-        }
-      }
-    } else {
-      simState.physicsAccumulator += deltaTime * simState.timeSpeed;
-
-      while (simState.physicsAccumulator >= simState.stepSize) {
-        physicsSystem->update(simState.stepSize);
-        simState.physicsAccumulator -= simState.stepSize;
-        simState.currentTime += simState.stepSize;
-
-        if (snapshotsOn) {
-          timelineSystem->saveSnapshot();
-          simState.timeHistory.push_back(simState.currentTime);
-
-          while (static_cast<int>(simState.timeHistory.size()) >
-                 timelineSystem->getSnapshotCount()) {
-            simState.timeHistory.erase(simState.timeHistory.begin());
+        } else {
+          float playSpeed = deltaTime * simState.timeSpeed;
+          simState.scrubAccumulator += playSpeed / simState.stepSize;
+          int steps = static_cast<int>(simState.scrubAccumulator);
+          simState.scrubAccumulator -= static_cast<float>(steps);
+          if (steps > 0) {
+            simState.historyIndex = glm::min(simState.historyIndex + steps,
+                                              snapshotCount - 1);
           }
         }
-      }
-    }
 
-    if (networkManager) {
-      networkSendAccumulator += deltaTime;
-      const float sendInterval = 1.0f / networkManager->networkSendHz;
-      if (networkSendAccumulator >= sendInterval) {
-        networkSendAccumulator -= sendInterval;
-        networkManager->tickSend();
+        timelineSystem->restoreSnapshot(simState.historyIndex);
+        if (simState.historyIndex < static_cast<int>(simState.timeHistory.size()))
+          simState.currentTime = simState.timeHistory[simState.historyIndex];
+
+        simState.stepFrame = false;
+        simState.rewinding = false;
+        simState.reversePlay = false;
+
+        if (simState.historyIndex >= snapshotCount - 1) {
+          simState.isPaused = true;
+        }
       }
     }
+    // Live simulation is handled by simulationThreadFunc() running on Core 4+.
   }
   } // end !isBaking
 
@@ -780,9 +853,14 @@ void Application::drawFrame() {
   } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     throw std::runtime_error("Failed to acquire swap chain image!");
   vkResetFences(device, 1, &inFlightFences[currentFrame]);
-  updateUniformBuffer(currentFrame);
-  vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-  recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+  {
+    // Hold simMutex while reading registry data into the command buffer so the
+    // simulation thread cannot write new physics state at the same time.
+    std::lock_guard<std::mutex> lock(simMutex);
+    updateUniformBuffer(currentFrame);
+    vkResetCommandBuffer(commandBuffers[currentFrame], 0);
+    recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+  }
   VkSubmitInfo submitInfo{};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};

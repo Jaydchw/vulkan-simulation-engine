@@ -7,8 +7,11 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 #include "Rendering/MainPipeline.h"
@@ -189,9 +192,19 @@ class Application final {
   MeshID gizmoMeshID = INVALID_MESH_ID;
   MaterialID gizmoMaterialID = INVALID_MATERIAL_ID;
 
+  // ── Simulation thread (pinned to Core 4+) ────────────────────────────────
+  // Runs physicsSystem::update() independently of the render loop so that
+  // simulation Hz and render Hz can be set to different values via ImGui.
+  std::thread         simulationThread;
+  std::atomic<bool>   simRunning{false};
+  // Guards shared registry/simState access between the simulation thread
+  // (writes physics state) and the render thread (reads for draw calls).
+  std::mutex          simMutex;
+
   void initWindow();
   void initVulkan();
   void mainLoop();
+  void simulationThreadFunc();
   void cleanup();
 
   void recreateGraphicsPipeline();
