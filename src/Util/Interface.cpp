@@ -2,6 +2,7 @@
 
 #include <vulkan/vulkan.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -303,6 +304,10 @@ NetworkManager* networkManager) {
     }
     if (menuItem("Settings")) {
       renderSettingsMenu(simState);
+      ImGui::EndMenu();
+    }
+    if (menuItem("Cameras")) {
+      renderCamerasMenu(registry);
       ImGui::EndMenu();
     }
     if (menuItem("Network")) {
@@ -2025,6 +2030,87 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
     ImGui::SameLine(); ImGui::TextDisabled("UDP/45000 discovery + TCP/45001-45020 data");
     fieldLabel("Send rate");
     ImGui::SameLine(); ImGui::TextDisabled("%.0f Hz  (position + orientation, owned objects only)", nm->networkSendHz);
+  }
+}
+
+void Interface::renderCamerasMenu(Registry& registry) {
+  const auto& camerasMap = registry.allCameras();
+  const float s = currentScale;
+
+  if (camerasMap.empty()) {
+    ImGui::TextDisabled("No cameras in scene");
+    return;
+  }
+
+  std::vector<Entity> sorted;
+  sorted.reserve(camerasMap.size());
+  for (const auto& [e, _] : camerasMap) sorted.push_back(e);
+  std::sort(sorted.begin(), sorted.end());
+
+  ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.90f, 1.0f), "Scene Cameras");
+  ImGui::Separator();
+  ImGui::TextDisabled("Keys 1-9 switch cameras");
+  ImGui::Spacing();
+
+  int displayIndex = 0;
+  for (Entity entity : sorted) {
+    const NameComponent* nc = registry.getComponent<NameComponent>(entity);
+    const char* name = nc ? nc->name.c_str() : "Unnamed Camera";
+    const bool isActive = (displayIndex == activeCameraIdx);
+
+    if (isActive) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.85f, 0.55f, 1.0f));
+    char label[128];
+    if (displayIndex < 9)
+      snprintf(label, sizeof(label), "[%d] %s", displayIndex + 1, name);
+    else
+      snprintf(label, sizeof(label), "    %s", name);
+
+    if (ImGui::MenuItem(label, nullptr, isActive)) {
+      cameraSwitchTarget = displayIndex;
+      cameraSwitchPending = true;
+    }
+    if (isActive) ImGui::PopStyleColor();
+    displayIndex++;
+  }
+
+  // Settings for the active camera
+  if (activeCameraIdx >= 0 && activeCameraIdx < static_cast<int>(sorted.size())) {
+    Entity activeCamEntity = sorted[activeCameraIdx];
+    CameraComponent* cam = registry.getComponent<CameraComponent>(activeCamEntity);
+    const NameComponent* nc = registry.getComponent<NameComponent>(activeCamEntity);
+    const char* name = nc ? nc->name.c_str() : "Camera";
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(0.55f, 0.65f, 0.90f, 1.0f), "%s", name);
+    ImGui::Spacing();
+
+    if (cam) {
+      const float itemW = 200.0f * s;
+
+      // Type toggle
+      bool isPerspective = (cam->type == CameraType::Perspective);
+      if (ImGui::RadioButton("Perspective", isPerspective))  cam->type = CameraType::Perspective;
+      ImGui::SameLine();
+      if (ImGui::RadioButton("Orthographic", !isPerspective)) cam->type = CameraType::Orthographic;
+
+      ImGui::Spacing();
+
+      if (cam->type == CameraType::Perspective) {
+        ImGui::SetNextItemWidth(itemW);
+        ImGui::SliderFloat("FOV", &cam->fov, 5.0f, 170.0f, "%.1f deg");
+      } else {
+        ImGui::SetNextItemWidth(itemW);
+        ImGui::SliderFloat("Ortho Size", &cam->orthographicSize, 1.0f, 500.0f, "%.1f");
+      }
+
+      ImGui::SetNextItemWidth(itemW);
+      ImGui::SliderFloat("Near", &cam->nearPlane, 0.01f, 10.0f, "%.2f");
+
+      ImGui::SetNextItemWidth(itemW);
+      ImGui::SliderFloat("Far", &cam->farPlane, 100.0f, 100000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+    }
   }
 }
 

@@ -1,0 +1,233 @@
+BeginSettings
+  ClearColor = 0.06, 0.07, 0.10, 1.0
+  TimeSpeed = 1.0
+EndSettings
+
+# Five cameras demonstrating different types and angles
+BeginCamera
+  Name = Overview
+  Position = 0.0, 80.0, 130.0
+  Target = 0.0, 0.0, 0.0
+  FOV = 60.0
+  NearPlane = 0.1
+  FarPlane = 10000.0
+EndCamera
+
+BeginCamera
+  Name = Low Angle
+  Position = 0.0, 5.0, 60.0
+  Target = 0.0, 10.0, 0.0
+  FOV = 75.0
+  NearPlane = 0.1
+  FarPlane = 5000.0
+EndCamera
+
+BeginCamera
+  Name = Top Down
+  Position = 0.0, 150.0, 0.1
+  Target = 0.0, 0.0, 0.0
+  FOV = 50.0
+  NearPlane = 0.1
+  FarPlane = 10000.0
+EndCamera
+
+BeginCamera
+  Name = Side Left
+  Position = -100.0, 30.0, 0.0
+  Target = 0.0, 10.0, 0.0
+  FOV = 55.0
+  NearPlane = 0.1
+  FarPlane = 5000.0
+EndCamera
+
+BeginCamera
+  Name = Ortho Front
+  Position = 0.0, 20.0, 100.0
+  Target = 0.0, 20.0, 0.0
+  Type = Orthographic
+  OrthoSize = 40.0
+  NearPlane = 0.1
+  FarPlane = 5000.0
+EndCamera
+
+BeginCamera
+  Name = Ortho Top
+  Position = 0.0, 80.0, 0.1
+  Target = 0.0, 0.0, 0.0
+  Type = Orthographic
+  OrthoSize = 55.0
+  NearPlane = 0.1
+  FarPlane = 5000.0
+EndCamera
+
+BeginCamera
+  Name = Close Up
+  Position = 15.0, 15.0, 30.0
+  Target = 0.0, 10.0, 0.0
+  FOV = 35.0
+  NearPlane = 0.1
+  FarPlane = 2000.0
+EndCamera
+
+BeginTexture
+  Name = CheckerFloor
+  Type = checker
+  ColorA = 0.22, 0.22, 0.28
+  ColorB = 0.14, 0.14, 0.18
+  Size = 512
+  Divisions = 16
+EndTexture
+
+BeginMaterial
+  Name = FloorMat
+  AlbedoTexture = CheckerFloor
+  Roughness = 0.85
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = RedMat
+  AlbedoColor = 0.9, 0.15, 0.15
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = BlueMat
+  AlbedoColor = 0.15, 0.3, 0.9
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = GreenMat
+  AlbedoColor = 0.15, 0.85, 0.25
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = GoldMat
+  AlbedoColor = 0.95, 0.78, 0.1
+  Roughness = 0.2
+  Metallic = 0.8
+EndMaterial
+
+BeginMaterial
+  Name = WhiteMat
+  AlbedoColor = 0.92, 0.92, 0.92
+  Roughness = 0.2
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 80.0
+  Height = 80.0
+EndMesh
+
+BeginMesh
+  Name = Sphere
+  Type = sphere
+  Radius = 1.0
+  Segments = 32
+EndMesh
+
+BeginMesh
+  Name = BigSphere
+  Type = sphere
+  Radius = 3.0
+  Segments = 32
+EndMesh
+
+BeginMesh
+  Name = Box
+  Type = cube
+  Size = 2.0
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = FloorMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 40.0, 0.0, 40.0
+EndObject
+
+BeginObject
+  Name = Red Sphere
+  Position = -15.0, 20.0, 0.0
+  Mesh = Sphere
+  Material = RedMat
+  Physics = true
+  Restitution = 0.8
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Blue Sphere
+  Position = -5.0, 30.0, 5.0
+  Mesh = Sphere
+  Material = BlueMat
+  Physics = true
+  Restitution = 0.75
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Green Sphere
+  Position = 5.0, 25.0, -5.0
+  Mesh = Sphere
+  Material = GreenMat
+  Physics = true
+  Velocity = 3.0, 0.0, -2.0
+  Restitution = 0.7
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Gold Ball
+  Position = 15.0, 15.0, 0.0
+  Mesh = BigSphere
+  Material = GoldMat
+  Physics = true
+  Mass = 5.0
+  Restitution = 0.5
+  Collider = sphere
+  ColliderRadius = 3.0
+EndObject
+
+BeginObject
+  Name = White Box
+  Position = 0.0, 18.0, 10.0
+  Mesh = Box
+  Material = WhiteMat
+  Physics = true
+  Restitution = 0.4
+  Collider = box
+  ColliderHalfExtents = 1.0, 1.0, 1.0
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.3, -1.0, 0.4
+  Color = 1.0, 0.97, 0.90
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = -20.0, 25.0, 20.0
+  Color = 0.5, 0.6, 1.0
+  Intensity = 1.2
+  CastsShadows = false
+EndLight

@@ -28,20 +28,41 @@ MaterialManager::~MaterialManager() {
   }
 }
 
-void MaterialManager::init(VkDescriptorSetLayout descSetLayout,
-                           VkDescriptorPool descPool) {
-  Debug::log(
-      Debug::Category::MATERIALS,
-      "MaterialManager: Initializing with descriptor set layout and pool");
-
+void MaterialManager::init(VkDescriptorSetLayout descSetLayout) {
   descriptorSetLayout = descSetLayout;
-  descriptorPool = descPool;
+
+  const VkDevice device = renderDevice->getDevice();
+  std::array<VkDescriptorPoolSize, 2> poolSizes{};
+  poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  poolSizes[0].descriptorCount = 1000;
+  poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  poolSizes[1].descriptorCount = 7000;
+
+  VkDescriptorPoolCreateInfo poolInfo{};
+  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+  poolInfo.pPoolSizes = poolSizes.data();
+  poolInfo.maxSets = 1000;
+
+  if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create material descriptor pool!");
 
   createDefaultMaterial();
+}
 
-  Debug::log(Debug::Category::MATERIALS,
-             "MaterialManager: Initialized with default material ID: ",
-             defaultMaterialID);
+void MaterialManager::resetForNewScene() {
+  const VkDevice device = renderDevice->getDevice();
+  for (auto& mat : materials) {
+    VkBuffer buf = mat->getPropertiesBuffer();
+    VkDeviceMemory mem = mat->getPropertiesBufferMemory();
+    if (buf != VK_NULL_HANDLE) vkDestroyBuffer(device, buf, nullptr);
+    if (mem != VK_NULL_HANDLE) vkFreeMemory(device, mem, nullptr);
+  }
+  materials.clear();
+  mtlFilepathToID.clear();
+  materialNameToID.clear();
+  vkResetDescriptorPool(device, descriptorPool, 0);
+  createDefaultMaterial();
 }
 
 MaterialID MaterialManager::registerMaterial(Material* material) {
@@ -180,10 +201,18 @@ void MaterialManager::updateMaterialProperties(
 }
 
 void MaterialManager::cleanup() {
-  Debug::log(Debug::Category::MATERIALS, "MaterialManager: Cleaning up ",
-             materials.size(), " materials");
+  const VkDevice device = renderDevice->getDevice();
+  for (auto& mat : materials) {
+    VkBuffer buf = mat->getPropertiesBuffer();
+    VkDeviceMemory mem = mat->getPropertiesBufferMemory();
+    if (buf != VK_NULL_HANDLE) vkDestroyBuffer(device, buf, nullptr);
+    if (mem != VK_NULL_HANDLE) vkFreeMemory(device, mem, nullptr);
+  }
   materials.clear();
-  Debug::log(Debug::Category::MATERIALS, "MaterialManager: Cleanup complete");
+  if (descriptorPool != VK_NULL_HANDLE) {
+    vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+    descriptorPool = VK_NULL_HANDLE;
+  }
 }
 
 void MaterialManager::createDescriptorSet(Material* material) const {

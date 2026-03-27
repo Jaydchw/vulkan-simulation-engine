@@ -32,7 +32,7 @@ CONTROLS
   Right Click   Orbit Camera (Orbit)
   Scroll        Zoom / Speed
   Ctrl+Arrows   Pan Camera
-  1 / 2         Camera Presets
+  1-9           Switch Camera
 )" << std::endl;
 }
 

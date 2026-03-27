@@ -142,6 +142,43 @@ BeginObject
   ColliderRadius = 1.0
 EndObject
 
+BeginCamera
+  Name = Main View
+  Position = 30.0, 35.0, 80.0
+  Target = 0.0, 8.0, 0.0
+  FOV = 60.0
+  NearPlane = 0.1
+  FarPlane = 5000.0
+EndCamera
+
+BeginCamera
+  Name = Top Down
+  Position = 0.0, 120.0, 0.1
+  Target = 0.0, 0.0, 0.0
+  FOV = 55.0
+  NearPlane = 0.1
+  FarPlane = 5000.0
+EndCamera
+
+BeginCamera
+  Name = Side View
+  Position = 80.0, 20.0, 0.0
+  Target = 0.0, 10.0, 0.0
+  FOV = 50.0
+  NearPlane = 0.1
+  FarPlane = 5000.0
+EndCamera
+
+BeginCamera
+  Name = Ortho Top
+  Position = 0.0, 100.0, 0.1
+  Target = 0.0, 0.0, 0.0
+  Type = Orthographic
+  OrthoSize = 45.0
+  NearPlane = 0.1
+  FarPlane = 5000.0
+EndCamera
+
 BeginLight
   Name = Sun
   Type = sun

@@ -129,6 +129,14 @@ class Interface {
   void setCurrentWorldPath(const std::string& path);
   void notifyBakeSaved();
 
+  void setActiveCameraIndex(int idx) { activeCameraIdx = idx; }
+  bool pollCameraSwitch(int& outIdx) {
+    if (!cameraSwitchPending) return false;
+    outIdx = cameraSwitchTarget;
+    cameraSwitchPending = false;
+    return true;
+  }
+
  private:
   GLFWwindow* window;
   VkInstance instance;
@@ -184,4 +192,9 @@ class Interface {
   void renderPostProcessingMenu(PostProcessing* postProcessing);
   void renderSettingsMenu(SimulationState& simState);
   void renderNetworkMenu(NetworkManager* networkManager, SimulationState& simState);
+  void renderCamerasMenu(Registry& registry);
+
+  int activeCameraIdx = 0;
+  bool cameraSwitchPending = false;
+  int cameraSwitchTarget = 0;
 };

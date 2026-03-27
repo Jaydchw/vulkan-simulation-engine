@@ -25,7 +25,6 @@
 #include "Spawning/SpawnerSystem.h"
 #include "Timeline/TimelineSystem.h"
 #include "Network/NetworkManager.h"
-#include "Util/Camera.h"
 #include "Util/Input.h"
 #include "Util/Interface.h"
 #include "Util/WorldParser.h"
@@ -74,7 +73,7 @@ class Application final {
   TextureManager* getTextureManager() const { return textureManager.get(); }
   LightManager* getLightManager() const { return lightManager.get(); }
 
-  void setCameraPreset(int presetIndex);
+  void switchToCamera(int index);
   void resetApplication();
 
  private:
@@ -93,7 +92,25 @@ class Application final {
   std::vector<VkFence> inFlightFences;
 
   Input input;
-  Camera camera;
+
+  enum class CameraMode { ORBIT, FPS };
+  struct CameraControllerState {
+    CameraMode mode = CameraMode::ORBIT;
+    glm::vec3 orbitPivot{0.0f, 0.0f, 0.0f};
+    glm::vec3 lastOrbitPosition{0.0f, 100.0f, 300.0f};
+    float orbitRadius = 350.0f;
+    float orbitTheta = 0.0f;
+    float orbitPhi = 1.5f;
+    glm::vec3 fpsPosition{0.0f, 100.0f, 300.0f};
+    float fpsYaw = -90.0f;
+    float fpsPitch = 0.0f;
+    float fpsSpeed = 50.0f;
+  };
+  CameraControllerState camCtrl;
+  Entity activeCamera = INVALID_ENTITY;
+  int activeCameraIndex = 0;
+  std::vector<Entity> scenecameras;
+
   VkExtent2D swapChainExtent{0, 0};
 
   std::unique_ptr<Window> window;
@@ -199,6 +216,11 @@ class Application final {
                                   int mods);
   static void scrollCallback(GLFWwindow* window, double xoffset,
                              double yoffset);
+
+  void initCamerasFromRegistry();
+  void updateCameraController(float deltaTime);
+  glm::mat4 getActiveCameraViewMatrix() const;
+  glm::vec3 getActiveCameraPosition() const;
 
   void createDefaultPipelineConfig(PipelineConfigInfo& configInfo) const;
   void setupRenderingCreateInfo(

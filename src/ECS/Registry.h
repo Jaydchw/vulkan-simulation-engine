@@ -24,6 +24,7 @@ class Registry final {
     colliders.erase(entity);
     physicsObjects.erase(entity);
     spawners.erase(entity);
+    cameras.erase(entity);
   }
 
   // Creates an entity with a specific ID (used when replicating remote spawns).
@@ -78,6 +79,9 @@ class Registry final {
   std::unordered_map<Entity, SpawnerComponent>& allSpawnersMut() {
     return spawners;
   }
+  const std::unordered_map<Entity, CameraComponent>& allCameras() const {
+    return cameras;
+  }
   jphys::PhysicsObject& getPhysicsObject(Entity entity) {
     return physicsObjects[entity];
   }
@@ -110,6 +114,7 @@ class Registry final {
   std::unordered_map<Entity, ColliderComponent> colliders;
   std::unordered_map<Entity, jphys::PhysicsObject> physicsObjects;
   std::unordered_map<Entity, SpawnerComponent> spawners;
+  std::unordered_map<Entity, CameraComponent> cameras;
 };
 
 template <>
@@ -300,4 +305,23 @@ inline const SpawnerComponent* Registry::getComponent<SpawnerComponent>(
 template <>
 inline bool Registry::hasComponent<SpawnerComponent>(Entity entity) const {
   return spawners.count(entity) > 0;
+}
+
+template <>
+inline void Registry::addComponent<CameraComponent>(Entity entity, const CameraComponent& c) {
+  cameras[entity] = c;
+}
+template <>
+inline CameraComponent* Registry::getComponent<CameraComponent>(Entity entity) {
+  auto it = cameras.find(entity);
+  return it != cameras.end() ? &it->second : nullptr;
+}
+template <>
+inline const CameraComponent* Registry::getComponent<CameraComponent>(Entity entity) const {
+  auto it = cameras.find(entity);
+  return it != cameras.end() ? &it->second : nullptr;
+}
+template <>
+inline bool Registry::hasComponent<CameraComponent>(Entity entity) const {
+  return cameras.count(entity) > 0;
 }

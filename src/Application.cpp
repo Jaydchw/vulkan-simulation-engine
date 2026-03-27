@@ -1,11 +1,14 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include "Application.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <limits>
+
+#include <glm/gtc/constants.hpp>
 
 #include "Util/Debug.h"
 #include "Util/RenderUtils.h"
@@ -53,6 +56,7 @@ vkDeviceWaitIdle(device);
 
 if (interface) interface->clearSelection();
 
+  materialManager->resetForNewScene();
   lightManager->resetForNewScene();
 
   ownedRegistry = std::make_unique<Registry>();
@@ -93,6 +97,8 @@ if (interface) interface->clearSelection();
   if (interface) {
     interface->setCurrentWorldPath(filepath);
   }
+
+  initCamerasFromRegistry();
 
   Debug::log(Debug::Category::MAIN, "Application: Loaded world: ", filepath);
 }
@@ -151,7 +157,7 @@ void Application::initVulkan() {
   gizmoMeshID = meshManager->createSphere(0.3f, 16);
   lightManager = std::make_unique<LightManager>(renderDevice.get());
   descriptorPool = Vulkan::createDescriptorPool(device, MAX_FRAMES_IN_FLIGHT);
-  materialManager->init(materialDescriptorSetLayout, descriptorPool);
+  materialManager->init(materialDescriptorSetLayout);
   gizmoMaterialID = materialManager->getDefaultMaterial();
   lightManager->init();
   mainPipeline =
@@ -199,7 +205,6 @@ void Application::initVulkan() {
 }
 
 void Application::mainLoop() {
-setCameraPreset(1);
 while (!window->shouldClose()) {
   window->pollEvents();
   const float currentTime = static_cast<float>(glfwGetTime());
@@ -683,11 +688,20 @@ while (!window->shouldClose()) {
         }
       }
 
+      int camSwitch = -1;
+      if (interface->pollCameraSwitch(camSwitch)) {
+        switchToCamera(camSwitch);
+      }
+      interface->setActiveCameraIndex(activeCameraIndex);
+
       if (!ImGui::GetIO().WantCaptureMouse &&
           !ImGui::GetIO().WantCaptureKeyboard) {
         input.update();
-        camera.update(input, deltaTime);
-        camera.setCursorMode(window->getHandle());
+        updateCameraController(deltaTime);
+        if (camCtrl.mode == CameraMode::FPS)
+          glfwSetInputMode(window->getHandle(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        else
+          glfwSetInputMode(window->getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
       } else {
         glfwSetInputMode(window->getHandle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
       }
@@ -867,13 +881,20 @@ if (hasEntities) {
 lightManager->updateAllShadowMatrices(sceneCenter, sceneRadius);
 lightManager->updateLightBuffer();
   UniformBufferObject ubo{};
-  ubo.view = camera.getViewMatrix();
-  ubo.proj = glm::perspective(
-      glm::radians(45.0f),
-      swapChainExtent.width / static_cast<float>(swapChainExtent.height), 0.1f,
-      50000.0f);
+  ubo.view = getActiveCameraViewMatrix();
+  const float aspect = swapChainExtent.width / static_cast<float>(swapChainExtent.height);
+  const CameraComponent* cam = (activeCamera != INVALID_ENTITY && registry)
+      ? registry->getComponent<CameraComponent>(activeCamera) : nullptr;
+  if (cam && cam->type == CameraType::Orthographic) {
+    float h = cam->orthographicSize;
+    ubo.proj = glm::ortho(-h * aspect, h * aspect, -h, h, cam->nearPlane, cam->farPlane);
+  } else {
+    ubo.proj = glm::perspective(
+        glm::radians(cam ? cam->fov : 45.0f), aspect,
+        cam ? cam->nearPlane : 0.1f, cam ? cam->farPlane : 50000.0f);
+  }
   ubo.proj[1][1] *= -1;
-  ubo.eyePos = camera.getPosition();
+  ubo.eyePos = getActiveCameraPosition();
   ubo.time = simState.currentTime;
   std::vector<ShadowMapData> shadowMaps;
   lightManager->getShadowSystem()->getShadowMaps(shadowMaps);
@@ -1011,28 +1032,217 @@ void Application::keyCallback(GLFWwindow* win, int key, int scancode,
         }
         break;
       }
-      case GLFW_KEY_1:
-        app->setCameraPreset(1);
-        break;
-      case GLFW_KEY_2:
-        app->setCameraPreset(2);
-        break;
+      case GLFW_KEY_1: app->switchToCamera(0); break;
+      case GLFW_KEY_2: app->switchToCamera(1); break;
+      case GLFW_KEY_3: app->switchToCamera(2); break;
+      case GLFW_KEY_4: app->switchToCamera(3); break;
+      case GLFW_KEY_5: app->switchToCamera(4); break;
+      case GLFW_KEY_6: app->switchToCamera(5); break;
+      case GLFW_KEY_7: app->switchToCamera(6); break;
+      case GLFW_KEY_8: app->switchToCamera(7); break;
+      case GLFW_KEY_9: app->switchToCamera(8); break;
       default:
         break;
     }
   }
 }
 
-void Application::setCameraPreset(int presetIndex) {
-  if (presetIndex == 1)
-    camera.setPose(glm::vec3(0.0f, 50.0f, 100.0f), glm::vec3(0.0f, 0.0f, 0.0f));
-  else if (presetIndex == 2)
-    camera.setPose(glm::vec3(50.0f, 30.0f, 50.0f),
-                   glm::vec3(0.0f, 10.0f, 0.0f));
+void Application::initCamerasFromRegistry() {
+  scenecameras.clear();
+  if (!registry) return;
+
+  for (const auto& [entity, _] : registry->allCameras())
+    scenecameras.push_back(entity);
+  std::sort(scenecameras.begin(), scenecameras.end());
+
+  if (scenecameras.empty()) {
+    Entity cam = registry->createEntity();
+    registry->addComponent<NameComponent>(cam, {"Default Camera"});
+
+    const glm::vec3 pos(30.0f, 35.0f, 80.0f);
+    const glm::vec3 target(0.0f, 8.0f, 0.0f);
+    const glm::vec3 fwd = glm::normalize(target - pos);
+    const glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0,1,0)));
+    const glm::vec3 up = glm::cross(right, fwd);
+
+    TransformComponent t;
+    t.position = pos;
+    t.rotation = glm::quat_cast(glm::mat3(right, up, -fwd));
+    registry->addComponent<TransformComponent>(cam, t);
+
+    CameraComponent camComp;
+    camComp.fov = 60.0f;
+    camComp.nearPlane = 0.1f;
+    camComp.farPlane = 5000.0f;
+    registry->addComponent<CameraComponent>(cam, camComp);
+
+    scenecameras.push_back(cam);
+  }
+
+  activeCameraIndex = 0;
+  activeCamera = scenecameras[0];
+
+  auto* t = registry->getComponent<TransformComponent>(activeCamera);
+  if (t) {
+    glm::vec3 fwd = glm::normalize(t->rotation * glm::vec3(0,0,-1));
+    camCtrl.fpsPosition = t->position;
+    camCtrl.fpsYaw = glm::degrees(atan2(fwd.z, fwd.x));
+    camCtrl.fpsPitch = glm::degrees(asin(glm::clamp(fwd.y, -1.0f, 1.0f)));
+    float radius = glm::max(glm::length(t->position), 50.0f);
+    camCtrl.orbitRadius = radius;
+    camCtrl.orbitPivot = t->position + fwd * radius;
+    glm::vec3 toPos = glm::normalize(t->position - camCtrl.orbitPivot);
+    camCtrl.orbitPhi = acos(glm::clamp(toPos.y, -1.0f, 1.0f));
+    camCtrl.orbitTheta = atan2(toPos.z, toPos.x);
+    camCtrl.lastOrbitPosition = t->position;
+  } else {
+    camCtrl.orbitPivot = glm::vec3(0,0,0);
+    camCtrl.orbitRadius = 350.0f;
+    camCtrl.fpsPosition = glm::vec3(0, 50, 100);
+    camCtrl.lastOrbitPosition = glm::vec3(0, 50, 100);
+  }
+  camCtrl.mode = CameraMode::ORBIT;
+}
+
+void Application::switchToCamera(int index) {
+  if (scenecameras.empty() || !registry) return;
+  index = glm::clamp(index, 0, static_cast<int>(scenecameras.size()) - 1);
+  activeCameraIndex = index;
+  activeCamera = scenecameras[index];
+
+  auto* t = registry->getComponent<TransformComponent>(activeCamera);
+  if (!t) return;
+  glm::vec3 fwd = glm::normalize(t->rotation * glm::vec3(0,0,-1));
+  camCtrl.fpsPosition = t->position;
+  camCtrl.fpsYaw = glm::degrees(atan2(fwd.z, fwd.x));
+  camCtrl.fpsPitch = glm::degrees(asin(glm::clamp(fwd.y, -1.0f, 1.0f)));
+  float radius = glm::max(glm::length(t->position), 50.0f);
+  camCtrl.orbitRadius = radius;
+  camCtrl.orbitPivot = t->position + fwd * radius;
+  glm::vec3 toPos = glm::normalize(t->position - camCtrl.orbitPivot);
+  camCtrl.orbitPhi = acos(glm::clamp(toPos.y, -1.0f, 1.0f));
+  camCtrl.orbitTheta = atan2(toPos.z, toPos.x);
+  camCtrl.lastOrbitPosition = t->position;
+  camCtrl.mode = CameraMode::ORBIT;
+}
+
+void Application::updateCameraController(float deltaTime) {
+  if (activeCamera == INVALID_ENTITY || !registry) return;
+  auto* transform = registry->getComponent<TransformComponent>(activeCamera);
+  if (!transform) return;
+
+  auto fpsForward = [](float yaw, float pitch) -> glm::vec3 {
+    return glm::normalize(glm::vec3(
+        cos(glm::radians(yaw)) * cos(glm::radians(pitch)),
+        sin(glm::radians(pitch)),
+        sin(glm::radians(yaw)) * cos(glm::radians(pitch))));
+  };
+
+  if (input.wasKeyJustPressed(GLFW_KEY_ENTER)) {
+    if (camCtrl.mode == CameraMode::ORBIT) {
+      camCtrl.mode = CameraMode::FPS;
+      camCtrl.fpsPosition = camCtrl.lastOrbitPosition;
+      glm::vec3 dir = glm::normalize(camCtrl.orbitPivot - camCtrl.lastOrbitPosition);
+      camCtrl.fpsYaw = glm::degrees(atan2(dir.z, dir.x));
+      camCtrl.fpsPitch = glm::degrees(asin(glm::clamp(dir.y, -1.0f, 1.0f)));
+    } else {
+      camCtrl.mode = CameraMode::ORBIT;
+      glm::vec3 offset = camCtrl.fpsPosition - camCtrl.orbitPivot;
+      camCtrl.orbitRadius = glm::length(offset);
+      if (camCtrl.orbitRadius > 0.001f) {
+        glm::vec3 n = offset / camCtrl.orbitRadius;
+        camCtrl.orbitPhi = acos(glm::clamp(n.y, -1.0f, 1.0f));
+        camCtrl.orbitTheta = atan2(n.z, n.x);
+      }
+    }
+  }
+
+  const bool ctrl = input.isKeyPressed(GLFW_KEY_LEFT_CONTROL) || input.isKeyPressed(GLFW_KEY_RIGHT_CONTROL);
+  if (ctrl) {
+    glm::vec3 fwd = fpsForward(camCtrl.fpsYaw, camCtrl.fpsPitch);
+    glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0,1,0)));
+    glm::vec3 movement(0);
+    if (input.isKeyPressed(GLFW_KEY_UP)) movement += fwd;
+    if (input.isKeyPressed(GLFW_KEY_DOWN)) movement -= fwd;
+    if (input.isKeyPressed(GLFW_KEY_LEFT)) movement -= right;
+    if (input.isKeyPressed(GLFW_KEY_RIGHT)) movement += right;
+    if (input.isKeyPressed(GLFW_KEY_PAGE_UP)) movement.y += 1;
+    if (input.isKeyPressed(GLFW_KEY_PAGE_DOWN)) movement.y -= 1;
+    if (glm::length(movement) > 0) {
+      glm::vec3 delta = glm::normalize(movement) * (camCtrl.fpsSpeed * deltaTime);
+      camCtrl.fpsPosition += delta;
+      if (camCtrl.mode == CameraMode::ORBIT) camCtrl.orbitPivot += delta;
+    }
+  } else {
+    const float rotSpeed = 2.0f * deltaTime;
+    float dYaw = 0, dPitch = 0;
+    if (input.isKeyPressed(GLFW_KEY_LEFT)) dYaw -= rotSpeed;
+    if (input.isKeyPressed(GLFW_KEY_RIGHT)) dYaw += rotSpeed;
+    if (input.isKeyPressed(GLFW_KEY_UP)) dPitch += rotSpeed;
+    if (input.isKeyPressed(GLFW_KEY_DOWN)) dPitch -= rotSpeed;
+    if (std::abs(dYaw) > 0 || std::abs(dPitch) > 0) {
+      if (camCtrl.mode == CameraMode::FPS) {
+        camCtrl.fpsYaw += glm::degrees(dYaw) * 50.0f * deltaTime;
+        camCtrl.fpsPitch = glm::clamp(camCtrl.fpsPitch + glm::degrees(dPitch) * 50.0f * deltaTime, -89.0f, 89.0f);
+      } else {
+        camCtrl.orbitTheta += dYaw * 2.0f;
+        camCtrl.orbitPhi = glm::clamp(camCtrl.orbitPhi - dPitch * 2.0f, 0.1f, glm::pi<float>() - 0.1f);
+      }
+    }
+  }
+
+  if (camCtrl.mode == CameraMode::ORBIT) {
+    double dx = 0, dy = 0;
+    input.getMouseDelta(dx, dy);
+    if (input.isMouseButtonPressed(GLFW_MOUSE_BUTTON_RIGHT)) {
+      camCtrl.orbitTheta -= static_cast<float>(dx) * 0.005f;
+      camCtrl.orbitPhi = glm::clamp(camCtrl.orbitPhi + static_cast<float>(dy) * 0.005f, 0.1f, glm::pi<float>() - 0.1f);
+    }
+    const double scroll = input.getScrollDelta();
+    if (std::abs(scroll) > 0) camCtrl.orbitRadius -= static_cast<float>(scroll) * 5.0f;
+
+    const float x = camCtrl.orbitRadius * sin(camCtrl.orbitPhi) * cos(camCtrl.orbitTheta);
+    const float y = camCtrl.orbitRadius * cos(camCtrl.orbitPhi);
+    const float z = camCtrl.orbitRadius * sin(camCtrl.orbitPhi) * sin(camCtrl.orbitTheta);
+    camCtrl.lastOrbitPosition = camCtrl.orbitPivot + glm::vec3(x, y, z);
+    transform->position = camCtrl.lastOrbitPosition;
+  } else {
+    double dx = 0, dy = 0;
+    input.getMouseDelta(dx, dy);
+    camCtrl.fpsYaw += static_cast<float>(dx) * 0.1f;
+    camCtrl.fpsPitch = glm::clamp(camCtrl.fpsPitch - static_cast<float>(dy) * 0.1f, -89.0f, 89.0f);
+    const double scroll = input.getScrollDelta();
+    if (std::abs(scroll) > 0) camCtrl.fpsSpeed = glm::max(1.0f, camCtrl.fpsSpeed + static_cast<float>(scroll) * 2.0f);
+
+    glm::vec3 fwd = fpsForward(camCtrl.fpsYaw, camCtrl.fpsPitch);
+    glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0,1,0)));
+    const float spd = camCtrl.fpsSpeed * deltaTime;
+    if (input.isKeyPressed(GLFW_KEY_W)) camCtrl.fpsPosition += fwd * spd;
+    if (input.isKeyPressed(GLFW_KEY_S)) camCtrl.fpsPosition -= fwd * spd;
+    if (input.isKeyPressed(GLFW_KEY_A)) camCtrl.fpsPosition -= right * spd;
+    if (input.isKeyPressed(GLFW_KEY_D)) camCtrl.fpsPosition += right * spd;
+    if (input.isKeyPressed(GLFW_KEY_SPACE)) camCtrl.fpsPosition.y += spd;
+    if (input.isKeyPressed(GLFW_KEY_LEFT_SHIFT) || input.isKeyPressed(GLFW_KEY_RIGHT_SHIFT)) camCtrl.fpsPosition.y -= spd;
+    transform->position = camCtrl.fpsPosition;
+  }
+}
+
+glm::mat4 Application::getActiveCameraViewMatrix() const {
+  if (camCtrl.mode == CameraMode::ORBIT)
+    return glm::lookAt(camCtrl.lastOrbitPosition, camCtrl.orbitPivot, glm::vec3(0,1,0));
+  const glm::vec3 fwd = glm::normalize(glm::vec3(
+      cos(glm::radians(camCtrl.fpsYaw)) * cos(glm::radians(camCtrl.fpsPitch)),
+      sin(glm::radians(camCtrl.fpsPitch)),
+      sin(glm::radians(camCtrl.fpsYaw)) * cos(glm::radians(camCtrl.fpsPitch))));
+  return glm::lookAt(camCtrl.fpsPosition, camCtrl.fpsPosition + fwd, glm::vec3(0,1,0));
+}
+
+glm::vec3 Application::getActiveCameraPosition() const {
+  return (camCtrl.mode == CameraMode::ORBIT) ? camCtrl.lastOrbitPosition : camCtrl.fpsPosition;
 }
 
 void Application::resetApplication() {
-  setCameraPreset(1);
+  if (!scenecameras.empty()) switchToCamera(0);
   simState.currentTime = 0.0f;
   simState.timeHistory.clear();
   simState.historyIndex = -1;

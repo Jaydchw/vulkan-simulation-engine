@@ -15,7 +15,8 @@ class MaterialManager final {
   MaterialManager(const MaterialManager&) = delete;
   MaterialManager& operator=(const MaterialManager&) = delete;
 
-  void init(VkDescriptorSetLayout descSetLayout, VkDescriptorPool descPool);
+  void init(VkDescriptorSetLayout descSetLayout);
+  void resetForNewScene();
 
   MaterialID registerMaterial(Material* material);
   MaterialID registerMaterial(const MaterialBuilder& builder);

@@ -566,6 +566,60 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
       builder.build(registry);
       continue;
     }
+
+    if (line == "BeginCamera") {
+      std::string camName = "Camera";
+      glm::vec3 position(0.0f, 50.0f, 100.0f);
+      glm::vec3 target(0.0f, 0.0f, 0.0f);
+      bool hasTarget = false;
+      CameraComponent cam;
+
+      while (std::getline(file, line)) {
+        lineNum++;
+        line = trim(line);
+        if (line.empty() || line[0] == '#') continue;
+        if (line == "EndCamera") break;
+
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = trim(line.substr(0, eq));
+        std::string val = trim(line.substr(eq + 1));
+
+        if (key == "Name")             camName = val;
+        else if (key == "Position")    position = parseVec3(val);
+        else if (key == "Target")    { target = parseVec3(val); hasTarget = true; }
+        else if (key == "FOV")         cam.fov = parseFloat(val);
+        else if (key == "NearPlane")   cam.nearPlane = parseFloat(val);
+        else if (key == "FarPlane")    cam.farPlane = parseFloat(val);
+        else if (key == "OrthoSize")   cam.orthographicSize = parseFloat(val);
+        else if (key == "Type") {
+          if (val == "orthographic" || val == "Orthographic")
+            cam.type = CameraType::Orthographic;
+          else
+            cam.type = CameraType::Perspective;
+        }
+      }
+
+      Entity camEntity = registry.createEntity();
+      registry.addComponent<NameComponent>(camEntity, {camName});
+
+      TransformComponent t;
+      t.position = position;
+      t.scale = glm::vec3(1.0f);
+      if (hasTarget) {
+        glm::vec3 fwd = glm::normalize(target - position);
+        glm::vec3 up(0, 1, 0);
+        if (std::abs(glm::dot(fwd, up)) > 0.999f) up = glm::vec3(0, 0, 1);
+        glm::vec3 right = glm::normalize(glm::cross(fwd, up));
+        glm::vec3 newUp = glm::cross(right, fwd);
+        t.rotation = glm::quat_cast(glm::mat3(right, newUp, -fwd));
+      }
+      registry.addComponent<TransformComponent>(camEntity, t);
+      registry.addComponent<CameraComponent>(camEntity, cam);
+
+      Debug::log(Debug::Category::MAIN, "WorldParser: Created camera '", camName, "'");
+      continue;
+    }
   }
 
   Debug::log(Debug::Category::MAIN, "WorldParser: Finished loading world: ",

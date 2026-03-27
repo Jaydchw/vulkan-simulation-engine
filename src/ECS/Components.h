@@ -93,6 +93,16 @@ struct SpawnTemplate {
   std::string namePrefix = "Spawned";
 };
 
+enum class CameraType { Perspective, Orthographic };
+
+struct CameraComponent {
+  CameraType type = CameraType::Perspective;
+  float fov = 45.0f;
+  float nearPlane = 0.1f;
+  float farPlane = 50000.0f;
+  float orthographicSize = 50.0f;
+};
+
 struct SpawnerComponent {
   std::vector<SpawnTemplate> templates;
 
