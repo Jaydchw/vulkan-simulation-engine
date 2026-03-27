@@ -289,11 +289,11 @@ int NetworkManager::getTotalManagedCount() const {
 }
 
 void NetworkManager::networkThreadFunc() {
-  DWORD lastHelloMs = GetTickCount();
-  constexpr DWORD HELLO_INTERVAL_MS = 1000;
+  ULONGLONG lastHelloMs = GetTickCount64();
+  constexpr ULONGLONG HELLO_INTERVAL_MS = 1000;
 
   while (running) {
-    DWORD now = GetTickCount();
+    ULONGLONG now = GetTickCount64();
     if (now - lastHelloMs >= HELLO_INTERVAL_MS) {
       sendUDPHello();
       lastHelloMs = now;
@@ -518,9 +518,10 @@ void NetworkManager::connectToPeer(const std::string& ip, uint16_t port) {
 }
 
 void NetworkManager::receiveFromPeer(PeerInfo& peer) {
-  // Read all available bytes into the peer's accumulation buffer
-  uint8_t tmp[65536];
-  int r = recv(peer.socket, reinterpret_cast<char*>(tmp), sizeof(tmp), 0);
+  // Read all available bytes into the peer's accumulation buffer.
+  // Heap-allocated to avoid a large (65 KB) stack frame.
+  std::vector<uint8_t> tmp(65536);
+  int r = recv(peer.socket, reinterpret_cast<char*>(tmp.data()), static_cast<int>(tmp.size()), 0);
   if (r == 0 || (r == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
     closesocket(peer.socket);
     peer.socket = INVALID_SOCKET;
@@ -532,7 +533,7 @@ void NetworkManager::receiveFromPeer(PeerInfo& peer) {
   }
   if (r > 0) {
     peer.bytesReceived += static_cast<uint64_t>(r);
-    peer.recvBuf.insert(peer.recvBuf.end(), tmp, tmp + r);
+    peer.recvBuf.insert(peer.recvBuf.end(), tmp.data(), tmp.data() + r);
   }
 
   // Process every complete packet in the buffer
@@ -575,6 +576,9 @@ void NetworkManager::receiveFromPeer(PeerInfo& peer) {
       case PacketType::SIM_STATE:
         handleSimState(payload);
         break;
+      case PacketType::SPAWN_ENTITY:
+        handleSpawnEntity(payload);
+        break;
       case PacketType::PING: {
         TCPHeader pong{};
         pong.type = static_cast<uint8_t>(PacketType::PONG);
@@ -598,10 +602,10 @@ void NetworkManager::sendHandshake(SOCKET s) {
   hdr.type = static_cast<uint8_t>(PacketType::HANDSHAKE);
   hdr.payloadSize = sizeof(hs);
 
-  uint8_t buf[sizeof(hdr) + sizeof(hs)];
-  std::memcpy(buf, &hdr, sizeof(hdr));
-  std::memcpy(buf + sizeof(hdr), &hs, sizeof(hs));
-  send(s, reinterpret_cast<const char*>(buf), sizeof(buf), 0);
+  std::vector<uint8_t> buf(sizeof(hdr) + sizeof(hs));
+  std::memcpy(buf.data(), &hdr, sizeof(hdr));
+  std::memcpy(buf.data() + sizeof(hdr), &hs, sizeof(hs));
+  send(s, reinterpret_cast<const char*>(buf.data()), static_cast<int>(buf.size()), 0);
 }
 
 void NetworkManager::handleHandshake(PeerInfo& peer,
@@ -1017,4 +1021,82 @@ std::string NetworkManager::getLocalIPAddress() {
   }
   freeaddrinfo(result);
   return best;
+}
+
+void NetworkManager::broadcastSpawnEntity(Entity e) {
+  if (!running || !registry) return;
+
+  const auto* transform = registry->getComponent<TransformComponent>(e);
+  const auto* phys      = registry->getComponent<PhysicsComponent>(e);
+  const auto* collider  = registry->getComponent<ColliderComponent>(e);
+  const auto* nameComp  = registry->getComponent<NameComponent>(e);
+  const auto* mesh      = registry->getComponent<MeshComponent>(e);
+  const auto* material  = registry->getComponent<MaterialComponent>(e);
+  const auto* render    = registry->getComponent<RenderComponent>(e);
+
+  if (!transform || !phys || !collider) return;
+
+  SpawnEntityPacket pkt{};
+  pkt.entityId = static_cast<uint32_t>(e);
+
+  pkt.posX = transform->position.x;
+  pkt.posY = transform->position.y;
+  pkt.posZ = transform->position.z;
+  pkt.rotW = transform->rotation.w;
+  pkt.rotX = transform->rotation.x;
+  pkt.rotY = transform->rotation.y;
+  pkt.rotZ = transform->rotation.z;
+  pkt.scaleX = transform->scale.x;
+  pkt.scaleY = transform->scale.y;
+  pkt.scaleZ = transform->scale.z;
+
+  pkt.velX    = phys->velocity.x;
+  pkt.velY    = phys->velocity.y;
+  pkt.velZ    = phys->velocity.z;
+  pkt.angVelX = phys->angularVelocity.x;
+  pkt.angVelY = phys->angularVelocity.y;
+  pkt.angVelZ = phys->angularVelocity.z;
+  pkt.mass        = phys->mass;
+  pkt.restitution = phys->restitution;
+  pkt.damping     = phys->damping;
+  pkt.useGravity  = phys->useGravity ? 1 : 0;
+
+  pkt.colliderType = static_cast<uint8_t>(collider->type);
+  pkt.radius       = collider->radius;
+  pkt.height       = collider->height;
+  pkt.halfExtX     = collider->halfExtents.x;
+  pkt.halfExtY     = collider->halfExtents.y;
+  pkt.halfExtZ     = collider->halfExtents.z;
+  pkt.normalX      = collider->normal.x;
+  pkt.normalY      = collider->normal.y;
+  pkt.normalZ      = collider->normal.z;
+  pkt.finite       = collider->finite ? 1 : 0;
+
+  pkt.hasRender  = (render && mesh && material) ? 1 : 0;
+  pkt.meshId     = mesh     ? mesh->meshID         : 0;
+  pkt.materialId = material ? material->materialID : 0;
+
+  if (nameComp) {
+    strncpy_s(pkt.name, sizeof(pkt.name), nameComp->name.c_str(), _TRUNCATE);
+  }
+
+  broadcastTCP(PacketType::SPAWN_ENTITY, &pkt, sizeof(pkt));
+}
+
+void NetworkManager::handleSpawnEntity(const std::vector<uint8_t>& payload) {
+  if (payload.size() < sizeof(SpawnEntityPacket)) return;
+
+  SpawnEntityPacket pkt{};
+  std::memcpy(&pkt, payload.data(), sizeof(pkt));
+
+  std::lock_guard<std::mutex> lk(spawnedEntitiesMutex);
+  pendingSpawnedEntities.push_back(pkt);
+}
+
+bool NetworkManager::pollPendingSpawnedEntity(SpawnEntityPacket& out) {
+  std::lock_guard<std::mutex> lk(spawnedEntitiesMutex);
+  if (pendingSpawnedEntities.empty()) return false;
+  out = pendingSpawnedEntities.front();
+  pendingSpawnedEntities.erase(pendingSpawnedEntities.begin());
+  return true;
 }

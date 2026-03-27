@@ -151,10 +151,25 @@ class EntityBuilder final {
     return *this;
   }
 
-  // Cylinder with symmetry axis along local Z. height is the full height.
   EntityBuilder& cylinderCollider(float radius, float height) {
     hasCollider = true;
     colliderComp.type = ColliderType::Cylinder;
+    colliderComp.radius = radius;
+    colliderComp.height = height;
+    return *this;
+  }
+
+  EntityBuilder& capsuleCollider(float radius, float height) {
+    hasCollider = true;
+    colliderComp.type = ColliderType::Capsule;
+    colliderComp.radius = radius;
+    colliderComp.height = height;
+    return *this;
+  }
+
+  EntityBuilder& coneCollider(float radius, float height) {
+    hasCollider = true;
+    colliderComp.type = ColliderType::Cone;
     colliderComp.radius = radius;
     colliderComp.height = height;
     return *this;

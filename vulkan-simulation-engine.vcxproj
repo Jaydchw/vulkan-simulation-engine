@@ -144,6 +144,7 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Network\NetworkManager.cpp" />
     <ClCompile Include="src\Physics\PhysicsSystem.cpp" />
+    <ClCompile Include="src\Spawning\SpawnerSystem.cpp" />
     <ClCompile Include="src\Resources\MaterialManager.cpp" />
     <ClCompile Include="src\Resources\MeshManager.cpp" />
     <ClCompile Include="src\Scene\LightManager.cpp" />

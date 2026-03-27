@@ -3,7 +3,7 @@
 
 namespace jphys {
 
-enum class ColliderType { Sphere, AABB, Plane, Cylinder };
+enum class ColliderType { Sphere, AABB, Plane, Cylinder, Capsule, Cone };
 
 class Collider {
  public:
@@ -44,6 +44,22 @@ class Collider {
   static Collider createCylinder(float radius, float height) {
     Collider c;
     c.type = ColliderType::Cylinder;
+    c.radius = radius;
+    c.height = height;
+    return c;
+  }
+
+  static Collider createCapsule(float radius, float height) {
+    Collider c;
+    c.type = ColliderType::Capsule;
+    c.radius = radius;
+    c.height = height;
+    return c;
+  }
+
+  static Collider createCone(float radius, float height) {
+    Collider c;
+    c.type = ColliderType::Cone;
     c.radius = radius;
     c.height = height;
     return c;

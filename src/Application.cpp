@@ -10,6 +10,7 @@
 #include "Util/Debug.h"
 #include "Util/RenderUtils.h"
 #include "Physics/PhysicsSystem.h"
+#include "Spawning/SpawnerSystem.h"
 #include "Timeline/TimelineSystem.h"
 #include "Timeline/WorldBakeSerializer.h"
 #include "Network/NetworkManager.h"
@@ -42,6 +43,7 @@ void Application::setRegistry(Registry& reg) {
   lightManager->setRegistry(registry);
   lightManager->syncLights();
   physicsSystem->setRegistry(registry);
+  spawnerSystem->setRegistry(registry);
   timelineSystem->setRegistry(registry);
   timelineSystem->saveInitialSnapshot();
 }
@@ -65,6 +67,7 @@ if (interface) interface->clearSelection();
   lightManager->syncLights();
 
   physicsSystem->setRegistry(registry);
+  spawnerSystem->setRegistry(registry);
   timelineSystem->setRegistry(registry);
   timelineSystem->saveInitialSnapshot();
 
@@ -174,13 +177,15 @@ void Application::initVulkan() {
   worldParser = std::make_unique<WorldParser>(meshManager.get(),
                                               materialManager.get(),
                                               textureManager.get());
-  physicsSystem = std::make_unique<PhysicsSystem>();
+  physicsSystem  = std::make_unique<PhysicsSystem>();
+  spawnerSystem  = std::make_unique<SpawnerSystem>();
   timelineSystem = std::make_unique<TimelineSystem>();
 
   // Networking
   networkManager = std::make_unique<NetworkManager>();
   networkManager->init(nullptr); // registry not available yet; set after world load
   physicsSystem->setNetworkManager(networkManager.get());
+  spawnerSystem->setNetworkManager(networkManager.get());
 
   interface->setWorldDirectory("Worlds");
   interface->setWorldLoadCallback([this](const std::string& path) {
@@ -420,6 +425,13 @@ while (!window->shouldClose()) {
   if (networkManager) {
     networkManager->tickReceive();
 
+    // Create entities spawned by remote peers
+    if (spawnerSystem) {
+      SpawnEntityPacket spawnPkt{};
+      while (networkManager->pollPendingSpawnedEntity(spawnPkt))
+        spawnerSystem->applyRemoteSpawn(spawnPkt);
+    }
+
     if (networkManager->pollNewPeerConnected() && !lastLoadedWorldPath.empty()) {
       networkManager->assignObjectOwnership();
       networkManager->sendLoadScene(lastLoadedWorldPath);
@@ -600,6 +612,9 @@ while (!window->shouldClose()) {
 
     simState.rewinding = false;
     simState.reversePlay = false;
+
+    if (spawnerSystem)
+      spawnerSystem->update(deltaTime * simState.timeSpeed);
 
     if (simState.stepFrame) {
       simState.stepFrame = false;

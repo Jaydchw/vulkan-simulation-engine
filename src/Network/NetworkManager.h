@@ -107,6 +107,12 @@ public:
     // Returns true (once) when any peer drops. Triggers ownership reallocation.
     bool pollPeerDropped();
 
+    // Called by SpawnerSystem after creating a new entity locally.
+    // Reads entity components from the registry and broadcasts a SPAWN_ENTITY packet to all peers.
+    void broadcastSpawnEntity(Entity e);
+    // Returns true if a remote peer spawned an entity; out is filled with the full description.
+    bool pollPendingSpawnedEntity(SpawnEntityPacket& out);
+
     uint8_t     getLocalPeerID()        const { return localPeerID; }
     uint32_t    getInstanceId()         const { return myInstanceId; }
     std::string getLocalIP()            const { return localIP; }
@@ -195,6 +201,10 @@ private:
     void handleObjectPropertiesBatch(const std::vector<uint8_t>& payload);
     void handleLoadScene(const std::vector<uint8_t>& payload);
     void handleSimState(const std::vector<uint8_t>& payload);
+    void handleSpawnEntity(const std::vector<uint8_t>& payload);
+
+    mutable std::mutex              spawnedEntitiesMutex;
+    std::vector<SpawnEntityPacket>  pendingSpawnedEntities;
 
     void applyRemoteStates();
     void applyRemoteProperties();

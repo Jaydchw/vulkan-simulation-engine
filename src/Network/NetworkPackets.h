@@ -17,6 +17,7 @@ enum class PacketType : uint8_t {
   SIM_STATE         = 0x06,
   HANDSHAKE         = 0x07,
   OBJECT_PROPERTIES = 0x08,  // slow channel  — mass/collider/etc, sent on connect or scene-load
+  SPAWN_ENTITY      = 0x09,  // spawner channel — full entity description, sent when spawner fires
 };
 
 #pragma pack(push, 1)
@@ -62,7 +63,7 @@ struct ObjectPropertyEntry {
   float   damping;
   uint8_t useGravity;
 
-  // ColliderComponent  (0=Sphere  1=AABB  2=Plane  3=Cylinder)
+  // ColliderComponent  (0=Sphere  1=AABB  2=Plane  3=Cylinder  4=Capsule  5=Cone)
   uint8_t colliderType;
   uint8_t pad[2];
   float   radius;
@@ -85,6 +86,41 @@ struct SimStatePayload {
 struct HandshakePayload {
   uint32_t instanceId;
   uint16_t tcpPort;
+};
+
+// Sent via TCP (reliable) whenever a locally-owned spawner fires.
+// Remote peers use this to create the entity in their own registry with the same ID.
+struct SpawnEntityPacket {
+  uint32_t entityId;
+
+  // TransformComponent
+  float posX, posY, posZ;
+  float rotW, rotX, rotY, rotZ;
+  float scaleX, scaleY, scaleZ;
+
+  // PhysicsComponent
+  float velX, velY, velZ;
+  float angVelX, angVelY, angVelZ;
+  float mass;
+  float restitution;
+  float damping;
+  uint8_t useGravity;
+
+  // ColliderComponent  (0=Sphere  1=AABB  2=Plane  3=Cylinder  4=Capsule  5=Cone)
+  uint8_t colliderType;
+  float radius;
+  float height;
+  float halfExtX, halfExtY, halfExtZ;
+  float normalX, normalY, normalZ;
+  uint8_t finite;
+
+  // Render (0 = physics-only, no visible mesh)
+  uint8_t hasRender;
+  uint8_t pad[2];
+  uint32_t meshId;
+  uint32_t materialId;
+
+  char name[32];
 };
 
 #pragma pack(pop)

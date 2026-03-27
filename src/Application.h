@@ -22,6 +22,7 @@
 #include "Resources/TextureManager.h"
 #include "Scene/LightManager.h"
 #include "Physics/PhysicsSystem.h"
+#include "Spawning/SpawnerSystem.h"
 #include "Timeline/TimelineSystem.h"
 #include "Network/NetworkManager.h"
 #include "Util/Camera.h"
@@ -105,6 +106,7 @@ class Application final {
   std::unique_ptr<MainPipeline> mainPipeline;
   std::unique_ptr<Interface> interface;
   std::unique_ptr<PhysicsSystem> physicsSystem;
+  std::unique_ptr<SpawnerSystem> spawnerSystem;
   std::unique_ptr<TimelineSystem> timelineSystem;
   std::unique_ptr<NetworkManager> networkManager;
 

@@ -159,6 +159,14 @@ void PhysicsSystem::syncToLibrary() {
         obj->setCollider(
             jphys::Collider::createCylinder(collider->radius, collider->height));
         break;
+      case ColliderType::Capsule:
+        obj->setCollider(
+            jphys::Collider::createCapsule(collider->radius, collider->height));
+        break;
+      case ColliderType::Cone:
+        obj->setCollider(
+            jphys::Collider::createCone(collider->radius, collider->height));
+        break;
     }
 
     if (phys) {

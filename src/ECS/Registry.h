@@ -23,6 +23,14 @@ class Registry final {
     physics.erase(entity);
     colliders.erase(entity);
     physicsObjects.erase(entity);
+    spawners.erase(entity);
+  }
+
+  // Creates an entity with a specific ID (used when replicating remote spawns).
+  // Advances nextEntity past specificId to avoid future conflicts.
+  Entity createEntityWithId(Entity specificId) {
+    if (specificId >= nextEntity) nextEntity = specificId + 1;
+    return specificId;
   }
 
   template <typename T>
@@ -64,6 +72,12 @@ class Registry final {
   const std::unordered_map<Entity, ColliderComponent>& allColliders() const {
     return colliders;
   }
+  const std::unordered_map<Entity, SpawnerComponent>& allSpawners() const {
+    return spawners;
+  }
+  std::unordered_map<Entity, SpawnerComponent>& allSpawnersMut() {
+    return spawners;
+  }
   jphys::PhysicsObject& getPhysicsObject(Entity entity) {
     return physicsObjects[entity];
   }
@@ -95,6 +109,7 @@ class Registry final {
   std::unordered_map<Entity, PhysicsComponent> physics;
   std::unordered_map<Entity, ColliderComponent> colliders;
   std::unordered_map<Entity, jphys::PhysicsObject> physicsObjects;
+  std::unordered_map<Entity, SpawnerComponent> spawners;
 };
 
 template <>
@@ -266,3 +281,23 @@ inline bool Registry::hasComponent<ColliderComponent>(Entity entity) const {
   return colliders.count(entity) > 0;
 }
 
+template <>
+inline void Registry::addComponent<SpawnerComponent>(Entity entity,
+                                                     const SpawnerComponent& c) {
+  spawners[entity] = c;
+}
+template <>
+inline SpawnerComponent* Registry::getComponent<SpawnerComponent>(Entity entity) {
+  auto it = spawners.find(entity);
+  return it != spawners.end() ? &it->second : nullptr;
+}
+template <>
+inline const SpawnerComponent* Registry::getComponent<SpawnerComponent>(
+    Entity entity) const {
+  auto it = spawners.find(entity);
+  return it != spawners.end() ? &it->second : nullptr;
+}
+template <>
+inline bool Registry::hasComponent<SpawnerComponent>(Entity entity) const {
+  return spawners.count(entity) > 0;
+}

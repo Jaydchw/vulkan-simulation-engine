@@ -225,23 +225,22 @@ MeshID MeshManager::createCylinder(float radius, float height,
 
   std::vector<Vertex> vertices;
   std::vector<uint16_t> indices;
+  const float pi2 = 2.0f * 3.14159265f;
 
-  const uint32_t ringCount = 2;
-  for (uint32_t i = 0; i < ringCount; ++i) {
+  // Side rings
+  for (uint32_t i = 0; i < 2; ++i) {
     float y = -0.5f * height + i * height;
     for (uint32_t j = 0; j <= segments; ++j) {
-      float theta = 2.0f * 3.14159f * float(j) / float(segments);
-      float x = radius * cos(theta);
-      float z = radius * sin(theta);
+      float theta = pi2 * float(j) / float(segments);
+      float x = radius * cosf(theta), z = radius * sinf(theta);
       Vertex v{};
-      v.pos = glm::vec3(x, y, z);
+      v.pos = {x, y, z};
       v.normal = glm::normalize(glm::vec3(x, 0.0f, z));
-      v.texCoord = glm::vec2(float(j) / segments, float(i));
-      v.color = glm::vec3(1.0f);
+      v.texCoord = {float(j) / segments, float(i)};
+      v.color = {1.0f, 1.0f, 1.0f};
       vertices.push_back(v);
     }
   }
-
   for (uint32_t j = 0; j < segments; ++j) {
     indices.push_back(j);
     indices.push_back(j + segments + 1);
@@ -249,6 +248,169 @@ MeshID MeshManager::createCylinder(float radius, float height,
     indices.push_back(j + 1);
     indices.push_back(j + segments + 1);
     indices.push_back(j + segments + 2);
+  }
+
+  // Bottom cap
+  uint16_t botCenter = static_cast<uint16_t>(vertices.size());
+  { Vertex v{}; v.pos = {0, -height * 0.5f, 0}; v.normal = {0,-1,0}; v.color = {1,1,1}; vertices.push_back(v); }
+  uint16_t botRingStart = static_cast<uint16_t>(vertices.size());
+  for (uint32_t j = 0; j <= segments; ++j) {
+    float theta = pi2 * float(j) / float(segments);
+    Vertex v{};
+    v.pos = {radius * cosf(theta), -height * 0.5f, radius * sinf(theta)};
+    v.normal = {0, -1, 0};
+    v.color = {1,1,1};
+    v.texCoord = {0.5f + 0.5f * cosf(theta), 0.5f + 0.5f * sinf(theta)};
+    vertices.push_back(v);
+  }
+  for (uint32_t j = 0; j < segments; ++j) {
+    indices.push_back(botCenter);
+    indices.push_back(botRingStart + j + 1);
+    indices.push_back(botRingStart + j);
+  }
+
+  // Top cap
+  uint16_t topCenter = static_cast<uint16_t>(vertices.size());
+  { Vertex v{}; v.pos = {0, height * 0.5f, 0}; v.normal = {0,1,0}; v.color = {1,1,1}; vertices.push_back(v); }
+  uint16_t topRingStart = static_cast<uint16_t>(vertices.size());
+  for (uint32_t j = 0; j <= segments; ++j) {
+    float theta = pi2 * float(j) / float(segments);
+    Vertex v{};
+    v.pos = {radius * cosf(theta), height * 0.5f, radius * sinf(theta)};
+    v.normal = {0, 1, 0};
+    v.color = {1,1,1};
+    v.texCoord = {0.5f + 0.5f * cosf(theta), 0.5f + 0.5f * sinf(theta)};
+    vertices.push_back(v);
+  }
+  for (uint32_t j = 0; j < segments; ++j) {
+    indices.push_back(topCenter);
+    indices.push_back(topRingStart + j);
+    indices.push_back(topRingStart + j + 1);
+  }
+
+  mesh->setVertices(vertices);
+  mesh->setIndices(indices);
+  createBuffers(mesh);
+  return registerMesh(mesh);
+}
+
+MeshID MeshManager::createCone(float radius, float height, uint32_t segments) {
+  Debug::log(Debug::Category::MESH, "MeshManager: Creating cone");
+  Mesh* const mesh = new Mesh();
+  mesh->setName("Cone");
+  mesh->setType(MeshType::Custom);
+
+  std::vector<Vertex> vertices;
+  std::vector<uint16_t> indices;
+  const float pi2 = 2.0f * 3.14159265f;
+  const float halfH = height * 0.5f;
+  uint16_t idx = 0;
+
+  // Side faces (flat normals per triangle)
+  for (uint32_t j = 0; j < segments; ++j) {
+    float t0 = pi2 * float(j) / float(segments);
+    float t1 = pi2 * float(j + 1) / float(segments);
+    glm::vec3 apex = {0, halfH, 0};
+    glm::vec3 b0   = {radius * cosf(t0), -halfH, radius * sinf(t0)};
+    glm::vec3 b1   = {radius * cosf(t1), -halfH, radius * sinf(t1)};
+    glm::vec3 n    = glm::normalize(glm::cross(b0 - apex, b1 - apex));
+    Vertex va{}, vb{}, vc{};
+    va.pos = apex; va.normal = n; va.color = {1,1,1}; va.texCoord = {0.5f, 0};
+    vb.pos = b0;   vb.normal = n; vb.color = {1,1,1}; vb.texCoord = {float(j)/segments, 1};
+    vc.pos = b1;   vc.normal = n; vc.color = {1,1,1}; vc.texCoord = {float(j+1)/segments, 1};
+    vertices.push_back(va); vertices.push_back(vb); vertices.push_back(vc);
+    indices.push_back(idx); indices.push_back(idx+1); indices.push_back(idx+2);
+    idx += 3;
+  }
+
+  // Bottom cap
+  uint16_t capCenter = idx++;
+  { Vertex v{}; v.pos = {0, -halfH, 0}; v.normal = {0,-1,0}; v.color = {1,1,1}; v.texCoord = {0.5f,0.5f}; vertices.push_back(v); }
+  uint16_t capRingStart = idx;
+  for (uint32_t j = 0; j <= segments; ++j) {
+    float theta = pi2 * float(j) / float(segments);
+    Vertex v{};
+    v.pos = {radius * cosf(theta), -halfH, radius * sinf(theta)};
+    v.normal = {0, -1, 0};
+    v.color  = {1,1,1};
+    v.texCoord = {0.5f + 0.5f * cosf(theta), 0.5f + 0.5f * sinf(theta)};
+    vertices.push_back(v);
+    idx++;
+  }
+  for (uint32_t j = 0; j < segments; ++j) {
+    indices.push_back(capCenter);
+    indices.push_back(capRingStart + j + 1);
+    indices.push_back(capRingStart + j);
+  }
+
+  mesh->setVertices(vertices);
+  mesh->setIndices(indices);
+  createBuffers(mesh);
+  return registerMesh(mesh);
+}
+
+MeshID MeshManager::createCapsule(float radius, float height, uint32_t segments) {
+  Debug::log(Debug::Category::MESH, "MeshManager: Creating capsule");
+  Mesh* const mesh = new Mesh();
+  mesh->setName("Capsule");
+  mesh->setType(MeshType::Custom);
+
+  std::vector<Vertex> vertices;
+  std::vector<uint16_t> indices;
+  const float pi  = 3.14159265f;
+  const float pi2 = 2.0f * pi;
+  const float halfCylH = std::max(0.0f, height * 0.5f - radius);
+  const uint32_t hStacks = std::max(2u, segments / 4);
+  const uint32_t totalStacks = hStacks * 2;
+
+  // Top pole
+  { Vertex v{}; v.pos = {0, halfCylH + radius, 0}; v.normal = {0,1,0}; v.color = {1,1,1}; vertices.push_back(v); }
+
+  // Latitude bands from south to north (excluding poles)
+  for (uint32_t i = 1; i < totalStacks; ++i) {
+    float t     = float(i) / totalStacks;
+    float theta = pi * t - pi * 0.5f;  // -pi/2 to pi/2
+    float yOff  = theta > 0.0f ? halfCylH : -halfCylH;
+    float y     = yOff + radius * sinf(theta);
+    float r     = radius * cosf(theta);
+    for (uint32_t j = 0; j <= segments; ++j) {
+      float phi = pi2 * float(j) / float(segments);
+      Vertex v{};
+      v.pos      = {r * cosf(phi), y, r * sinf(phi)};
+      v.normal   = glm::normalize(glm::vec3(cosf(theta)*cosf(phi), sinf(theta), cosf(theta)*sinf(phi)));
+      v.color    = {1,1,1};
+      v.texCoord = {float(j)/segments, t};
+      vertices.push_back(v);
+    }
+  }
+
+  // Bottom pole
+  { Vertex v{}; v.pos = {0, -halfCylH - radius, 0}; v.normal = {0,-1,0}; v.color = {1,1,1}; vertices.push_back(v); }
+
+  const uint32_t ringVerts      = segments + 1;
+  const uint32_t bottomPoleIdx  = static_cast<uint32_t>(vertices.size()) - 1;
+  const uint32_t lastRingStart  = 1 + (totalStacks - 2) * ringVerts;
+
+  // Top cap fan
+  for (uint32_t j = 0; j < segments; ++j) {
+    indices.push_back(0);
+    indices.push_back(1 + j + 1);
+    indices.push_back(1 + j);
+  }
+  // Middle quads
+  for (uint32_t i = 0; i < totalStacks - 2; ++i) {
+    uint32_t r0 = 1 + i * ringVerts;
+    uint32_t r1 = r0 + ringVerts;
+    for (uint32_t j = 0; j < segments; ++j) {
+      indices.push_back(r0 + j);     indices.push_back(r0 + j + 1); indices.push_back(r1 + j);
+      indices.push_back(r0 + j + 1); indices.push_back(r1 + j + 1); indices.push_back(r1 + j);
+    }
+  }
+  // Bottom cap fan
+  for (uint32_t j = 0; j < segments; ++j) {
+    indices.push_back(bottomPoleIdx);
+    indices.push_back(lastRingStart + j);
+    indices.push_back(lastRingStart + j + 1);
   }
 
   mesh->setVertices(vertices);

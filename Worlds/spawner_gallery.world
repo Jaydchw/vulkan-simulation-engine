@@ -1,0 +1,200 @@
+# Spawner Gallery
+# Four spawners arranged in a row, each isolating a different parameter:
+#   Left  (-15): Slow drip — very long interval, zero randomness. Clean timing reference.
+#   Left-Centre (-5): Burst gun — fast interval with high speed and tight cone.
+#   Right-Centre (+5): Spin emitter — slow speed but extreme angular velocity randomness.
+#   Right (+15): Capped emitter — spawns exactly 20 objects then stops (MaxSpawns = 20).
+# Tests: independent operation of multiple spawners, MaxSpawns cap, angular spin.
+
+BeginSettings
+  ClearColor = 0.06, 0.06, 0.09, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.25, 0.25, 0.30
+  Roughness = 0.92
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = SlowMat
+  AlbedoColor = 0.85, 0.85, 0.85
+  Roughness = 0.3
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = BurstMat
+  AlbedoColor = 1.0, 0.35, 0.1
+  Roughness = 0.2
+  Metallic = 0.3
+EndMaterial
+
+BeginMaterial
+  Name = SpinMat
+  AlbedoColor = 0.2, 0.9, 0.6
+  Roughness = 0.5
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = CappedMat
+  AlbedoColor = 0.6, 0.3, 1.0
+  Roughness = 0.35
+  Metallic = 0.2
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 80.0
+  Height = 50.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.5
+  Segments = 20
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 40.0, 0.0, 25.0
+EndObject
+
+# Slow drip: one ball every 2 seconds, zero randomness.
+BeginSpawner
+  Name = SlowDrip
+  Position = -15.0, 10.0, 0.0
+  SpawnInterval = 2.0
+  SpawnDirection = 0.0, -1.0, 0.0
+  SpawnSpeed = 0.0
+
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = Slow
+    Mesh = Ball
+    Material = SlowMat
+    ScaleUniform = 1.0
+    Mass = 1.0
+    Restitution = 0.6
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.5
+  EndTemplate
+EndSpawner
+
+# Burst gun: fires rapidly upward with a tight 10-degree cone at high speed.
+BeginSpawner
+  Name = BurstGun
+  Position = -5.0, 1.0, 0.0
+  SpawnInterval = 0.08
+  SpawnIntervalRandomness = 0.1
+  SpawnDirection = 0.0, 1.0, 0.0
+  DirectionRandomness = 0.17
+  SpawnSpeed = 18.0
+  SpeedRandomness = 0.15
+
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = Burst
+    Mesh = Ball
+    Material = BurstMat
+    ScaleUniform = 1.0
+    Mass = 0.6
+    Restitution = 0.55
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.5
+  EndTemplate
+EndSpawner
+
+# Spin emitter: low upward speed but each ball gets a heavy random spin.
+BeginSpawner
+  Name = SpinEmitter
+  Position = 5.0, 1.0, 0.0
+  SpawnInterval = 0.3
+  SpawnDirection = 0.0, 1.0, 0.0
+  SpawnSpeed = 5.0
+  DirectionRandomness = 0.4
+  AngularVelocityRandomness = 20.0
+
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = Spin
+    Mesh = Ball
+    Material = SpinMat
+    ScaleUniform = 1.0
+    Mass = 1.0
+    Restitution = 0.5
+    Damping = 0.97
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.5
+  EndTemplate
+EndSpawner
+
+# Capped emitter: fires quickly but stops after exactly 20 objects.
+BeginSpawner
+  Name = CappedEmitter
+  Position = 15.0, 10.0, 0.0
+  SpawnInterval = 0.15
+  SpawnIntervalRandomness = 0.3
+  SpawnDirection = 0.0, -1.0, 0.0
+  DirectionRandomness = 0.5
+  SpawnSpeed = 3.0
+  PositionRandomness = 1.0
+  MaxSpawns = 20
+
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = Capped
+    Mesh = Ball
+    Material = CappedMat
+    ScaleUniform = 1.0
+    Mass = 1.0
+    Restitution = 0.7
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.5
+  EndTemplate
+EndSpawner
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.3, -1.0, 0.35
+  Color = 1.0, 0.97, 0.90
+  Intensity = 2.2
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill Left
+  Type = point
+  Position = -20.0, 15.0, 10.0
+  Color = 0.5, 0.7, 1.0
+  Intensity = 1.5
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = Fill Right
+  Type = point
+  Position = 20.0, 15.0, 10.0
+  Color = 1.0, 0.8, 0.5
+  Intensity = 1.5
+  CastsShadows = false
+EndLight

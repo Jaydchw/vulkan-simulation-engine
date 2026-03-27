@@ -3,6 +3,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <string>
+#include <vector>
 
 #include "Resources/Material.h"
 
@@ -67,7 +68,7 @@ struct PhysicsComponent {
   bool useGravity = true;
 };
 
-enum class ColliderType { Sphere, AABB, Plane, Cylinder };
+enum class ColliderType { Sphere, AABB, Plane, Cylinder, Capsule, Cone };
 
 struct ColliderComponent {
   ColliderType type = ColliderType::Sphere;
@@ -76,4 +77,48 @@ struct ColliderComponent {
   glm::vec3 halfExtents = glm::vec3(0.5f);
   glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);
   bool finite = false;
+};
+
+// Defines a single spawnable object prototype with its own weight for random selection.
+struct SpawnTemplate {
+  float weight = 1.0f;
+
+  PhysicsComponent physics;
+  ColliderComponent collider;
+
+  bool hasRender = true;
+  MeshID meshID = INVALID_MESH_ID;
+  MaterialID materialID = INVALID_MATERIAL_ID;
+  glm::vec3 scale = glm::vec3(1.0f);
+  std::string namePrefix = "Spawned";
+};
+
+struct SpawnerComponent {
+  std::vector<SpawnTemplate> templates;
+
+  // How often to spawn (seconds). Actual interval = spawnInterval * (1 + U[0, intervalRandomness]).
+  float spawnInterval = 1.0f;
+  float spawnIntervalRandomness = 0.0f;
+
+  // Launch direction and speed applied on top of the template's base velocity.
+  glm::vec3 spawnDirection = glm::vec3(0.0f, 1.0f, 0.0f);
+  float directionRandomness = 0.0f;  // half-angle cone in radians
+  float spawnSpeed = 0.0f;
+  float speedRandomness = 0.0f;      // speed *= (1 + U[-r, r])
+
+  // Spawned entity position = spawner position + spawnOffset + random sphere sample.
+  glm::vec3 spawnOffset = glm::vec3(0.0f);
+  float positionRandomness = 0.0f;   // sphere radius for random offset
+
+  // Angular velocity applied to spawned entities (template angularVelocity is additive).
+  glm::vec3 angularVelocity = glm::vec3(0.0f);
+  float angularVelocityRandomness = 0.0f;
+
+  int maxSpawns = -1;  // -1 = unlimited
+  bool enabled = true;
+
+  // Runtime state — not intended for serialization.
+  float timer = 0.0f;
+  float currentInterval = -1.0f;  // recomputed after each spawn; -1 triggers first computation
+  int spawnCount = 0;
 };

@@ -1,0 +1,88 @@
+# Spawner Basic Test
+# A single spawner that drops spheres straight down onto a floor at a steady rate.
+# Tests: interval timing, basic template, gravity, collisions with static floor.
+
+BeginSettings
+  ClearColor = 0.07, 0.07, 0.10, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.30, 0.30, 0.35
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = SpawnedBall
+  AlbedoColor = 0.9, 0.3, 0.15
+  Roughness = 0.35
+  Metallic = 0.1
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 50.0
+  Height = 50.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.5
+  Segments = 24
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 25.0, 0.0, 25.0
+EndObject
+
+# Spawner positioned above the floor, drops balls straight down every 0.5s.
+BeginSpawner
+  Name = DropSpawner
+  Position = 0.0, 12.0, 0.0
+  SpawnInterval = 0.5
+  SpawnDirection = 0.0, -1.0, 0.0
+  SpawnSpeed = 0.0
+
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = Ball
+    Mesh = Ball
+    Material = SpawnedBall
+    Scale = 1.0, 1.0, 1.0
+    Mass = 1.0
+    Restitution = 0.65
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.5
+  EndTemplate
+EndSpawner
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.3, -1.0, 0.4
+  Color = 1.0, 0.97, 0.90
+  Intensity = 2.2
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = -8.0, 14.0, 8.0
+  Color = 0.5, 0.6, 1.0
+  Intensity = 1.2
+  CastsShadows = false
+EndLight

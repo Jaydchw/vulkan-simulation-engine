@@ -108,30 +108,163 @@ void PhysicsWorld::resolveCollisions() {
 
       if (colA.getType() == ColliderType::Sphere &&
           colB.getType() == ColliderType::Plane) {
-        CollisionResult result = testSpherePlane(*objA, *objB);
-        recordCollision("Sphere / Plane", result.collided);
-        if (result.collided) resolveSpherePlane(*objA, *objB, result);
+        auto r = testSpherePlane(*objA, *objB);
+        recordCollision("Sphere / Plane", r.collided);
+        if (r.collided) resolveSpherePlane(*objA, *objB, r);
       }
 
       if (colA.getType() == ColliderType::Sphere &&
           colB.getType() == ColliderType::Sphere) {
-        CollisionResult result = testSphereSphere(*objA, *objB);
-        recordCollision("Sphere / Sphere", result.collided);
-        if (result.collided) resolveSphereSphere(*objA, *objB, result);
+        auto r = testSphereSphere(*objA, *objB);
+        recordCollision("Sphere / Sphere", r.collided);
+        if (r.collided) resolveSphereSphere(*objA, *objB, r);
       }
 
       if (colA.getType() == ColliderType::Sphere &&
           colB.getType() == ColliderType::AABB) {
-        CollisionResult result = testSphereAABB(*objA, *objB);
-        recordCollision("Sphere / AABB", result.collided);
-        if (result.collided) resolveSphereAABB(*objA, *objB, result);
+        auto r = testSphereAABB(*objA, *objB);
+        recordCollision("Sphere / AABB", r.collided);
+        if (r.collided) resolveSphereAABB(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::Sphere &&
+          colB.getType() == ColliderType::Cylinder) {
+        auto r = testSphereCylinder(*objA, *objB);
+        recordCollision("Sphere / Cylinder", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
       }
 
       if (colA.getType() == ColliderType::Cylinder &&
           colB.getType() == ColliderType::Plane) {
-        CollisionResult result = testCylinderPlane(*objA, *objB);
-        recordCollision("Cylinder / Plane", result.collided);
-        if (result.collided) resolveCylinderPlane(*objA, *objB, result);
+        auto r = testCylinderPlane(*objA, *objB);
+        recordCollision("Cylinder / Plane", r.collided);
+        if (r.collided) resolveCylinderPlane(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::Cylinder &&
+          colB.getType() == ColliderType::Sphere) {
+        auto r = testSphereCylinder(*objB, *objA);
+        recordCollision("Sphere / Cylinder", r.collided);
+        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      }
+
+      if (colA.getType() == ColliderType::Cylinder &&
+          colB.getType() == ColliderType::Cylinder) {
+        auto r = testCylinderCylinder(*objA, *objB);
+        recordCollision("Cylinder / Cylinder", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::AABB &&
+          colB.getType() == ColliderType::Plane) {
+        auto r = testAABBPlane(*objA, *objB);
+        recordCollision("AABB / Plane", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::AABB &&
+          colB.getType() == ColliderType::AABB) {
+        auto r = testAABBAABB(*objA, *objB);
+        recordCollision("AABB / AABB", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::AABB &&
+          colB.getType() == ColliderType::Sphere) {
+        auto r = testSphereAABB(*objB, *objA);
+        recordCollision("Sphere / AABB", r.collided);
+        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      }
+
+      if (colA.getType() == ColliderType::AABB &&
+          colB.getType() == ColliderType::Cylinder) {
+        auto r = testAABBCylinder(*objA, *objB);
+        recordCollision("AABB / Cylinder", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::Cylinder &&
+          colB.getType() == ColliderType::AABB) {
+        auto r = testAABBCylinder(*objB, *objA);
+        recordCollision("AABB / Cylinder", r.collided);
+        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      }
+
+      if (colA.getType() == ColliderType::Capsule &&
+          colB.getType() == ColliderType::Plane) {
+        auto r = testCapsulePlane(*objA, *objB);
+        recordCollision("Capsule / Plane", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::Capsule &&
+          colB.getType() == ColliderType::Sphere) {
+        auto r = testCapsuleSphere(*objA, *objB);
+        recordCollision("Capsule / Sphere", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::Sphere &&
+          colB.getType() == ColliderType::Capsule) {
+        auto r = testCapsuleSphere(*objB, *objA);
+        recordCollision("Capsule / Sphere", r.collided);
+        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      }
+
+      if (colA.getType() == ColliderType::Capsule &&
+          colB.getType() == ColliderType::AABB) {
+        auto r = testCapsuleAABB(*objA, *objB);
+        recordCollision("Capsule / AABB", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::AABB &&
+          colB.getType() == ColliderType::Capsule) {
+        auto r = testCapsuleAABB(*objB, *objA);
+        recordCollision("Capsule / AABB", r.collided);
+        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      }
+
+      if (colA.getType() == ColliderType::Capsule &&
+          colB.getType() == ColliderType::Cylinder) {
+        auto r = testCapsuleCylinder(*objA, *objB);
+        recordCollision("Capsule / Cylinder", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::Cylinder &&
+          colB.getType() == ColliderType::Capsule) {
+        auto r = testCapsuleCylinder(*objB, *objA);
+        recordCollision("Capsule / Cylinder", r.collided);
+        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      }
+
+      if (colA.getType() == ColliderType::Capsule &&
+          colB.getType() == ColliderType::Capsule) {
+        auto r = testCapsuleCapsule(*objA, *objB);
+        recordCollision("Capsule / Capsule", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::Cone &&
+          colB.getType() == ColliderType::Plane) {
+        auto r = testConePlane(*objA, *objB);
+        recordCollision("Cone / Plane", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::Cone &&
+          colB.getType() == ColliderType::Sphere) {
+        auto r = testConeSphere(*objA, *objB);
+        recordCollision("Cone / Sphere", r.collided);
+        if (r.collided) resolveImpulse(*objA, *objB, r);
+      }
+
+      if (colA.getType() == ColliderType::Sphere &&
+          colB.getType() == ColliderType::Cone) {
+        auto r = testConeSphere(*objB, *objA);
+        recordCollision("Cone / Sphere", r.collided);
+        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
       }
     }
   }
@@ -336,6 +469,485 @@ void PhysicsWorld::resolveCylinderPlane(PhysicsObject& cylinder,
                          result.normal * velAlongNormal *
                              (1.0f + cylinder.getRestitution()));
   }
+}
+
+void PhysicsWorld::resolveImpulse(PhysicsObject& a, PhysicsObject& b,
+                                   const CollisionResult& result) {
+  if (b.isStatic()) {
+    a.setPosition(a.getPosition() + result.normal * result.penetration);
+    float van = glm::dot(a.getVelocity(), result.normal);
+    if (van < 0.0f)
+      a.setVelocity(a.getVelocity() -
+                    result.normal * van * (1.0f + a.getRestitution()));
+  } else {
+    float totalMass = a.getMass() + b.getMass();
+    a.setPosition(a.getPosition() +
+                  result.normal * result.penetration * (b.getMass() / totalMass));
+    b.setPosition(b.getPosition() -
+                  result.normal * result.penetration * (a.getMass() / totalMass));
+    float relVel = glm::dot(a.getVelocity() - b.getVelocity(), result.normal);
+    if (relVel > 0.0f) return;
+    float e    = std::min(a.getRestitution(), b.getRestitution());
+    float imp  = -(1.0f + e) * relVel / totalMass;
+    a.setVelocity(a.getVelocity() + result.normal * (imp * b.getMass()));
+    b.setVelocity(b.getVelocity() - result.normal * (imp * a.getMass()));
+  }
+}
+
+// ── Closest points on two line segments ──────────────────────────────────────
+static std::pair<glm::vec3, glm::vec3> closestSegmentPoints(
+    const glm::vec3& p1, const glm::vec3& d1, float h1,
+    const glm::vec3& p2, const glm::vec3& d2, float h2) {
+  glm::vec3 r  = p1 - p2;
+  float     b  = glm::dot(d1, d2);
+  float     f  = glm::dot(d2, r);
+  float     c  = glm::dot(d1, r);
+  float     denom = 1.0f - b * b;
+  float     s, t;
+  if (std::abs(denom) < 1e-6f) {
+    s = 0.0f;
+    t = std::max(-h2, std::min(h2, f));
+  } else {
+    s = std::max(-h1, std::min(h1, (b * f - c) / denom));
+    t = b * s + f;
+    if (t < -h2) {
+      t = -h2;
+      s = std::max(-h1, std::min(h1, (b * t - c)));
+    } else if (t > h2) {
+      t = h2;
+      s = std::max(-h1, std::min(h1, (b * t - c)));
+    }
+  }
+  return {p1 + d1 * s, p2 + d2 * t};
+}
+
+CollisionResult PhysicsWorld::testAABBPlane(const PhysicsObject& aabb,
+                                             const PhysicsObject& plane) {
+  CollisionResult result;
+  glm::vec3 n          = plane.getCollider().getNormal();
+  glm::vec3 relPos     = aabb.getPosition() - plane.getPosition();
+  float     projCenter = glm::dot(relPos, n);
+  glm::vec3 he         = aabb.getCollider().getHalfExtents() * aabb.getScale();
+  float     effRadius  = std::abs(he.x * n.x) + std::abs(he.y * n.y) + std::abs(he.z * n.z);
+  float     penetration = effRadius - projCenter;
+
+  if (penetration > 0.0f) {
+    if (plane.getCollider().isFinite()) {
+      glm::vec3 contact      = aabb.getPosition() - n * projCenter;
+      glm::vec3 localContact = contact - plane.getPosition();
+      glm::vec3 phe          = plane.getCollider().getHalfExtents() * plane.getScale();
+      glm::vec3 absN         = glm::abs(n);
+      glm::vec3 t1, t2;
+      if (absN.y > 0.5f)      { t1 = {1,0,0}; t2 = {0,0,1}; }
+      else if (absN.x > 0.5f) { t1 = {0,1,0}; t2 = {0,0,1}; }
+      else                    { t1 = {1,0,0}; t2 = {0,1,0}; }
+      if (std::abs(glm::dot(localContact, t1)) > glm::dot(phe, glm::abs(t1)) + glm::dot(he, glm::abs(t1)) ||
+          std::abs(glm::dot(localContact, t2)) > glm::dot(phe, glm::abs(t2)) + glm::dot(he, glm::abs(t2)))
+        return result;
+    }
+    result.collided      = true;
+    result.normal        = n;
+    result.penetration   = penetration;
+    result.contactPoint  = aabb.getPosition() - n * projCenter;
+  }
+  return result;
+}
+
+CollisionResult PhysicsWorld::testAABBAABB(const PhysicsObject& a,
+                                            const PhysicsObject& b) {
+  CollisionResult result;
+  glm::vec3 heA  = a.getCollider().getHalfExtents() * a.getScale();
+  glm::vec3 heB  = b.getCollider().getHalfExtents() * b.getScale();
+  glm::vec3 diff = a.getPosition() - b.getPosition();
+
+  float ox = (heA.x + heB.x) - std::abs(diff.x);
+  float oy = (heA.y + heB.y) - std::abs(diff.y);
+  float oz = (heA.z + heB.z) - std::abs(diff.z);
+  if (ox <= 0.0f || oy <= 0.0f || oz <= 0.0f) return result;
+
+  glm::vec3 normal;
+  float     penetration;
+  if (ox <= oy && ox <= oz) {
+    penetration = ox;
+    normal      = {diff.x > 0.0f ? 1.0f : -1.0f, 0.0f, 0.0f};
+  } else if (oy <= ox && oy <= oz) {
+    penetration = oy;
+    normal      = {0.0f, diff.y > 0.0f ? 1.0f : -1.0f, 0.0f};
+  } else {
+    penetration = oz;
+    normal      = {0.0f, 0.0f, diff.z > 0.0f ? 1.0f : -1.0f};
+  }
+
+  result.collided     = true;
+  result.normal       = normal;
+  result.penetration  = penetration;
+  result.contactPoint = (a.getPosition() + b.getPosition()) * 0.5f;
+  return result;
+}
+
+CollisionResult PhysicsWorld::testSphereCylinder(const PhysicsObject& sphere,
+                                                  const PhysicsObject& cylinder) {
+  CollisionResult result;
+  glm::mat3 R      = glm::mat3_cast(cylinder.getOrientation());
+  glm::vec3 axis   = R[2];
+  glm::vec3 relPos = sphere.getPosition() - cylinder.getPosition();
+  float r_cyl      = cylinder.getCollider().getRadius();
+  float halfH      = cylinder.getCollider().getHeight() * 0.5f;
+  float r_sph      = sphere.getCollider().getRadius();
+
+  float     axDist   = glm::dot(relPos, axis);
+  glm::vec3 radVec   = relPos - axis * axDist;
+  float     radDist  = glm::length(radVec);
+
+  bool inAxial  = axDist >= -halfH && axDist <= halfH;
+  bool inRadial = radDist <= r_cyl;
+
+  if (inAxial && inRadial) {
+    float sideDepth = r_cyl - radDist;
+    float capDepth  = halfH - std::abs(axDist);
+    if (sideDepth < capDepth) {
+      glm::vec3 dir = (radDist > 1e-4f) ? (radVec / radDist) : glm::vec3(1,0,0);
+      result = {true, dir, sideDepth + r_sph,
+                cylinder.getPosition() + axis * axDist + dir * r_cyl};
+    } else {
+      float     s   = axDist > 0 ? 1.0f : -1.0f;
+      result = {true, axis * s, capDepth + r_sph,
+                cylinder.getPosition() + axis * halfH * s + radVec};
+    }
+    return result;
+  }
+
+  glm::vec3 closestPoint;
+  if (inAxial && !inRadial) {
+    glm::vec3 dir  = radVec / radDist;
+    closestPoint   = cylinder.getPosition() + axis * axDist + dir * r_cyl;
+  } else if (!inAxial && inRadial) {
+    float s        = axDist > 0 ? 1.0f : -1.0f;
+    closestPoint   = cylinder.getPosition() + axis * halfH * s + radVec;
+  } else {
+    float     s   = axDist > 0 ? 1.0f : -1.0f;
+    glm::vec3 dir = (radDist > 1e-4f) ? (radVec / radDist) : glm::vec3(1,0,0);
+    closestPoint  = cylinder.getPosition() + axis * halfH * s + dir * r_cyl;
+  }
+
+  glm::vec3 toSph = sphere.getPosition() - closestPoint;
+  float     dist  = glm::length(toSph);
+  if (dist < r_sph && dist > 1e-4f) {
+    result.collided     = true;
+    result.normal       = toSph / dist;
+    result.penetration  = r_sph - dist;
+    result.contactPoint = closestPoint;
+  }
+  return result;
+}
+
+CollisionResult PhysicsWorld::testCylinderCylinder(const PhysicsObject& a,
+                                                    const PhysicsObject& b) {
+  CollisionResult result;
+  glm::mat3 Ra = glm::mat3_cast(a.getOrientation());
+  glm::mat3 Rb = glm::mat3_cast(b.getOrientation());
+  glm::vec3 axA = Ra[2], axB = Rb[2];
+  float rA     = a.getCollider().getRadius(), halfA = a.getCollider().getHeight() * 0.5f;
+  float rB     = b.getCollider().getRadius(), halfB = b.getCollider().getHeight() * 0.5f;
+
+  auto [cA, cB] = closestSegmentPoints(a.getPosition(), axA, halfA,
+                                        b.getPosition(), axB, halfB);
+  glm::vec3 diff = cA - cB;
+  float     dist = glm::length(diff);
+  float     minD = rA + rB;
+
+  if (dist < minD && dist > 1e-4f) {
+    result.collided     = true;
+    result.normal       = diff / dist;
+    result.penetration  = minD - dist;
+    result.contactPoint = (cA + cB) * 0.5f;
+  }
+  return result;
+}
+
+CollisionResult PhysicsWorld::testAABBCylinder(const PhysicsObject& aabb,
+                                                const PhysicsObject& cylinder) {
+  CollisionResult result;
+  glm::mat3 R    = glm::mat3_cast(cylinder.getOrientation());
+  glm::vec3 axis = R[2];
+  float r_cyl    = cylinder.getCollider().getRadius();
+  float halfH    = cylinder.getCollider().getHeight() * 0.5f;
+  glm::vec3 he   = aabb.getCollider().getHalfExtents() * aabb.getScale();
+
+  glm::vec3 relPos = aabb.getPosition() - cylinder.getPosition();
+  float t = std::max(-halfH, std::min(halfH, glm::dot(relPos, axis)));
+  glm::vec3 axisPoint  = cylinder.getPosition() + axis * t;
+  glm::vec3 aabbMin    = aabb.getPosition() - he;
+  glm::vec3 aabbMax    = aabb.getPosition() + he;
+  glm::vec3 closestBox = glm::clamp(axisPoint, aabbMin, aabbMax);
+  glm::vec3 diff       = axisPoint - closestBox;
+  float     dist       = glm::length(diff);
+
+  if (dist < r_cyl) {
+    glm::vec3 normal;
+    float     pen;
+    if (dist > 1e-4f) {
+      normal = -diff / dist;
+      pen    = r_cyl - dist;
+    } else {
+      glm::vec3 d  = axisPoint - aabb.getPosition();
+      glm::vec3 ov = he - glm::abs(d);
+      if (ov.x <= ov.y && ov.x <= ov.z) {
+        normal = {d.x > 0.0f ? -1.0f : 1.0f, 0, 0};
+        pen    = ov.x + r_cyl;
+      } else if (ov.y <= ov.x && ov.y <= ov.z) {
+        normal = {0, d.y > 0.0f ? -1.0f : 1.0f, 0};
+        pen    = ov.y + r_cyl;
+      } else {
+        normal = {0, 0, d.z > 0.0f ? -1.0f : 1.0f};
+        pen    = ov.z + r_cyl;
+      }
+    }
+    result.collided     = true;
+    result.normal       = normal;
+    result.penetration  = pen;
+    result.contactPoint = closestBox;
+  }
+  return result;
+}
+
+// ── Capsule helpers ───────────────────────────────────────────────────────────
+static glm::vec3 capsuleAxis(const PhysicsObject& cap) {
+  return glm::mat3_cast(cap.getOrientation())[1];
+}
+static float capsuleHalfCyl(const PhysicsObject& cap) {
+  return std::max(0.0f, cap.getCollider().getHeight() * 0.5f - cap.getCollider().getRadius());
+}
+
+CollisionResult PhysicsWorld::testCapsulePlane(const PhysicsObject& capsule,
+                                                const PhysicsObject& plane) {
+  CollisionResult result;
+  glm::vec3 ax   = capsuleAxis(capsule);
+  float     hc   = capsuleHalfCyl(capsule);
+  float     r    = capsule.getCollider().getRadius();
+  glm::vec3 n    = plane.getCollider().getNormal();
+  glm::vec3 p1   = capsule.getPosition() + ax * hc;
+  glm::vec3 p2   = capsule.getPosition() - ax * hc;
+  float     d1   = glm::dot(p1 - plane.getPosition(), n);
+  float     d2   = glm::dot(p2 - plane.getPosition(), n);
+  float     minD = std::min(d1, d2);
+  float     pen  = r - minD;
+
+  if (pen > 0.0f) {
+    if (plane.getCollider().isFinite()) {
+      glm::vec3 contact = capsule.getPosition() -
+                          n * glm::dot(capsule.getPosition() - plane.getPosition(), n);
+      glm::vec3 lc  = contact - plane.getPosition();
+      glm::vec3 phe = plane.getCollider().getHalfExtents() * plane.getScale();
+      glm::vec3 absN = glm::abs(n);
+      glm::vec3 t1, t2;
+      if (absN.y > 0.5f)      { t1 = {1,0,0}; t2 = {0,0,1}; }
+      else if (absN.x > 0.5f) { t1 = {0,1,0}; t2 = {0,0,1}; }
+      else                    { t1 = {1,0,0}; t2 = {0,1,0}; }
+      if (std::abs(glm::dot(lc, t1)) > glm::dot(phe, glm::abs(t1)) + r ||
+          std::abs(glm::dot(lc, t2)) > glm::dot(phe, glm::abs(t2)) + r)
+        return result;
+    }
+    glm::vec3 lowestPt = (d1 < d2) ? p1 : p2;
+    result.collided     = true;
+    result.normal       = n;
+    result.penetration  = pen;
+    result.contactPoint = lowestPt - n * minD;
+  }
+  return result;
+}
+
+CollisionResult PhysicsWorld::testCapsuleSphere(const PhysicsObject& capsule,
+                                                 const PhysicsObject& sphere) {
+  CollisionResult result;
+  glm::vec3 ax  = capsuleAxis(capsule);
+  float     hc  = capsuleHalfCyl(capsule);
+  float     rC  = capsule.getCollider().getRadius();
+  float     rS  = sphere.getCollider().getRadius();
+
+  glm::vec3 relPos = sphere.getPosition() - capsule.getPosition();
+  float     t      = std::max(-hc, std::min(hc, glm::dot(relPos, ax)));
+  glm::vec3 closest = capsule.getPosition() + ax * t;
+  glm::vec3 diff   = sphere.getPosition() - closest;
+  float     dist   = glm::length(diff);
+  float     minD   = rC + rS;
+
+  if (dist < minD && dist > 1e-4f) {
+    result.collided     = true;
+    result.normal       = diff / dist;
+    result.penetration  = minD - dist;
+    result.contactPoint = closest + (diff / dist) * rC;
+  }
+  return result;
+}
+
+CollisionResult PhysicsWorld::testCapsuleAABB(const PhysicsObject& capsule,
+                                               const PhysicsObject& aabb) {
+  CollisionResult result;
+  glm::vec3 ax  = capsuleAxis(capsule);
+  float     hc  = capsuleHalfCyl(capsule);
+  float     r   = capsule.getCollider().getRadius();
+  glm::vec3 he  = aabb.getCollider().getHalfExtents() * aabb.getScale();
+  glm::vec3 aabbMin = aabb.getPosition() - he;
+  glm::vec3 aabbMax = aabb.getPosition() + he;
+
+  glm::vec3 relPos  = aabb.getPosition() - capsule.getPosition();
+  float     t       = std::max(-hc, std::min(hc, glm::dot(relPos, ax)));
+  glm::vec3 axPt    = capsule.getPosition() + ax * t;
+  glm::vec3 closest = glm::clamp(axPt, aabbMin, aabbMax);
+  glm::vec3 diff    = axPt - closest;
+  float     dist    = glm::length(diff);
+
+  if (dist < r) {
+    glm::vec3 normal;
+    float     pen;
+    if (dist > 1e-4f) {
+      normal = diff / dist;
+      pen    = r - dist;
+    } else {
+      glm::vec3 d  = axPt - aabb.getPosition();
+      glm::vec3 ov = he - glm::abs(d);
+      if (ov.x <= ov.y && ov.x <= ov.z) {
+        normal = {d.x > 0.0f ? 1.0f : -1.0f, 0, 0};
+        pen    = ov.x + r;
+      } else if (ov.y <= ov.x && ov.y <= ov.z) {
+        normal = {0, d.y > 0.0f ? 1.0f : -1.0f, 0};
+        pen    = ov.y + r;
+      } else {
+        normal = {0, 0, d.z > 0.0f ? 1.0f : -1.0f};
+        pen    = ov.z + r;
+      }
+    }
+    result.collided     = true;
+    result.normal       = normal;
+    result.penetration  = pen;
+    result.contactPoint = closest;
+  }
+  return result;
+}
+
+CollisionResult PhysicsWorld::testCapsuleCylinder(const PhysicsObject& capsule,
+                                                   const PhysicsObject& cylinder) {
+  CollisionResult result;
+  glm::vec3 axC = capsuleAxis(capsule);
+  float     hc  = capsuleHalfCyl(capsule);
+  float     rC  = capsule.getCollider().getRadius();
+  glm::mat3 Rcyl = glm::mat3_cast(cylinder.getOrientation());
+  glm::vec3 axCyl = Rcyl[2];
+  float     hCyl  = cylinder.getCollider().getHeight() * 0.5f;
+  float     rCyl  = cylinder.getCollider().getRadius();
+
+  auto [pCap, pCyl] = closestSegmentPoints(capsule.getPosition(), axC, hc,
+                                            cylinder.getPosition(), axCyl, hCyl);
+  glm::vec3 diff = pCap - pCyl;
+  float     dist = glm::length(diff);
+  float     minD = rC + rCyl;
+
+  if (dist < minD && dist > 1e-4f) {
+    result.collided     = true;
+    result.normal       = diff / dist;
+    result.penetration  = minD - dist;
+    result.contactPoint = pCyl + (diff / dist) * rCyl;
+  }
+  return result;
+}
+
+CollisionResult PhysicsWorld::testCapsuleCapsule(const PhysicsObject& a,
+                                                  const PhysicsObject& b) {
+  CollisionResult result;
+  glm::vec3 axA = capsuleAxis(a), axB = capsuleAxis(b);
+  float     hA  = capsuleHalfCyl(a), hB  = capsuleHalfCyl(b);
+  float     rA  = a.getCollider().getRadius(), rB = b.getCollider().getRadius();
+
+  auto [pA, pB] = closestSegmentPoints(a.getPosition(), axA, hA,
+                                        b.getPosition(), axB, hB);
+  glm::vec3 diff = pA - pB;
+  float     dist = glm::length(diff);
+  float     minD = rA + rB;
+
+  if (dist < minD && dist > 1e-4f) {
+    result.collided     = true;
+    result.normal       = diff / dist;
+    result.penetration  = minD - dist;
+    result.contactPoint = (pA + pB) * 0.5f;
+  }
+  return result;
+}
+
+CollisionResult PhysicsWorld::testConePlane(const PhysicsObject& cone,
+                                             const PhysicsObject& plane) {
+  CollisionResult result;
+  glm::mat3 R    = glm::mat3_cast(cone.getOrientation());
+  glm::vec3 axis = R[1];
+  glm::vec3 n    = plane.getCollider().getNormal();
+  float     r    = cone.getCollider().getRadius();
+  float     halfH = cone.getCollider().getHeight() * 0.5f;
+
+  glm::vec3 apex       = cone.getPosition() + axis * halfH;
+  glm::vec3 baseCenter = cone.getPosition() - axis * halfH;
+  float     dApex      = glm::dot(apex - plane.getPosition(), n);
+  float     dBase      = glm::dot(baseCenter - plane.getPosition(), n);
+  float     axN        = glm::dot(axis, n);
+  float     radN       = std::sqrt(std::max(0.0f, 1.0f - axN * axN));
+  float     dRimMin    = dBase - radN * r;
+  float     minD       = std::min(dApex, dRimMin);
+  float     pen        = -minD;
+
+  if (pen > 0.0f) {
+    if (plane.getCollider().isFinite()) {
+      glm::vec3 contact = cone.getPosition() -
+                          n * glm::dot(cone.getPosition() - plane.getPosition(), n);
+      glm::vec3 lc  = contact - plane.getPosition();
+      glm::vec3 phe = plane.getCollider().getHalfExtents() * plane.getScale();
+      glm::vec3 absN = glm::abs(n);
+      glm::vec3 t1, t2;
+      if (absN.y > 0.5f)      { t1 = {1,0,0}; t2 = {0,0,1}; }
+      else if (absN.x > 0.5f) { t1 = {0,1,0}; t2 = {0,0,1}; }
+      else                    { t1 = {1,0,0}; t2 = {0,1,0}; }
+      if (std::abs(glm::dot(lc, t1)) > glm::dot(phe, glm::abs(t1)) + r ||
+          std::abs(glm::dot(lc, t2)) > glm::dot(phe, glm::abs(t2)) + r)
+        return result;
+    }
+    result.collided     = true;
+    result.normal       = n;
+    result.penetration  = pen;
+    result.contactPoint =
+        cone.getPosition() - n * glm::dot(cone.getPosition() - plane.getPosition(), n);
+  }
+  return result;
+}
+
+CollisionResult PhysicsWorld::testConeSphere(const PhysicsObject& cone,
+                                              const PhysicsObject& sphere) {
+  CollisionResult result;
+  glm::mat3 R    = glm::mat3_cast(cone.getOrientation());
+  glm::vec3 axis = R[1];
+  float     r    = cone.getCollider().getRadius();
+  float     h    = cone.getCollider().getHeight();
+  float     halfH = h * 0.5f;
+  float     rS   = sphere.getCollider().getRadius();
+
+  glm::vec3 relPos = sphere.getPosition() - cone.getPosition();
+  float     axDist = glm::dot(relPos, axis);
+  glm::vec3 radVec = relPos - axis * axDist;
+  float     radDist = glm::length(radVec);
+
+  float clampedAx  = std::max(-halfH, std::min(halfH, axDist));
+  float t          = (clampedAx + halfH) / h;
+  float rAtT       = r * (1.0f - t);
+  glm::vec3 radDir = (radDist > 1e-4f) ? (radVec / radDist) : glm::vec3(1,0,0);
+  glm::vec3 closestOnSurface = cone.getPosition() + axis * clampedAx +
+                                radDir * std::min(radDist, rAtT);
+
+  glm::vec3 toSph = sphere.getPosition() - closestOnSurface;
+  float     dist  = glm::length(toSph);
+  if (dist < rS && dist > 1e-4f) {
+    result.collided     = true;
+    result.normal       = toSph / dist;
+    result.penetration  = rS - dist;
+    result.contactPoint = closestOnSurface;
+  }
+  return result;
 }
 
 }  // namespace jphys

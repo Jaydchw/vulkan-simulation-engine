@@ -1,0 +1,150 @@
+# Spawner Multi-Template Test
+# A single spawner with three weighted templates: a light bouncy ball (60%),
+# a heavy box (25%), and a large slow sphere (15%).
+# Tests: weighted random template selection, different shapes and materials per template.
+
+BeginSettings
+  ClearColor = 0.08, 0.06, 0.10, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.28, 0.28, 0.32
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = LightBall
+  AlbedoColor = 0.9, 0.8, 0.15
+  Roughness = 0.25
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = HeavyBox
+  AlbedoColor = 0.65, 0.20, 0.20
+  Roughness = 0.7
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = BigSphere
+  AlbedoColor = 0.20, 0.65, 0.30
+  Roughness = 0.4
+  Metallic = 0.2
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 60.0
+  Height = 60.0
+EndMesh
+
+BeginMesh
+  Name = SmallBall
+  Type = sphere
+  Radius = 0.5
+  Segments = 24
+EndMesh
+
+BeginMesh
+  Name = Box
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = LargeBall
+  Type = sphere
+  Radius = 1.2
+  Segments = 24
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 30.0, 0.0, 30.0
+EndObject
+
+BeginSpawner
+  Name = MultiSpawner
+  Position = 0.0, 14.0, 0.0
+  SpawnInterval = 0.7
+  SpawnIntervalRandomness = 0.2
+  SpawnDirection = 0.0, -1.0, 0.0
+  DirectionRandomness = 0.25
+  SpawnSpeed = 2.0
+  SpeedRandomness = 0.4
+  PositionRandomness = 1.5
+
+  # Light bouncy ball — most common (weight 6)
+  BeginTemplate
+    Weight = 6.0
+    NamePrefix = SmallBall
+    Mesh = SmallBall
+    Material = LightBall
+    ScaleUniform = 1.0
+    Mass = 0.5
+    Restitution = 0.80
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.5
+  EndTemplate
+
+  # Heavy box — less common (weight 2.5)
+  BeginTemplate
+    Weight = 2.5
+    NamePrefix = Box
+    Mesh = Box
+    Material = HeavyBox
+    ScaleUniform = 1.0
+    Mass = 4.0
+    Restitution = 0.20
+    Damping = 0.98
+    UseGravity = true
+    Collider = box
+    ColliderHalfExtents = 0.5, 0.5, 0.5
+  EndTemplate
+
+  # Large slow sphere — rare (weight 1.5)
+  BeginTemplate
+    Weight = 1.5
+    NamePrefix = BigSphere
+    Mesh = LargeBall
+    Material = BigSphere
+    ScaleUniform = 1.0
+    Mass = 8.0
+    Restitution = 0.45
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 1.2
+  EndTemplate
+EndSpawner
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.35, -1.0, 0.3
+  Color = 1.0, 0.97, 0.90
+  Intensity = 2.3
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 10.0, 18.0, -6.0
+  Color = 0.7, 0.6, 1.0
+  Intensity = 1.5
+  CastsShadows = false
+EndLight

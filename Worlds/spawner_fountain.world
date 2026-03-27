@@ -1,0 +1,95 @@
+# Spawner Fountain Test
+# Tests: direction randomness (cone scatter), position randomness, speed randomness,
+#        angular velocity randomness, and fast spawn interval to create a dense fountain.
+
+BeginSettings
+  ClearColor = 0.05, 0.08, 0.14, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.25, 0.25, 0.30
+  Roughness = 0.95
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = FountainBall
+  AlbedoColor = 0.2, 0.7, 1.0
+  Roughness = 0.2
+  Metallic = 0.5
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 80.0
+  Height = 80.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.4
+  Segments = 20
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 40.0, 0.0, 40.0
+EndObject
+
+# Fountain: launches upward with a 35-degree cone scatter and position jitter.
+# SpawnIntervalRandomness adds up to 50% variation so bursts feel organic.
+# AngularVelocityRandomness gives each ball a random tumble.
+BeginSpawner
+  Name = Fountain
+  Position = 0.0, 0.5, 0.0
+  SpawnInterval = 0.12
+  SpawnIntervalRandomness = 0.5
+  SpawnDirection = 0.0, 1.0, 0.0
+  DirectionRandomness = 0.61
+  SpawnSpeed = 12.0
+  SpeedRandomness = 0.30
+  PositionRandomness = 0.6
+  AngularVelocityRandomness = 8.0
+
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = Drop
+    Mesh = Ball
+    Material = FountainBall
+    ScaleUniform = 1.0
+    Mass = 0.8
+    Restitution = 0.55
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.4
+  EndTemplate
+EndSpawner
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.4, -1.0, 0.2
+  Color = 1.0, 0.96, 0.88
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Blue Fill
+  Type = point
+  Position = 0.0, 20.0, 0.0
+  Color = 0.4, 0.6, 1.0
+  Intensity = 2.0
+  CastsShadows = false
+EndLight

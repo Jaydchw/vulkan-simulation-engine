@@ -245,6 +245,12 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
         meshID = meshManager->createPlane(width, height);
       else if (meshType == "cylinder")
         meshID = meshManager->createCylinder(radius, height, segments);
+      else if (meshType == "cone")
+        meshID = meshManager->createCone(radius, height, segments);
+      else if (meshType == "capsule")
+        meshID = meshManager->createCapsule(radius, height, segments);
+      else if (meshType == "pyramid")
+        meshID = meshManager->createPyramid(sizeVal, height);
 
       if (meshID != INVALID_MESH_ID) {
         namedMeshes[meshName] = meshID;
@@ -381,9 +387,119 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
             builder.planeCollider(colliderNormal);
         } else if (colliderType == "cylinder")
           builder.cylinderCollider(colliderRadius, colliderHeight);
+        else if (colliderType == "capsule")
+          builder.capsuleCollider(colliderRadius, colliderHeight);
+        else if (colliderType == "cone")
+          builder.coneCollider(colliderRadius, colliderHeight);
       }
 
       builder.build(registry);
+      continue;
+    }
+
+    if (line == "BeginSpawner") {
+      std::string spawnerName = "Spawner";
+      glm::vec3 position(0.0f);
+      SpawnerComponent spawner;
+
+      while (std::getline(file, line)) {
+        lineNum++;
+        line = trim(line);
+        if (line.empty() || line[0] == '#') continue;
+        if (line == "EndSpawner") break;
+
+        if (line == "BeginTemplate") {
+          SpawnTemplate tmpl;
+          std::string tmplMeshRef, tmplMatRef;
+          std::string tmplCollider = "sphere";
+
+          while (std::getline(file, line)) {
+            lineNum++;
+            line = trim(line);
+            if (line.empty() || line[0] == '#') continue;
+            if (line == "EndTemplate") break;
+
+            const size_t eq = line.find('=');
+            if (eq == std::string::npos) continue;
+            std::string key = trim(line.substr(0, eq));
+            std::string val = trim(line.substr(eq + 1));
+
+            if (key == "Weight")             tmpl.weight = parseFloat(val);
+            else if (key == "Mesh")          tmplMeshRef = val;
+            else if (key == "Material")      tmplMatRef = val;
+            else if (key == "Scale")         tmpl.scale = parseVec3(val);
+            else if (key == "ScaleUniform") {
+              float s = parseFloat(val);
+              tmpl.scale = glm::vec3(s);
+            }
+            else if (key == "NamePrefix")    tmpl.namePrefix = val;
+            else if (key == "HasRender")     tmpl.hasRender = parseBool(val);
+            else if (key == "Mass")          tmpl.physics.mass = parseFloat(val);
+            else if (key == "Restitution")   tmpl.physics.restitution = parseFloat(val);
+            else if (key == "Damping")       tmpl.physics.damping = parseFloat(val);
+            else if (key == "UseGravity")    tmpl.physics.useGravity = parseBool(val);
+            else if (key == "Velocity")      tmpl.physics.velocity = parseVec3(val);
+            else if (key == "AngularVelocity") tmpl.physics.angularVelocity = parseVec3(val);
+            else if (key == "Collider")      tmplCollider = val;
+            else if (key == "ColliderRadius")      tmpl.collider.radius = parseFloat(val);
+            else if (key == "ColliderHeight")      tmpl.collider.height = parseFloat(val);
+            else if (key == "ColliderHalfExtents") tmpl.collider.halfExtents = parseVec3(val);
+          }
+
+          auto meshIt = namedMeshes.find(tmplMeshRef);
+          auto matIt  = namedMaterials.find(tmplMatRef);
+          if (meshIt != namedMeshes.end()) tmpl.meshID = meshIt->second;
+          else tmpl.hasRender = false;
+          if (matIt != namedMaterials.end()) tmpl.materialID = matIt->second;
+          else tmpl.hasRender = false;
+
+          if (tmplCollider == "sphere")         tmpl.collider.type = ColliderType::Sphere;
+          else if (tmplCollider == "box")       tmpl.collider.type = ColliderType::AABB;
+          else if (tmplCollider == "cylinder")  tmpl.collider.type = ColliderType::Cylinder;
+          else if (tmplCollider == "capsule")   tmpl.collider.type = ColliderType::Capsule;
+          else if (tmplCollider == "cone")      tmpl.collider.type = ColliderType::Cone;
+
+          spawner.templates.push_back(tmpl);
+          continue;
+        }
+
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = trim(line.substr(0, eq));
+        std::string val = trim(line.substr(eq + 1));
+
+        if (key == "Name")                       spawnerName = val;
+        else if (key == "Position")              position = parseVec3(val);
+        else if (key == "SpawnInterval")         spawner.spawnInterval = parseFloat(val);
+        else if (key == "SpawnIntervalRandomness") spawner.spawnIntervalRandomness = parseFloat(val);
+        else if (key == "SpawnDirection")        spawner.spawnDirection = parseVec3(val);
+        else if (key == "DirectionRandomness")   spawner.directionRandomness = parseFloat(val);
+        else if (key == "SpawnSpeed")            spawner.spawnSpeed = parseFloat(val);
+        else if (key == "SpeedRandomness")       spawner.speedRandomness = parseFloat(val);
+        else if (key == "SpawnOffset")           spawner.spawnOffset = parseVec3(val);
+        else if (key == "PositionRandomness")    spawner.positionRandomness = parseFloat(val);
+        else if (key == "AngularVelocity")       spawner.angularVelocity = parseVec3(val);
+        else if (key == "AngularVelocityRandomness") spawner.angularVelocityRandomness = parseFloat(val);
+        else if (key == "MaxSpawns")             spawner.maxSpawns = parseInt(val);
+        else if (key == "Enabled")               spawner.enabled = parseBool(val);
+      }
+
+      // Spawner entities carry a no-gravity PhysicsComponent so the network
+      // ownership system can assign them to a specific peer.  No collider means
+      // the physics library never touches them; they stay fixed.
+      Entity entity = registry.createEntity();
+      registry.addComponent<NameComponent>(entity, {spawnerName});
+      TransformComponent tc;
+      tc.position = position;
+      registry.addComponent<TransformComponent>(entity, tc);
+      PhysicsComponent pc;
+      pc.useGravity = false;
+      pc.damping    = 1.0f;
+      registry.addComponent<PhysicsComponent>(entity, pc);
+      registry.addComponent<SpawnerComponent>(entity, spawner);
+
+      Debug::log(Debug::Category::OBJECTS, "WorldParser: Created spawner '",
+                 spawnerName, "' with ", spawner.templates.size(), " template(s)");
       continue;
     }
 

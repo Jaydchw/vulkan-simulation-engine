@@ -78,6 +78,24 @@ class PhysicsObject {
       float invZZ = (Izz > 0.0f) ? 1.0f / Izz : 0.0f;
       return glm::vec3(invXX, invYY, invZZ);
     }
+    if (collider.getType() == ColliderType::Capsule) {
+      float r = collider.getRadius();
+      float h = collider.getHeight();
+      float Ixx = (1.0f / 12.0f) * mass * (3.0f * r * r + h * h);
+      float Izz = 0.5f * mass * r * r;
+      float invXX = (Ixx > 0.0f) ? 1.0f / Ixx : 0.0f;
+      float invZZ = (Izz > 0.0f) ? 1.0f / Izz : 0.0f;
+      return glm::vec3(invXX, invXX, invZZ);
+    }
+    if (collider.getType() == ColliderType::Cone) {
+      float r = collider.getRadius();
+      float h = collider.getHeight();
+      float Izz = (3.0f / 10.0f) * mass * r * r;
+      float Ixx = (3.0f / 80.0f) * mass * (4.0f * r * r + h * h);
+      float invXX = (Ixx > 0.0f) ? 1.0f / Ixx : 0.0f;
+      float invZZ = (Izz > 0.0f) ? 1.0f / Izz : 0.0f;
+      return glm::vec3(invXX, invXX, invZZ);
+    }
     float inv = (mass > 0.0f) ? 1.0f / mass : 0.0f;
     return glm::vec3(inv, inv, inv);
   }

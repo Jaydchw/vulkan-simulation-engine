@@ -46,8 +46,32 @@ public:
                                          const PhysicsObject& plane);
  static CollisionResult testSphereAABB(const PhysicsObject& sphere,
                                         const PhysicsObject& aabb);
+ static CollisionResult testSphereCylinder(const PhysicsObject& sphere,
+                                            const PhysicsObject& cylinder);
  static CollisionResult testCylinderPlane(const PhysicsObject& cylinder,
                                            const PhysicsObject& plane);
+ static CollisionResult testCylinderCylinder(const PhysicsObject& a,
+                                              const PhysicsObject& b);
+ static CollisionResult testAABBPlane(const PhysicsObject& aabb,
+                                       const PhysicsObject& plane);
+ static CollisionResult testAABBAABB(const PhysicsObject& a,
+                                      const PhysicsObject& b);
+ static CollisionResult testAABBCylinder(const PhysicsObject& aabb,
+                                          const PhysicsObject& cylinder);
+ static CollisionResult testCapsulePlane(const PhysicsObject& capsule,
+                                          const PhysicsObject& plane);
+ static CollisionResult testCapsuleSphere(const PhysicsObject& capsule,
+                                           const PhysicsObject& sphere);
+ static CollisionResult testCapsuleAABB(const PhysicsObject& capsule,
+                                         const PhysicsObject& aabb);
+ static CollisionResult testCapsuleCylinder(const PhysicsObject& capsule,
+                                             const PhysicsObject& cylinder);
+ static CollisionResult testCapsuleCapsule(const PhysicsObject& a,
+                                            const PhysicsObject& b);
+ static CollisionResult testConePlane(const PhysicsObject& cone,
+                                       const PhysicsObject& plane);
+ static CollisionResult testConeSphere(const PhysicsObject& cone,
+                                        const PhysicsObject& sphere);
 
  const std::vector<PhysicsObject*>& getObjects() const { return objects; }
 
@@ -63,6 +87,8 @@ private:
 
  void recordCollision(const char* pairName, bool resolved);
 
+ static void resolveImpulse(PhysicsObject& a, PhysicsObject& b,
+                             const CollisionResult& result);
  static void resolveSpherePlane(PhysicsObject& sphere,
                                   PhysicsObject& plane,
                                   const CollisionResult& result);
