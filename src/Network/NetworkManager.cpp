@@ -15,10 +15,11 @@ NetworkManager::NetworkManager() {
   if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
     std::cerr << "[Network] WSAStartup failed: " << WSAGetLastError() << "\n";
 
-  std::mt19937 rng(std::random_device{}());
+  rng = std::mt19937(std::random_device{}());
   std::uniform_int_distribution<uint32_t> dist(1, UINT32_MAX);
   myInstanceId = dist(rng);
   localPeerID = 1;
+  bwWindowStart = std::chrono::steady_clock::now();
 }
 
 NetworkManager::~NetworkManager() {
@@ -32,6 +33,7 @@ void NetworkManager::init(Registry* reg) {
   if (running) {
     std::lock_guard<std::mutex> lk(remoteStatesMutex);
     pendingRemoteStates.clear();
+    pendingRemoteProperties.clear();
     return;
   }
 
@@ -86,9 +88,43 @@ void NetworkManager::shutdown() {
   }
 }
 
+void NetworkManager::setNetworkEnabled(bool enabled) {
+  if (enabled == running.load()) return;
+
+  if (!enabled) {
+    shutdown();
+  } else {
+    // Clear all stale per-session state so we start fresh
+    {
+      std::lock_guard<std::mutex> lk(peersMutex);
+      peers.clear();
+    }
+    {
+      std::lock_guard<std::mutex> lk(remoteStatesMutex);
+      pendingRemoteStates.clear();
+      pendingRemoteProperties.clear();
+    }
+    {
+      std::lock_guard<std::mutex> lk(ownershipMutex);
+      ownershipMap.clear();
+    }
+    {
+      std::lock_guard<std::mutex> lk(commandMutex);
+      pendingSceneLoads.clear();
+      pendingSimStates.clear();
+    }
+    {
+      std::lock_guard<std::mutex> lk(deferredMutex);
+      deferredSends.clear();
+    }
+    init(registry);  // registry is still valid from before shutdown
+  }
+}
+
 void NetworkManager::tickReceive() {
   if (!running) return;
-  applyRemoteStates();
+  applyRemoteProperties();  // slow channel — usually a no-op, cheap when empty
+  applyRemoteStates();      // fast channel — applied every frame
 }
 
 void NetworkManager::tickSend() {
@@ -104,22 +140,33 @@ void NetworkManager::assignObjectOwnership() {
     dynamicEntities.push_back(e);
   std::sort(dynamicEntities.begin(), dynamicEntities.end());
 
-  uint8_t peerCount;
+  // Build the list of active peer IDs: only connected peers + self.
+  // If simulated packet loss is at or above the isolation threshold, this
+  // instance runs in solo mode and claims all objects locally.
+  std::vector<uint8_t> activePeerIds;
   {
     std::lock_guard<std::mutex> lk(peersMutex);
-    peerCount = static_cast<uint8_t>(allKnownInstances.size());
-    if (peerCount == 0) peerCount = 1;
-    if (peerCount > NETWORK_MAX_PEERS) peerCount = NETWORK_MAX_PEERS;
+    if (simPacketLossPercent >= OWNERSHIP_LOSS_ISOLATION_PCT) {
+      activePeerIds.push_back(localPeerID);
+    } else {
+      activePeerIds.push_back(localPeerID);
+      for (const auto& p : peers)
+        if (p.connected && p.id != 0) activePeerIds.push_back(p.id);
+      std::sort(activePeerIds.begin(), activePeerIds.end());
+      activePeerIds.erase(
+          std::unique(activePeerIds.begin(), activePeerIds.end()),
+          activePeerIds.end());
+    }
   }
+
+  const uint8_t activePeerCount = static_cast<uint8_t>(
+      std::min(activePeerIds.size(), size_t(NETWORK_MAX_PEERS)));
 
   {
     std::lock_guard<std::mutex> lk(ownershipMutex);
     ownershipMap.clear();
-    for (size_t i = 0; i < dynamicEntities.size(); ++i) {
-      Entity e = dynamicEntities[i];
-      uint8_t owner = static_cast<uint8_t>((i % peerCount) + 1);
-      ownershipMap[e] = owner;
-    }
+    for (size_t i = 0; i < dynamicEntities.size(); ++i)
+      ownershipMap[dynamicEntities[i]] = activePeerIds[i % activePeerCount];
   }
 
   {
@@ -137,9 +184,12 @@ void NetworkManager::assignObjectOwnership() {
         }
   }
 
-  std::cout << "[Network] Assigned " << dynamicEntities.size() << " objects to "
-            << (int)peerCount << " peers (I am peer " << (int)localPeerID
-            << ")\n";
+  std::cout << "[Network] Ownership assigned: " << dynamicEntities.size()
+            << " objects across " << (int)activePeerCount << " active peers"
+            << (simPacketLossPercent >= OWNERSHIP_LOSS_ISOLATION_PCT
+                    ? " [isolated: high loss]"
+                    : "")
+            << " (I am peer " << (int)localPeerID << ")\n";
 }
 
 bool NetworkManager::isLocallyOwned(Entity e) const {
@@ -200,6 +250,11 @@ bool NetworkManager::pollNewPeerConnected() {
   return newPeerConnectedFlag.compare_exchange_strong(expected, false);
 }
 
+bool NetworkManager::pollPeerDropped() {
+  bool expected = true;
+  return peerDroppedFlag.compare_exchange_strong(expected, false);
+}
+
 bool NetworkManager::isConnected() const {
   std::lock_guard<std::mutex> lk(peersMutex);
   for (const auto& p : peers)
@@ -256,7 +311,10 @@ void NetworkManager::networkThreadFunc() {
     }
 
     timeval tv{0, 50000};
-    if (select(0, &readSet, nullptr, nullptr, &tv) <= 0) continue;
+    if (select(0, &readSet, nullptr, nullptr, &tv) <= 0) {
+      flushDeferredSends();
+      continue;
+    }
 
     if (udpSocket != INVALID_SOCKET && FD_ISSET(udpSocket, &readSet))
       receiveUDPHellos();
@@ -270,6 +328,7 @@ void NetworkManager::networkThreadFunc() {
             FD_ISSET(p.socket, &readSet))
           receiveFromPeer(p);
     }
+    flushDeferredSends();
   }
 }
 
@@ -342,22 +401,11 @@ void NetworkManager::receiveUDPHellos() {
     std::cout << "[Network] Discovered peer inst=" << pkt.instanceId
               << " ip=" << senderIP << " tcp=" << pkt.tcpPort << "\n";
 
-    bool merged = false;
-    for (auto& p : peers) {
-      if (p.ip == senderIP && p.instanceId == 0) {
-        p.instanceId = pkt.instanceId;
-        p.tcpPort = pkt.tcpPort;
-        merged = true;
-        break;
-      }
-    }
-    if (!merged) {
-      PeerInfo newPeer{};
-      newPeer.instanceId = pkt.instanceId;
-      newPeer.ip = senderIP;
-      newPeer.tcpPort = pkt.tcpPort;
-      peers.push_back(newPeer);
-    }
+    PeerInfo newPeer{};
+    newPeer.instanceId = pkt.instanceId;
+    newPeer.ip = senderIP;
+    newPeer.tcpPort = pkt.tcpPort;
+    peers.push_back(newPeer);
 
     allKnownInstances.push_back({pkt.instanceId, senderIP, pkt.tcpPort});
     std::sort(allKnownInstances.begin(), allKnownInstances.end(),
@@ -411,28 +459,24 @@ void NetworkManager::acceptTCPConnections() {
   inet_ntop(AF_INET, &clientAddr.sin_addr, ipBuf, sizeof(ipBuf));
   std::string clientIP(ipBuf);
 
+  // Send our handshake first (socket is still blocking — small packet completes
+  // immediately)
+  sendHandshake(clientSock);
+
   u_long nb = 1;
   ioctlsocket(clientSock, FIONBIO, &nb);
 
   std::cout << "[Network] Incoming TCP from " << clientIP << "\n";
 
+  // Don't match by IP — multiple instances share the same IP on one machine.
+  // Identity is resolved when we receive their HANDSHAKE packet.
   std::lock_guard<std::mutex> lk(peersMutex);
-  for (auto& p : peers) {
-    if (p.ip == clientIP && !p.connected) {
-      if (p.socket != INVALID_SOCKET) closesocket(p.socket);
-      p.socket = clientSock;
-      p.connected = true;
-      newPeerConnectedFlag = true;
-      return;
-    }
-  }
-
   PeerInfo np{};
   np.ip = clientIP;
   np.socket = clientSock;
   np.connected = true;
+  // instanceId=0 until handleHandshake fills it in
   peers.push_back(np);
-  newPeerConnectedFlag = true;
 }
 
 void NetworkManager::connectToPeer(const std::string& ip, uint16_t port) {
@@ -452,6 +496,10 @@ void NetworkManager::connectToPeer(const std::string& ip, uint16_t port) {
     return;
   }
 
+  // Send our handshake while socket is still blocking — small packet, completes
+  // immediately
+  sendHandshake(s);
+
   u_long nb = 1;
   ioctlsocket(s, FIONBIO, &nb);
 
@@ -470,69 +518,158 @@ void NetworkManager::connectToPeer(const std::string& ip, uint16_t port) {
 }
 
 void NetworkManager::receiveFromPeer(PeerInfo& peer) {
-  TCPHeader hdr{};
-  int ret = recv(peer.socket, reinterpret_cast<char*>(&hdr), sizeof(hdr), 0);
-
-  if (ret == 0 ||
-      (ret == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
+  // Read all available bytes into the peer's accumulation buffer
+  uint8_t tmp[65536];
+  int r = recv(peer.socket, reinterpret_cast<char*>(tmp), sizeof(tmp), 0);
+  if (r == 0 || (r == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
     closesocket(peer.socket);
     peer.socket = INVALID_SOCKET;
     peer.connected = false;
+    peer.recvBuf.clear();
+    peerDroppedFlag = true;
     std::cout << "[Network] Peer " << peer.ip << " disconnected\n";
     return;
   }
-  if (ret != sizeof(hdr)) return;
-  if (hdr.payloadSize == 0) return;
-  if (hdr.payloadSize > 4 * 1024 * 1024) return;
-
-  std::vector<uint8_t> payload(hdr.payloadSize);
-  int totalRead = 0;
-  while (totalRead < static_cast<int>(hdr.payloadSize)) {
-    int r =
-        recv(peer.socket, reinterpret_cast<char*>(payload.data()) + totalRead,
-             hdr.payloadSize - totalRead, 0);
-    if (r <= 0) break;
-    totalRead += r;
+  if (r > 0) {
     peer.bytesReceived += static_cast<uint64_t>(r);
+    peer.recvBuf.insert(peer.recvBuf.end(), tmp, tmp + r);
   }
-  if (totalRead != static_cast<int>(hdr.payloadSize)) return;
 
-  switch (static_cast<PacketType>(hdr.type)) {
-    case PacketType::OBJECT_STATES:
-      handleObjectStatesBatch(payload);
-      break;
-    case PacketType::LOAD_SCENE:
-      handleLoadScene(payload);
-      break;
-    case PacketType::SIM_STATE:
-      handleSimState(payload);
-      break;
-    case PacketType::PING: {
-      TCPHeader pong{};
-      pong.type = static_cast<uint8_t>(PacketType::PONG);
-      pong.payloadSize = 0;
-      send(peer.socket, reinterpret_cast<const char*>(&pong), sizeof(pong), 0);
+  // Process every complete packet in the buffer
+  while (peer.recvBuf.size() >= sizeof(TCPHeader)) {
+    TCPHeader hdr{};
+    std::memcpy(&hdr, peer.recvBuf.data(), sizeof(hdr));
+
+    if (hdr.payloadSize > 4 * 1024 * 1024) {
+      // Protocol error — disconnect rather than letting garbage accumulate
+      closesocket(peer.socket);
+      peer.socket = INVALID_SOCKET;
+      peer.connected = false;
+      peer.recvBuf.clear();
+      std::cout << "[Network] Peer " << peer.ip
+                << " protocol error, disconnecting\n";
+      return;
+    }
+
+    size_t needed = sizeof(TCPHeader) + hdr.payloadSize;
+    if (peer.recvBuf.size() < needed) break;  // wait for the rest
+
+    std::vector<uint8_t> payload(peer.recvBuf.begin() + sizeof(TCPHeader),
+                                 peer.recvBuf.begin() + needed);
+    peer.recvBuf.erase(peer.recvBuf.begin(), peer.recvBuf.begin() + needed);
+
+    switch (static_cast<PacketType>(hdr.type)) {
+      case PacketType::HANDSHAKE:
+        handleHandshake(peer, payload);
+        if (!peer.connected) return;  // duplicate was dropped
+        break;
+      case PacketType::OBJECT_STATES:
+        handleObjectStatesBatch(payload);
+        break;
+      case PacketType::OBJECT_PROPERTIES:
+        handleObjectPropertiesBatch(payload);
+        break;
+      case PacketType::LOAD_SCENE:
+        handleLoadScene(payload);
+        break;
+      case PacketType::SIM_STATE:
+        handleSimState(payload);
+        break;
+      case PacketType::PING: {
+        TCPHeader pong{};
+        pong.type = static_cast<uint8_t>(PacketType::PONG);
+        pong.payloadSize = 0;
+        send(peer.socket, reinterpret_cast<const char*>(&pong), sizeof(pong),
+             0);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+}
+
+void NetworkManager::sendHandshake(SOCKET s) {
+  HandshakePayload hs{};
+  hs.instanceId = myInstanceId;
+  hs.tcpPort = localTCPPort;
+
+  TCPHeader hdr{};
+  hdr.type = static_cast<uint8_t>(PacketType::HANDSHAKE);
+  hdr.payloadSize = sizeof(hs);
+
+  uint8_t buf[sizeof(hdr) + sizeof(hs)];
+  std::memcpy(buf, &hdr, sizeof(hdr));
+  std::memcpy(buf + sizeof(hdr), &hs, sizeof(hs));
+  send(s, reinterpret_cast<const char*>(buf), sizeof(buf), 0);
+}
+
+void NetworkManager::handleHandshake(PeerInfo& peer,
+                                     const std::vector<uint8_t>& payload) {
+  // peersMutex is already held by the caller (networkThreadFunc)
+  if (payload.size() < sizeof(HandshakePayload)) return;
+  HandshakePayload hs{};
+  std::memcpy(&hs, payload.data(), sizeof(hs));
+
+  // Check if we already have a live connection to this instance via the
+  // outbound socket. If so, this is the duplicate incoming connection — drop
+  // it.
+  for (auto& p : peers) {
+    if (&p == &peer) continue;
+    if (p.instanceId == hs.instanceId && p.connected &&
+        p.socket != INVALID_SOCKET) {
+      closesocket(peer.socket);
+      peer.socket = INVALID_SOCKET;
+      peer.connected = false;
+      peer.recvBuf.clear();
+      std::cout << "[Network] Dropped duplicate connection from inst="
+                << hs.instanceId << "\n";
+      return;
+    }
+  }
+
+  // Identify this peer
+  peer.instanceId = hs.instanceId;
+  peer.tcpPort = hs.tcpPort;
+
+  // Add to known instances if not already there (can happen if TCP arrives
+  // before the UDP hello is processed)
+  if (!isKnownInstance(hs.instanceId)) {
+    allKnownInstances.push_back({hs.instanceId, peer.ip, hs.tcpPort});
+    std::sort(allKnownInstances.begin(), allKnownInstances.end(),
+              [](const InstanceInfo& a, const InstanceInfo& b) {
+                return a.instanceId < b.instanceId;
+              });
+    recomputePeerIDs();
+  }
+
+  // Ensure this peer has its ID assigned
+  for (size_t i = 0; i < allKnownInstances.size(); ++i) {
+    if (allKnownInstances[i].instanceId == hs.instanceId) {
+      peer.id = static_cast<uint8_t>(i + 1);
       break;
     }
-    default:
-      break;
   }
+
+  newPeerConnectedFlag = true;
+  std::cout << "[Network] Handshake: inst=" << hs.instanceId
+            << " -> PeerID=" << (int)peer.id << "\n";
 }
 
 void NetworkManager::handleObjectStatesBatch(
     const std::vector<uint8_t>& payload) {
-  if (payload.size() < sizeof(ObjectStatesBatchHeader)) return;
+  if (payload.size() < sizeof(ObjectBatchHeader)) return;
 
-  ObjectStatesBatchHeader batchHdr{};
+  ObjectBatchHeader batchHdr{};
   std::memcpy(&batchHdr, payload.data(), sizeof(batchHdr));
 
   size_t offset = sizeof(batchHdr);
-  size_t expectedSize = offset + batchHdr.count * sizeof(ObjectStateEntry);
+  size_t expectedSize = offset + batchHdr.count * sizeof(ObjectFastStateEntry);
   if (payload.size() < expectedSize) return;
 
   std::lock_guard<std::mutex> lk(remoteStatesMutex);
   for (uint32_t i = 0; i < batchHdr.count; ++i) {
-    ObjectStateEntry entry{};
+    ObjectFastStateEntry entry{};
     std::memcpy(&entry, payload.data() + offset, sizeof(entry));
     offset += sizeof(entry);
 
@@ -541,7 +678,41 @@ void NetworkManager::handleObjectStatesBatch(
     state.position = {entry.posX, entry.posY, entry.posZ};
     state.orientation =
         glm::quat(entry.rotW, entry.rotX, entry.rotY, entry.rotZ);
+    state.velocity = {entry.velX, entry.velY, entry.velZ};
     pendingRemoteStates.push_back(state);
+  }
+}
+
+void NetworkManager::handleObjectPropertiesBatch(
+    const std::vector<uint8_t>& payload) {
+  if (payload.size() < sizeof(ObjectBatchHeader)) return;
+
+  ObjectBatchHeader batchHdr{};
+  std::memcpy(&batchHdr, payload.data(), sizeof(batchHdr));
+
+  size_t offset = sizeof(batchHdr);
+  size_t expectedSize = offset + batchHdr.count * sizeof(ObjectPropertyEntry);
+  if (payload.size() < expectedSize) return;
+
+  std::lock_guard<std::mutex> lk(remoteStatesMutex);
+  for (uint32_t i = 0; i < batchHdr.count; ++i) {
+    ObjectPropertyEntry entry{};
+    std::memcpy(&entry, payload.data() + offset, sizeof(entry));
+    offset += sizeof(entry);
+
+    RemoteObjectProperties props{};
+    props.entityId = entry.entityId;
+    props.mass = entry.mass;
+    props.restitution = entry.restitution;
+    props.damping = entry.damping;
+    props.useGravity = entry.useGravity != 0;
+    props.colliderType = entry.colliderType;
+    props.radius = entry.radius;
+    props.height = entry.height;
+    props.halfExtents = {entry.halfExtX, entry.halfExtY, entry.halfExtZ};
+    props.normal = {entry.normalX, entry.normalY, entry.normalZ};
+    props.finite = entry.finite != 0;
+    pendingRemoteProperties.push_back(props);
   }
 }
 
@@ -587,6 +758,10 @@ void NetworkManager::applyRemoteStates() {
     transform->position = state.position;
     transform->rotation = state.orientation;
 
+    // Keep velocity current for cross-peer collision resolution
+    auto* phys = registry->getComponent<PhysicsComponent>(e);
+    if (phys) phys->velocity = state.velocity;
+
     auto* physObj = registry->getPhysicsObjectPtr(e);
     if (physObj) {
       physObj->setPosition(state.position);
@@ -595,16 +770,48 @@ void NetworkManager::applyRemoteStates() {
   }
 }
 
+void NetworkManager::applyRemoteProperties() {
+  std::vector<RemoteObjectProperties> snapshot;
+  {
+    std::lock_guard<std::mutex> lk(remoteStatesMutex);
+    if (pendingRemoteProperties.empty()) return;
+    snapshot.swap(pendingRemoteProperties);
+  }
+  if (!registry) return;
+
+  for (const auto& props : snapshot) {
+    Entity e = static_cast<Entity>(props.entityId);
+
+    auto* phys = registry->getComponent<PhysicsComponent>(e);
+    if (phys) {
+      phys->mass = props.mass;
+      phys->restitution = props.restitution;
+      phys->damping = props.damping;
+      phys->useGravity = props.useGravity;
+    }
+
+    auto* collider = registry->getComponent<ColliderComponent>(e);
+    if (collider) {
+      collider->type = static_cast<ColliderType>(props.colliderType);
+      collider->radius = props.radius;
+      collider->height = props.height;
+      collider->halfExtents = props.halfExtents;
+      collider->normal = props.normal;
+      collider->finite = props.finite;
+    }
+  }
+}
+
 void NetworkManager::sendOwnedObjectStates() {
   if (!registry) return;
 
-  std::vector<ObjectStateEntry> entries;
+  std::vector<ObjectFastStateEntry> entries;
   for (const auto& [e, phys] : registry->allPhysics()) {
     if (!isLocallyOwned(e)) continue;
     const auto* transform = registry->getComponent<TransformComponent>(e);
     if (!transform) continue;
 
-    ObjectStateEntry entry{};
+    ObjectFastStateEntry entry{};
     entry.entityId = static_cast<uint32_t>(e);
     entry.posX = transform->position.x;
     entry.posY = transform->position.y;
@@ -613,17 +820,20 @@ void NetworkManager::sendOwnedObjectStates() {
     entry.rotX = transform->rotation.x;
     entry.rotY = transform->rotation.y;
     entry.rotZ = transform->rotation.z;
+    entry.velX = phys.velocity.x;
+    entry.velY = phys.velocity.y;
+    entry.velZ = phys.velocity.z;
     entries.push_back(entry);
   }
   if (entries.empty()) return;
 
-  ObjectStatesBatchHeader batchHdr{};
+  ObjectBatchHeader batchHdr{};
   batchHdr.senderPeerId = localPeerID;
   batchHdr.count = static_cast<uint32_t>(entries.size());
 
   uint32_t payloadSize =
       sizeof(batchHdr) +
-      static_cast<uint32_t>(entries.size() * sizeof(ObjectStateEntry));
+      static_cast<uint32_t>(entries.size() * sizeof(ObjectFastStateEntry));
 
   TCPHeader hdr{};
   hdr.type = static_cast<uint8_t>(PacketType::OBJECT_STATES);
@@ -636,14 +846,35 @@ void NetworkManager::sendOwnedObjectStates() {
   std::memcpy(buf.data() + off, &batchHdr, sizeof(batchHdr));
   off += sizeof(batchHdr);
   std::memcpy(buf.data() + off, entries.data(),
-              entries.size() * sizeof(ObjectStateEntry));
+              entries.size() * sizeof(ObjectFastStateEntry));
+
+  // Bandwidth budget reset (1-second window)
+  auto now = std::chrono::steady_clock::now();
+  if (std::chrono::duration<float>(now - bwWindowStart).count() >= 1.0f) {
+    bwBytesThisSecond = 0;
+    bwWindowStart = now;
+  }
+
+  std::uniform_real_distribution<float> lossDist(0.0f, 100.0f);
 
   std::lock_guard<std::mutex> lk(peersMutex);
   for (auto& peer : peers) {
     if (!peer.connected || peer.socket == INVALID_SOCKET) continue;
-    int sent = send(peer.socket, reinterpret_cast<const char*>(buf.data()),
-                    static_cast<int>(buf.size()), 0);
-    if (sent > 0) peer.bytesSent += static_cast<uint64_t>(sent);
+
+    // Per-peer packet loss simulation
+    if (simPacketLossPercent > 0.0f && lossDist(rng) < simPacketLossPercent)
+      continue;
+
+    // Bandwidth cap: drop if this send would exceed the budget
+    if (simBandwidthLimitKBps > 0.0f) {
+      uint64_t limitBytes =
+          static_cast<uint64_t>(simBandwidthLimitKBps * 1024.0f);
+      if (bwBytesThisSecond + buf.size() > limitBytes) continue;
+      bwBytesThisSecond += buf.size();
+    }
+
+    peer.bytesSent += buf.size();
+    queueSimulatedSend(peer.socket, buf);
   }
 }
 
@@ -688,6 +919,80 @@ void NetworkManager::broadcastTCP(PacketType type, const void* payload,
     int sent = send(peer.socket, reinterpret_cast<const char*>(buf.data()),
                     static_cast<int>(buf.size()), 0);
     if (sent > 0) peer.bytesSent += static_cast<uint64_t>(sent);
+  }
+}
+
+void NetworkManager::sendOwnedObjectProperties() {
+  if (!registry) return;
+
+  std::vector<ObjectPropertyEntry> entries;
+  for (const auto& [e, phys] : registry->allPhysics()) {
+    if (!isLocallyOwned(e)) continue;
+    const auto* collider = registry->getComponent<ColliderComponent>(e);
+    if (!collider) continue;
+
+    ObjectPropertyEntry entry{};
+    entry.entityId = static_cast<uint32_t>(e);
+    entry.mass = phys.mass;
+    entry.restitution = phys.restitution;
+    entry.damping = phys.damping;
+    entry.useGravity = phys.useGravity ? 1 : 0;
+    entry.colliderType = static_cast<uint8_t>(collider->type);
+    entry.radius = collider->radius;
+    entry.height = collider->height;
+    entry.halfExtX = collider->halfExtents.x;
+    entry.halfExtY = collider->halfExtents.y;
+    entry.halfExtZ = collider->halfExtents.z;
+    entry.normalX = collider->normal.x;
+    entry.normalY = collider->normal.y;
+    entry.normalZ = collider->normal.z;
+    entry.finite = collider->finite ? 1 : 0;
+    entries.push_back(entry);
+  }
+  if (entries.empty()) return;
+
+  ObjectBatchHeader batchHdr{};
+  batchHdr.senderPeerId = localPeerID;
+  batchHdr.count = static_cast<uint32_t>(entries.size());
+
+  const uint32_t payloadSize =
+      sizeof(batchHdr) +
+      static_cast<uint32_t>(entries.size() * sizeof(ObjectPropertyEntry));
+
+  std::vector<uint8_t> payload(payloadSize);
+  size_t off = 0;
+  std::memcpy(payload.data() + off, &batchHdr, sizeof(batchHdr));
+  off += sizeof(batchHdr);
+  std::memcpy(payload.data() + off, entries.data(),
+              entries.size() * sizeof(ObjectPropertyEntry));
+
+  // Sent via the reliable control path — not subject to loss/BW simulation.
+  broadcastTCP(PacketType::OBJECT_PROPERTIES, payload.data(), payloadSize);
+}
+
+void NetworkManager::queueSimulatedSend(SOCKET sock,
+                                        const std::vector<uint8_t>& data) {
+  if (simExtraLatencyMs <= 0.0f) {
+    send(sock, reinterpret_cast<const char*>(data.data()),
+         static_cast<int>(data.size()), 0);
+    return;
+  }
+
+  auto readyAt = std::chrono::steady_clock::now() +
+                 std::chrono::microseconds(
+                     static_cast<int64_t>(simExtraLatencyMs * 1000.0f));
+  std::lock_guard<std::mutex> lk(deferredMutex);
+  deferredSends.push_back({readyAt, sock, data});
+}
+
+void NetworkManager::flushDeferredSends() {
+  auto now = std::chrono::steady_clock::now();
+  std::lock_guard<std::mutex> lk(deferredMutex);
+  while (!deferredSends.empty() && deferredSends.front().readyAt <= now) {
+    auto& d = deferredSends.front();
+    send(d.sock, reinterpret_cast<const char*>(d.data.data()),
+         static_cast<int>(d.data.size()), 0);
+    deferredSends.pop_front();
   }
 }
 

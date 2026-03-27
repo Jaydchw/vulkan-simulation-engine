@@ -74,10 +74,10 @@ if (interface) interface->clearSelection();
     networkManager->assignObjectOwnership();
   }
 
-  // Reset owner-colour state for the new scene
+  // Clear material override cache so colours are re-applied with the new registry.
+  // Do NOT reset colorByOwner — it is user intent and should survive reloads.
   savedMaterialIDs.clear();
-  lastColorByOwner = false;
-  if (networkManager) networkManager->colorByOwner = false;
+  lastColorByOwner = false;  // forces a re-broadcast on the next frame so peers re-sync
 
   simState = SimulationState{};
   simState.timeSpeed = worldSettings.timeSpeed;
@@ -186,8 +186,10 @@ void Application::initVulkan() {
   interface->setWorldLoadCallback([this](const std::string& path) {
     loadWorld(path);
     // Broadcast scene change to all peers (unless we're applying a remote one)
-    if (networkManager && !applyingRemoteSceneLoad)
+    if (networkManager && !applyingRemoteSceneLoad) {
       networkManager->sendLoadScene(path);
+      networkManager->sendOwnedObjectProperties();
+    }
   });
 }
 
@@ -210,8 +212,10 @@ while (!window->shouldClose()) {
     simState.reloadRequested = false;
     if (!lastLoadedWorldPath.empty()) {
       loadWorld(lastLoadedWorldPath);
-      if (networkManager && !applyingRemoteSceneLoad)
+      if (networkManager && !applyingRemoteSceneLoad) {
         networkManager->sendLoadScene(lastLoadedWorldPath);
+        networkManager->sendOwnedObjectProperties();
+      }
     }
   }
 
@@ -231,8 +235,10 @@ while (!window->shouldClose()) {
     simState.baked = false;
     simState.scrubAccumulator = 0.0f;
     simState.physicsAccumulator = 0.0f;
-    if (networkManager && !lastLoadedWorldPath.empty() && !applyingRemoteSceneLoad)
+    if (networkManager && !lastLoadedWorldPath.empty() && !applyingRemoteSceneLoad) {
       networkManager->sendLoadScene(lastLoadedWorldPath);
+      networkManager->sendOwnedObjectProperties();
+    }
   }
 
   if (simState.loadBakeRequested && snapshotsOn && !lastLoadedWorldPath.empty()) {
@@ -417,6 +423,30 @@ while (!window->shouldClose()) {
     if (networkManager->pollNewPeerConnected() && !lastLoadedWorldPath.empty()) {
       networkManager->assignObjectOwnership();
       networkManager->sendLoadScene(lastLoadedWorldPath);
+      networkManager->sendOwnedObjectProperties();
+      // Auto-enable colour-by-owner the moment a peer appears; broadcast to all peers
+      networkManager->colorByOwner = true;
+      lastBroadcastColorByOwner    = false;  // triggers broadcast on next simstate send
+      applyOwnerColors(true);
+      lastColorByOwner = true;
+    }
+
+    // Re-assign ownership when a peer disconnects and refresh colours
+    if (networkManager->pollPeerDropped()) {
+      networkManager->assignObjectOwnership();
+      if (networkManager->colorByOwner) {
+        applyOwnerColors(true);
+      }
+    }
+
+    // Packet-loss isolation: above the threshold this instance runs solo;
+    // crossing back below re-joins the normal round-robin.
+    {
+      const bool highLoss = networkManager->simPacketLossPercent >= OWNERSHIP_LOSS_ISOLATION_PCT;
+      if (highLoss != ownershipHighLossMode) {
+        ownershipHighLossMode = highLoss;
+        networkManager->assignObjectOwnership();
+      }
     }
 
     std::string remotePath;
@@ -607,8 +637,9 @@ while (!window->shouldClose()) {
 
     if (networkManager) {
       networkSendAccumulator += deltaTime;
-      if (networkSendAccumulator >= kNetworkSendInterval) {
-        networkSendAccumulator -= kNetworkSendInterval;
+      const float sendInterval = 1.0f / networkManager->networkSendHz;
+      if (networkSendAccumulator >= sendInterval) {
+        networkSendAccumulator -= sendInterval;
         networkManager->tickSend();
       }
     }

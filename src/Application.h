@@ -164,9 +164,8 @@ class Application final {
   bool    lastBroadcastReversePlay   = false;
   bool    lastBroadcastColorByOwner  = false;
 
-  float networkSendAccumulator               = 0.0f;
-  static constexpr float kNetworkSendHz      = 20.0f;
-  static constexpr float kNetworkSendInterval = 1.0f / kNetworkSendHz;
+  float networkSendAccumulator   = 0.0f;
+  bool  ownershipHighLossMode    = false; // hysteresis flag for packet-loss isolation
 
   MeshID gizmoMeshID = INVALID_MESH_ID;
   MaterialID gizmoMaterialID = INVALID_MATERIAL_ID;

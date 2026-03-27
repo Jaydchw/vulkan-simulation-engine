@@ -243,6 +243,32 @@ NetworkManager* networkManager) {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
+  // Tint the entire UI with the local peer colour when in a multi-peer session.
+  // Each instance gets a distinct hue so you can tell windows apart at a glance.
+  static const ImVec4 kPeerTints[5] = {
+      {0.6f, 0.6f, 0.6f, 1.0f},
+      {1.0f, 0.3f, 0.3f, 1.0f},
+      {0.3f, 1.0f, 0.3f, 1.0f},
+      {0.3f, 0.5f, 1.0f, 1.0f},
+      {1.0f, 1.0f, 0.3f, 1.0f},
+  };
+  const bool applyPeerTint = networkManager &&
+                             networkManager->isRunning() &&
+                             networkManager->getConnectedPeerCount() >= 1 &&
+                             networkManager->getLocalPeerID() >= 1 &&
+                             networkManager->getLocalPeerID() <= 4;
+  ImVec4 peerTintColor = {0,0,0,0};
+  if (applyPeerTint) {
+    peerTintColor = kPeerTints[networkManager->getLocalPeerID()];
+    const ImVec4& pc = peerTintColor;
+    auto blend = [&](ImGuiCol col, float t) {
+      const ImVec4 base = ImGui::GetStyleColorVec4(col);
+      return ImVec4(base.x*(1-t)+pc.x*t, base.y*(1-t)+pc.y*t,
+                    base.z*(1-t)+pc.z*t, base.w);
+    };
+    ImGui::PushStyleColor(ImGuiCol_MenuBarBg, blend(ImGuiCol_MenuBarBg, 0.18f));
+  }
+
   if (selectedEntity != INVALID_ENTITY &&
       !registry.hasComponent<NameComponent>(selectedEntity)) {
     selectedEntity = INVALID_ENTITY;
@@ -286,11 +312,84 @@ NetworkManager* networkManager) {
 
     if (generalSettings.showFPS) {
       const float fps = ImGui::GetIO().Framerate;
+      const float dt  = ImGui::GetIO().DeltaTime;
+
+      // Smoothed TX/RX KB/s via EMA
+      static uint64_t prevTotalSent = 0, prevTotalRecv = 0;
+      static float smoothTxKBps = 0.0f, smoothRxKBps = 0.0f;
+      const int peerCount = networkManager ? networkManager->getConnectedPeerCount() : 0;
+      if (networkManager && peerCount >= 1 && dt > 0.0f) {
+        uint64_t totalSent = 0, totalRecv = 0;
+        for (const auto& p : networkManager->getPeerSnapshot()) {
+          totalSent += p.bytesSent;
+          totalRecv += p.bytesReceived;
+        }
+        const float txKBps = static_cast<float>(totalSent - prevTotalSent) / (dt * 1024.0f);
+        const float rxKBps = static_cast<float>(totalRecv - prevTotalRecv) / (dt * 1024.0f);
+        prevTotalSent = totalSent;
+        prevTotalRecv = totalRecv;
+        constexpr float alpha = 0.1f;
+        smoothTxKBps = smoothTxKBps * (1-alpha) + txKBps * alpha;
+        smoothRxKBps = smoothRxKBps * (1-alpha) + rxKBps * alpha;
+      } else if (peerCount == 0) {
+        smoothTxKBps = smoothRxKBps = 0.0f;
+        prevTotalSent = prevTotalRecv = 0;
+      }
+
+      // Build display strings
       char fpsText[48];
-      snprintf(fpsText, sizeof(fpsText), "%.0f FPS  |  %.1f ms", fps,
-               1000.0f / fps);
-      const float textWidth = ImGui::CalcTextSize(fpsText).x;
-      ImGui::SameLine(ImGui::GetWindowWidth() - textWidth - 20.0f);
+      snprintf(fpsText, sizeof(fpsText), "%.0f FPS  |  %.1f ms", fps, 1000.0f / fps);
+
+      const bool showNet = networkManager && peerCount >= 1;
+      char txStr[24]={}, rxStr[24]={}, lossStr[24]={}, latStr[24]={};
+      float loss = 0.0f, lat = 0.0f;
+      if (showNet) {
+        snprintf(txStr,   sizeof(txStr),   "TX %.1f",   smoothTxKBps);
+        snprintf(rxStr,   sizeof(rxStr),   "  RX %.1f KB/s", smoothRxKBps);
+        loss = networkManager->simPacketLossPercent;
+        lat  = networkManager->simExtraLatencyMs;
+        if (loss > 0.0f) snprintf(lossStr, sizeof(lossStr), "  loss %.0f%%", loss);
+        if (lat  > 0.0f) snprintf(latStr,  sizeof(latStr),  "  +%.0fms",     lat);
+      }
+
+      // Measure total width for right-alignment
+      float totalWidth = ImGui::CalcTextSize(fpsText).x;
+      if (showNet) {
+        totalWidth += ImGui::CalcTextSize(txStr).x
+                    + ImGui::CalcTextSize(rxStr).x
+                    + ImGui::CalcTextSize(lossStr).x
+                    + ImGui::CalcTextSize(latStr).x
+                    + ImGui::CalcTextSize("  |  ").x;  // separator before FPS
+      }
+
+      ImGui::SetCursorPosX(ImGui::GetWindowWidth() - totalWidth - 20.0f);
+
+      if (showNet) {
+        // TX — green
+        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.5f, 1.0f), "%s", txStr);
+        ImGui::SameLine(0, 0);
+        // RX — cyan-blue
+        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", rxStr);
+        ImGui::SameLine(0, 0);
+        // Loss — yellow → red
+        if (lossStr[0]) {
+          const ImVec4 lossCol = loss >= 50.0f ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f)
+                               : loss >= 20.0f ? ImVec4(1.0f, 0.7f, 0.2f, 1.0f)
+                                               : ImVec4(1.0f, 1.0f, 0.4f, 1.0f);
+          ImGui::TextColored(lossCol, "%s", lossStr);
+          ImGui::SameLine(0, 0);
+        }
+        // Latency — orange
+        if (latStr[0]) {
+          ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "%s", latStr);
+          ImGui::SameLine(0, 0);
+        }
+        // Separator
+        ImGui::TextDisabled("  |  ");
+        ImGui::SameLine(0, 0);
+      }
+
+      // FPS — green / yellow / red
       if (fps >= 60.0f)
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%s", fpsText);
       else if (fps >= 30.0f)
@@ -301,13 +400,14 @@ NetworkManager* networkManager) {
     ImGui::EndMainMenuBar();
   }
 
-  renderTransportBar(simState);
+  renderTransportBar(simState, applyPeerTint ? peerTintColor : ImVec4{0,0,0,0});
 
   if (simState.bakePerformanceMode && simState.baked && simState.bakeStats.hasData &&
       !simState.isBaking && simState.bakeCurrentStep == simState.bakeTotalSteps) {
     showBakeStatsWindow = true;
   }
 
+  if (applyPeerTint) ImGui::PopStyleColor(1);
   ImGui::Render();
 }
 
@@ -335,7 +435,7 @@ static void fieldLabel(const char* label) {
   ImGui::PopStyleColor();
 }
 
-void Interface::renderTransportBar(SimulationState& simState) {
+void Interface::renderTransportBar(SimulationState& simState, ImVec4 peerTint) {
   const ImGuiViewport* viewport = ImGui::GetMainViewport();
   const float s = currentScale;
   const float barHeight = 38.0f * s;
@@ -365,7 +465,15 @@ void Interface::renderTransportBar(SimulationState& simState) {
   ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f * s);
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4 * s, 3 * s));
 
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.11f, 0.11f, 0.14f, 1.0f));
+  {
+    ImVec4 barBg = {0.11f, 0.11f, 0.14f, 1.0f};
+    if (peerTint.w > 0.0f) {
+      constexpr float t = 0.18f;
+      barBg = {barBg.x*(1-t)+peerTint.x*t, barBg.y*(1-t)+peerTint.y*t,
+               barBg.z*(1-t)+peerTint.z*t, 1.0f};
+    }
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, barBg);
+  }
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.22f, 0.28f, 1.0f));
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.23f, 1.0f));
   ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.34f, 1.0f));
@@ -1677,18 +1785,23 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
       "Unassigned", "Peer 1 (Red)", "Peer 2 (Green)", "Peer 3 (Blue)", "Peer 4 (Yellow)"
   };
 
-  const bool   connected  = nm->isConnected();
-  const int    peerCount  = nm->getConnectedPeerCount();
-  const uint8_t pid       = nm->getLocalPeerID();
-  const uint8_t safeId    = (pid < 5) ? pid : 0;
+  const bool    netRunning = nm->isRunning();
+  const bool    connected  = nm->isConnected();
+  const int     peerCount  = nm->getConnectedPeerCount();
+  const uint8_t pid        = nm->getLocalPeerID();
+  const uint8_t safeId     = (pid < 5) ? pid : 0;
 
   // ---- Status ----
   sectionHeader("Status");
   {
-    ImVec4 sc = connected ? ImVec4(0.30f,0.90f,0.40f,1.0f) : ImVec4(0.80f,0.40f,0.40f,1.0f);
-    ImGui::TextColored(sc, connected ? "Connected" : "Searching for peers...");
-    ImGui::SameLine(0, 10*s);
-    ImGui::TextDisabled("(%d peer%s)", peerCount, peerCount == 1 ? "" : "s");
+    if (!netRunning) {
+      ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.0f), "Networking Disabled");
+    } else {
+      ImVec4 sc = connected ? ImVec4(0.30f,0.90f,0.40f,1.0f) : ImVec4(0.80f,0.40f,0.40f,1.0f);
+      ImGui::TextColored(sc, connected ? "Connected" : "Searching for peers...");
+      ImGui::SameLine(0, 10*s);
+      ImGui::TextDisabled("(%d peer%s)", peerCount, peerCount == 1 ? "" : "s");
+    }
 
     ImGui::Spacing();
     fieldLabel("This Instance");
@@ -1735,6 +1848,27 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
   // ---- Actions ----
   sectionHeader("Actions");
   {
+    // ── Networking on/off toggle ──────────────────────────────────────────
+    if (netRunning) {
+      ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.50f, 0.15f, 0.15f, 1.0f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.62f, 0.20f, 0.20f, 1.0f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.72f, 0.26f, 0.26f, 1.0f));
+      if (ImGui::Button("Disable Networking", ImVec2(160*s, 26*s)))
+        nm->setNetworkEnabled(false);
+    } else {
+      ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.42f, 0.18f, 1.0f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.52f, 0.24f, 1.0f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.30f, 0.62f, 0.30f, 1.0f));
+      if (ImGui::Button("Enable Networking", ImVec2(160*s, 26*s)))
+        nm->setNetworkEnabled(true);
+    }
+    ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip(netRunning
+          ? "Disconnect all peers, stop discovery.\nRuns fully locally until re-enabled."
+          : "Start peer discovery and reconnect.");
+    ImGui::Spacing();
+
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.22f, 0.36f, 0.22f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.46f, 0.28f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.35f, 0.55f, 0.35f, 1.0f));
@@ -1747,6 +1881,7 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
 
     ImGui::SameLine(0, 8*s);
 
+    ImGui::BeginDisabled(!netRunning);
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.18f, 0.23f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.34f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.32f, 0.32f, 0.42f, 1.0f));
@@ -1760,6 +1895,7 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
     ImGui::PopStyleColor(3);
     if (ImGui::IsItemHovered())
       ImGui::SetTooltip("Pause or resume simulation on ALL connected peers.");
+    ImGui::EndDisabled();
   }
 
   // ---- Peers ----
@@ -1832,6 +1968,38 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
     ImGui::Spacing();
   }
 
+  // ---- Send Rate ----
+  sectionHeader("Send Rate");
+  {
+    ImGui::SetNextItemWidth(180.0f * s);
+    ImGui::SliderFloat("##networkSendHz", &nm->networkSendHz, 1.0f, 120.0f, "%.0f Hz");
+    ImGui::SameLine();
+    ImGui::TextDisabled("physics tick rate");
+  }
+
+  // ---- Network Conditions ----
+  sectionHeader("Conditions");
+  {
+    fieldLabel("Packet Loss");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(160.0f * s);
+    ImGui::SliderFloat("##pktLoss", &nm->simPacketLossPercent, 0.0f, 100.0f, "%.0f%%");
+
+    fieldLabel("Extra Latency");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(160.0f * s);
+    ImGui::SliderFloat("##latency", &nm->simExtraLatencyMs, 0.0f, 500.0f, "%.0f ms");
+
+    fieldLabel("Bandwidth Cap");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(160.0f * s);
+    if (nm->simBandwidthLimitKBps <= 0.0f)
+      ImGui::SliderFloat("##bwcap", &nm->simBandwidthLimitKBps, 0.0f, 1000.0f, "Unlimited");
+    else
+      ImGui::SliderFloat("##bwcap", &nm->simBandwidthLimitKBps, 0.0f, 1000.0f, "%.0f KB/s");
+    ImGui::Spacing();
+  }
+
   // ---- Stats ----
   sectionHeader("Stats");
   {
@@ -1856,7 +2024,7 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
     fieldLabel("Protocol");
     ImGui::SameLine(); ImGui::TextDisabled("UDP/45000 discovery + TCP/45001-45020 data");
     fieldLabel("Send rate");
-    ImGui::SameLine(); ImGui::TextDisabled("20 Hz  (position + orientation, owned objects only)");
+    ImGui::SameLine(); ImGui::TextDisabled("%.0f Hz  (position + orientation, owned objects only)", nm->networkSendHz);
   }
 }
 

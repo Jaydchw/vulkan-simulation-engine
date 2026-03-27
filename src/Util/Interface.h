@@ -176,7 +176,7 @@ class Interface {
   void createImGuiRenderPass();
   void applyScalePreset();
   void renderWorldsMenu();
-  void renderTransportBar(SimulationState& simState);
+  void renderTransportBar(SimulationState& simState, ImVec4 peerTint = {0,0,0,0});
   void renderObjectsMenu(Registry& registry);
   void renderSceneMenu(SceneSettings& sceneSettings,
                        MainPipeline* mainPipeline,

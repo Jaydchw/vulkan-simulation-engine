@@ -1,6 +1,7 @@
 #include "PhysicsSystem.h"
 
 #include <chrono>
+#include <cmath>
 #include <vector>
 
 #include "ECS/Components.h"
@@ -13,6 +14,10 @@ PhysicsSystem::PhysicsSystem() {
 }
 
 void PhysicsSystem::setRegistry(Registry* reg) {
+  // Clear stale raw pointers into the old registry before it is destroyed.
+  // syncToLibrary() also calls world.clear() at its start, but the old registry
+  // may already be deallocated by then, leaving dangling pointers in the world.
+  world.clear();
   registry = reg;
 }
 
@@ -22,6 +27,7 @@ void PhysicsSystem::update(float deltaTime) {
   syncToLibrary();
   world.step(deltaTime);
   syncFromLibrary();
+  resolveCrossPeerCollisions();
 }
 
 PhysicsStepTimings PhysicsSystem::timedUpdate(float deltaTime) {
@@ -35,6 +41,7 @@ PhysicsStepTimings PhysicsSystem::timedUpdate(float deltaTime) {
   world.step(deltaTime);
   auto t2 = clock::now();
   syncFromLibrary();
+  resolveCrossPeerCollisions();
   auto t3 = clock::now();
 
   auto ms = [](auto a, auto b) {
@@ -45,6 +52,72 @@ PhysicsStepTimings PhysicsSystem::timedUpdate(float deltaTime) {
   t.syncFromMs  = ms(t2, t3);
   t.collisionStats = world.getLastCollisionStats();
   return t;
+}
+
+void PhysicsSystem::resolveCrossPeerCollisions() {
+  // Only runs in networked sessions with more than one peer.
+  if (!registry || !networkManager) return;
+  if (networkManager->getConnectedPeerCount() == 0) return;
+
+  auto entities = registry->getEntities();
+
+  for (Entity local : entities) {
+    auto* localPhys      = registry->getComponent<PhysicsComponent>(local);
+    auto* localCollider  = registry->getComponent<ColliderComponent>(local);
+    auto* localTransform = registry->getComponent<TransformComponent>(local);
+    if (!localPhys || !localCollider || !localTransform) continue;
+    if (!networkManager->isLocallyOwned(local)) continue;
+    if (localCollider->type != ColliderType::Sphere) continue;
+
+    const float localRadius = localCollider->radius * localTransform->scale.x;
+    glm::vec3   localPos    = localTransform->position;
+    glm::vec3   localVel    = localPhys->velocity;
+    const float localMass   = (localPhys->mass > 0.0f) ? localPhys->mass : 1.0f;
+
+    for (Entity remote : entities) {
+      if (remote == local) continue;
+      auto* remotePhys      = registry->getComponent<PhysicsComponent>(remote);
+      auto* remoteCollider  = registry->getComponent<ColliderComponent>(remote);
+      auto* remoteTransform = registry->getComponent<TransformComponent>(remote);
+      if (!remotePhys || !remoteCollider || !remoteTransform) continue;
+      if (networkManager->isLocallyOwned(remote)) continue;
+      if (remoteCollider->type != ColliderType::Sphere) continue;
+
+      const float remoteRadius = remoteCollider->radius * remoteTransform->scale.x;
+      const glm::vec3 remotePos = remoteTransform->position;
+      const glm::vec3 remoteVel = remotePhys->velocity;
+      const float     remoteMass = (remotePhys->mass > 0.0f) ? remotePhys->mass : 1.0f;
+
+      const glm::vec3 diff    = localPos - remotePos;
+      const float     distSq  = glm::dot(diff, diff);
+      const float     minDist = localRadius + remoteRadius;
+
+      if (distSq >= minDist * minDist || distSq < 1e-10f) continue;
+
+      const float     dist   = std::sqrt(distSq);
+      const glm::vec3 normal = diff / dist;
+
+      // Relative velocity along the collision normal
+      const float relVel = glm::dot(localVel - remoteVel, normal);
+      if (relVel < 0.0f) {
+        // Elastic impulse — each peer only applies its own half
+        const float j = -(1.0f + localPhys->restitution) * relVel /
+                        (1.0f / localMass + 1.0f / remoteMass);
+        localVel += (j / localMass) * normal;
+      }
+
+      // Push local object out of overlap (50% — remote does the other 50%)
+      localPos += normal * ((minDist - dist) * 0.5f);
+    }
+
+    localPhys->velocity        = localVel;
+    localTransform->position   = localPos;
+    auto* physObj = registry->getPhysicsObjectPtr(local);
+    if (physObj) {
+      physObj->setVelocity(localVel);
+      physObj->setPosition(localPos);
+    }
+  }
 }
 
 void PhysicsSystem::syncToLibrary() {

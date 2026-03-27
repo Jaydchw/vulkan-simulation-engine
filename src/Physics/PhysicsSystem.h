@@ -38,4 +38,8 @@ class PhysicsSystem final {
 
   void syncToLibrary();
   void syncFromLibrary();
+  // Resolves collisions between locally-owned and remote-owned dynamic objects.
+  // Only the local object's velocity and position are modified; the remote peer
+  // does the symmetric correction on its side.
+  void resolveCrossPeerCollisions();
 };
