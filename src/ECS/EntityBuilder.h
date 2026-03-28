@@ -79,68 +79,68 @@ class EntityBuilder final {
   }
 
   EntityBuilder& velocity(const glm::vec3& v) {
-    hasPhysics = true;
-    physicsComp.velocity = v;
+    hasSimulated = true;
+    simulatedComp.velocity = v;
     return *this;
   }
 
   EntityBuilder& velocity(float x, float y, float z) {
-    hasPhysics = true;
-    physicsComp.velocity = glm::vec3(x, y, z);
+    hasSimulated = true;
+    simulatedComp.velocity = glm::vec3(x, y, z);
     return *this;
   }
 
   EntityBuilder& acceleration(const glm::vec3& a) {
-    hasPhysics = true;
-    physicsComp.acceleration = a;
+    hasSimulated = true;
+    simulatedComp.acceleration = a;
     return *this;
   }
 
   EntityBuilder& mass(float m) {
-    hasPhysics = true;
-    physicsComp.mass = m;
+    hasSimulated = true;
+    simulatedComp.mass = m;
     return *this;
   }
 
   EntityBuilder& restitution(float r) {
-    hasPhysics = true;
-    physicsComp.restitution = r;
+    hasSimulated = true;
+    simulatedComp.restitution = r;
     return *this;
   }
 
   EntityBuilder& damping(float d) {
-    hasPhysics = true;
-    physicsComp.damping = d;
+    hasSimulated = true;
+    simulatedComp.damping = d;
     return *this;
   }
 
   EntityBuilder& useGravity(bool g) {
-    hasPhysics = true;
-    physicsComp.useGravity = g;
+    hasSimulated = true;
+    simulatedComp.useGravity = g;
     return *this;
   }
 
   EntityBuilder& angularVelocity(const glm::vec3& av) {
-    hasPhysics = true;
-    physicsComp.angularVelocity = av;
+    hasSimulated = true;
+    simulatedComp.angularVelocity = av;
     return *this;
   }
 
   EntityBuilder& angularVelocity(float x, float y, float z) {
-    hasPhysics = true;
-    physicsComp.angularVelocity = glm::vec3(x, y, z);
+    hasSimulated = true;
+    simulatedComp.angularVelocity = glm::vec3(x, y, z);
     return *this;
   }
 
   EntityBuilder& constantTorque(const glm::vec3& t) {
-    hasPhysics = true;
-    physicsComp.constantTorque = t;
+    hasSimulated = true;
+    simulatedComp.constantTorque = t;
     return *this;
   }
 
   EntityBuilder& constantTorque(float x, float y, float z) {
-    hasPhysics = true;
-    physicsComp.constantTorque = glm::vec3(x, y, z);
+    hasSimulated = true;
+    simulatedComp.constantTorque = glm::vec3(x, y, z);
     return *this;
   }
 
@@ -257,6 +257,12 @@ class EntityBuilder final {
     return *this;
   }
 
+  EntityBuilder& animation(const AnimationComponent& anim) {
+    hasAnimation = true;
+    animComp = anim;
+    return *this;
+  }
+
   Entity build(Registry& registry) const {
     if (!hasLight) {
       if (meshComp.meshID == INVALID_MESH_ID) {
@@ -288,11 +294,14 @@ class EntityBuilder final {
                  ", Material: ", materialComp.materialID, ")");
     }
 
-    if (hasPhysics) {
-      registry.addComponent<PhysicsComponent>(entity, physicsComp);
+    if (hasSimulated) {
+      registry.addComponent<SimulatedComponent>(entity, simulatedComp);
     }
     if (hasCollider) {
       registry.addComponent<ColliderComponent>(entity, colliderComp);
+    }
+    if (hasAnimation) {
+      registry.addComponent<AnimationComponent>(entity, animComp);
     }
 
     return entity;
@@ -305,9 +314,11 @@ class EntityBuilder final {
   MaterialComponent materialComp;
   RenderComponent renderComp;
   LightComponent lightComp;
-  PhysicsComponent physicsComp;
+  SimulatedComponent simulatedComp;
   ColliderComponent colliderComp;
-  bool hasLight = false;
-  bool hasPhysics = false;
-  bool hasCollider = false;
+  AnimationComponent animComp;
+  bool hasLight     = false;
+  bool hasSimulated   = false;
+  bool hasCollider  = false;
+  bool hasAnimation = false;
 };

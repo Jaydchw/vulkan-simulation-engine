@@ -1,0 +1,268 @@
+# Combined: Physics Gauntlet
+# Balls must navigate a course of moving animated platforms and obstacles.
+# Drop balls at the top; they fall through moving obstacles and land below.
+
+BeginSettings
+  ClearColor = 0.05, 0.04, 0.08, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.22, 0.22, 0.28
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = ObstacleMat
+  AlbedoColor = 0.8, 0.15, 0.15
+  Roughness = 0.4
+  Metallic = 0.2
+EndMaterial
+
+BeginMaterial
+  Name = ObstacleMatB
+  AlbedoColor = 0.15, 0.7, 0.85
+  Roughness = 0.35
+  Metallic = 0.3
+EndMaterial
+
+BeginMaterial
+  Name = ObstacleMatC
+  AlbedoColor = 0.9, 0.65, 0.1
+  Roughness = 0.3
+  Metallic = 0.4
+EndMaterial
+
+BeginMaterial
+  Name = CatchMat
+  AlbedoColor = 0.3, 0.8, 0.3
+  Roughness = 0.5
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = BallMatA
+  AlbedoColor = 1.0, 1.0, 1.0
+  Roughness = 0.2
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = BallMatB
+  AlbedoColor = 1.0, 0.5, 0.0
+  Roughness = 0.25
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = BallMatC
+  AlbedoColor = 0.4, 0.6, 1.0
+  Roughness = 0.2
+  Metallic = 0.05
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 50.0
+  Height = 50.0
+EndMesh
+
+BeginMesh
+  Name = Slab
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.75
+  Segments = 28
+EndMesh
+
+# Bottom catch platform (static)
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 25.0, 0.0, 25.0
+EndObject
+
+# Green catch platform (static, elevated slightly)
+BeginObject
+  Name = Catch Platform
+  Position = 0.0, 0.5, 0.0
+  Scale = 10.0, 0.4, 10.0
+  Mesh = Slab
+  Material = CatchMat
+  Collider = box
+  ColliderHalfExtents = 5.0, 0.2, 5.0
+EndObject
+
+# === Gauntlet Levels (animated obstacles) ===
+
+# Level 1 (low): wide red bar sweeping left-right
+BeginObject
+  Name = Obstacle Level 1
+  Position = -6.0, 5.0, 0.0
+  Scale = 5.0, 0.6, 3.0
+  Mesh = Slab
+  Material = ObstacleMat
+  Collider = box
+  ColliderHalfExtents = 2.5, 0.3, 1.5
+  BeginAnimation
+    PathMode = reverse
+    Easing = linear
+    TotalDuration = 2.5
+    BeginWaypoint
+      Position = -6.0, 5.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 6.0, 5.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 2.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Level 2 (mid): cyan bar sweeping front-back, opposite phase
+BeginObject
+  Name = Obstacle Level 2
+  Position = 0.0, 10.0, 5.0
+  Scale = 3.0, 0.6, 5.0
+  Mesh = Slab
+  Material = ObstacleMatB
+  Collider = box
+  ColliderHalfExtents = 1.5, 0.3, 2.5
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 3.0
+    BeginWaypoint
+      Position = 0.0, 10.0, 5.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 10.0, -5.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 3.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Level 3 (upper): gold rotating-ish obstacle, looping diagonally
+BeginObject
+  Name = Obstacle Level 3
+  Position = -4.0, 16.0, -3.0
+  Scale = 6.0, 0.5, 1.5
+  Mesh = Slab
+  Material = ObstacleMatC
+  Collider = box
+  ColliderHalfExtents = 3.0, 0.25, 0.75
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 5.0
+    BeginWaypoint
+      Position = -4.0, 16.0, -3.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 4.0, 16.0, 3.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 2.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# === Physics Balls dropped from the top ===
+
+BeginObject
+  Name = White Ball
+  Position = 0.0, 30.0, 0.0
+  Mesh = Ball
+  Material = BallMatA
+  Physics = true
+  Restitution = 0.65
+  Mass = 1.0
+  Collider = sphere
+  ColliderRadius = 0.75
+EndObject
+
+BeginObject
+  Name = Orange Ball
+  Position = 2.0, 32.0, 1.0
+  Mesh = Ball
+  Material = BallMatB
+  Physics = true
+  Restitution = 0.7
+  Mass = 1.2
+  Collider = sphere
+  ColliderRadius = 0.75
+EndObject
+
+BeginObject
+  Name = Blue Ball
+  Position = -2.0, 28.0, -1.0
+  Mesh = Ball
+  Material = BallMatC
+  Physics = true
+  Restitution = 0.6
+  Mass = 0.8
+  Collider = sphere
+  ColliderRadius = 0.75
+EndObject
+
+BeginObject
+  Name = White Ball 2
+  Position = 1.0, 35.0, -0.5
+  Mesh = Ball
+  Material = BallMatA
+  Physics = true
+  Restitution = 0.75
+  Mass = 1.0
+  Velocity = 0.5, 0.0, 0.5
+  Collider = sphere
+  ColliderRadius = 0.75
+EndObject
+
+BeginObject
+  Name = Orange Ball 2
+  Position = -1.5, 27.0, 0.8
+  Mesh = Ball
+  Material = BallMatB
+  Physics = true
+  Restitution = 0.55
+  Mass = 1.5
+  Collider = sphere
+  ColliderRadius = 0.75
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.2, -1.0, 0.3
+  Color = 1.0, 0.95, 0.88
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 25.0, 5.0
+  Color = 0.3, 0.35, 0.6
+  Intensity = 200.0
+  CastsShadows = false
+EndLight

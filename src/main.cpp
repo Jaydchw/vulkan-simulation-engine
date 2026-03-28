@@ -3,6 +3,7 @@
 #include <crtdbg.h>
 #endif
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 
@@ -54,7 +55,12 @@ int main() {
 
     auto worlds = WorldParser::listWorlds("Scenes/Worlds");
     if (!worlds.empty()) {
-      app.loadWorld(worlds[0]);
+      std::string toLoad = worlds[0];
+      for (const auto& w : worlds) {
+        auto stem = std::filesystem::path(w).stem().string();
+        if (stem == "default") { toLoad = w; break; }
+      }
+      app.loadWorld(toLoad);
     }
     app.getLightManager()->debugPrintLightInfo();
 

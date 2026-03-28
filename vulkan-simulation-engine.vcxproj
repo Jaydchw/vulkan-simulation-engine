@@ -142,6 +142,7 @@
   <ItemGroup>
     <ClCompile Include="src\Application.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Animation\AnimationSystem.cpp" />
     <ClCompile Include="src\Network\NetworkManager.cpp" />
     <ClCompile Include="src\Physics\PhysicsSystem.cpp" />
     <ClCompile Include="src\Spawning\SpawnerSystem.cpp" />
@@ -200,6 +201,7 @@
     <ClInclude Include="src\ECS\Entity.h" />
     <ClInclude Include="src\ECS\EntityBuilder.h" />
     <ClInclude Include="src\ECS\Registry.h" />
+    <ClInclude Include="src\Animation\AnimationSystem.h" />
     <ClInclude Include="src\Physics\PhysicsSystem.h" />
     <ClInclude Include="src\Rendering\MainPipeline.h" />
     <ClInclude Include="src\Resources\ProceduralTexture.h" />

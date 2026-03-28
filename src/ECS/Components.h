@@ -5,6 +5,9 @@
 #include <string>
 #include <vector>
 
+enum class EasingType { LINEAR, SMOOTHSTEP };
+enum class PathMode   { STOP, LOOP, REVERSE };
+
 #include "Resources/Material.h"
 
 using MeshID = uint32_t;
@@ -57,7 +60,7 @@ struct LightComponent {
   uint32_t shadowMapIndex = UINT32_MAX;
 };
 
-struct PhysicsComponent {
+struct SimulatedComponent {
   glm::vec3 velocity = glm::vec3(0.0f);
   glm::vec3 acceleration = glm::vec3(0.0f);
   glm::vec3 angularVelocity = glm::vec3(0.0f);
@@ -83,7 +86,7 @@ struct ColliderComponent {
 struct SpawnTemplate {
   float weight = 1.0f;
 
-  PhysicsComponent physics;
+  SimulatedComponent simulated;
   ColliderComponent collider;
 
   bool hasRender = true;
@@ -101,6 +104,23 @@ struct CameraComponent {
   float nearPlane = 0.1f;
   float farPlane = 50000.0f;
   float orthographicSize = 50.0f;
+};
+
+struct AnimationWaypoint {
+  glm::vec3 position = glm::vec3(0.0f);
+  glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+  float time = 0.0f;
+};
+
+struct AnimationComponent {
+  std::vector<AnimationWaypoint> waypoints;
+  float totalDuration = 1.0f;
+  EasingType easing   = EasingType::LINEAR;
+  PathMode   pathMode = PathMode::STOP;
+
+  float currentTime = 0.0f;
+  bool  forward     = true;
+  bool  active      = true;
 };
 
 struct SpawnerComponent {

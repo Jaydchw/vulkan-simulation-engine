@@ -1,0 +1,202 @@
+# Animation Test: STOP mode
+# A platform travels from A to B to C then stops
+
+BeginSettings
+  ClearColor = 0.08, 0.08, 0.12, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.25, 0.25, 0.3
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = PlatformA
+  AlbedoColor = 0.9, 0.3, 0.2
+  Roughness = 0.4
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = PlatformB
+  AlbedoColor = 0.2, 0.7, 0.3
+  Roughness = 0.4
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = PlatformC
+  AlbedoColor = 0.2, 0.4, 0.9
+  Roughness = 0.4
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = WaypointMarker
+  AlbedoColor = 1.0, 1.0, 0.0
+  Roughness = 0.8
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Ground
+  Type = plane
+  Width = 60.0
+  Height = 60.0
+EndMesh
+
+BeginMesh
+  Name = Platform
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Marker
+  Type = sphere
+  Radius = 0.3
+EndMesh
+
+BeginObject
+  Name = Floor
+  Position = 0.0, 0.0, 0.0
+  Mesh = Ground
+  Material = GroundMat
+EndObject
+
+# Red platform: travels A(0,2,0) -> B(10,2,0) -> C(10,2,-10), then stops
+BeginObject
+  Name = Platform A (STOP)
+  Position = 0.0, 2.0, 0.0
+  Scale = 4.0, 0.5, 4.0
+  Mesh = Platform
+  Material = PlatformA
+  Collider = box
+  ColliderHalfExtents = 2.0, 0.25, 2.0
+  BeginAnimation
+    PathMode = stop
+    Easing = smoothstep
+    TotalDuration = 5.0
+    BeginWaypoint
+      Position = 0.0, 2.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.0, 2.0, 0.0
+      Rotation = 0.0, 45.0, 0.0
+      Time = 3.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.0, 2.0, -10.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 5.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Green platform: rises straight up then stops
+BeginObject
+  Name = Platform B (STOP Rise)
+  Position = -8.0, 0.5, 0.0
+  Scale = 3.0, 0.5, 3.0
+  Mesh = Platform
+  Material = PlatformB
+  Collider = box
+  ColliderHalfExtents = 1.5, 0.25, 1.5
+  BeginAnimation
+    PathMode = stop
+    Easing = smoothstep
+    TotalDuration = 4.0
+    BeginWaypoint
+      Position = -8.0, 0.5, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -8.0, 8.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 2.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -8.0, 8.0, -8.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 4.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Blue platform: linear easing diagonal path
+BeginObject
+  Name = Platform C (STOP Linear)
+  Position = 0.0, 1.0, -15.0
+  Scale = 3.5, 0.5, 3.5
+  Mesh = Platform
+  Material = PlatformC
+  Collider = box
+  ColliderHalfExtents = 1.75, 0.25, 1.75
+  BeginAnimation
+    PathMode = stop
+    Easing = linear
+    TotalDuration = 6.0
+    BeginWaypoint
+      Position = 0.0, 1.0, -15.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 5.0, 5.0, -15.0
+      Rotation = 0.0, 30.0, 0.0
+      Time = 2.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.0, 1.0, -20.0
+      Rotation = 0.0, 60.0, 0.0
+      Time = 4.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.0, 1.0, -25.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 6.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Waypoint markers (static spheres showing where platforms end up)
+BeginObject
+  Name = End Marker A
+  Position = 10.0, 2.0, -10.0
+  Scale = 0.3, 0.3, 0.3
+  Mesh = Marker
+  Material = WaypointMarker
+EndObject
+
+BeginObject
+  Name = End Marker B
+  Position = -8.0, 8.0, -8.0
+  Scale = 0.3, 0.3, 0.3
+  Mesh = Marker
+  Material = WaypointMarker
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.4, -1.0, 0.3
+  Color = 1.0, 0.95, 0.88
+  Intensity = 3.0
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 20.0, 5.0
+  Color = 0.3, 0.4, 0.6
+  Intensity = 80.0
+  CastsShadows = false
+EndLight

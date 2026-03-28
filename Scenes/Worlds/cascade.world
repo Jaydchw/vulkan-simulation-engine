@@ -1,0 +1,305 @@
+# Cascade: balls fall through a staggered tower of sweeping platforms at increasing heights
+# Each platform level moves in a different axis; balls scatter unpredictably as they drop.
+
+BeginSettings
+  ClearColor = 0.03, 0.04, 0.07, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.18, 0.18, 0.22
+  Roughness = 0.92
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = Level1Mat
+  AlbedoColor = 0.85, 0.20, 0.20
+  Roughness = 0.30
+  Metallic = 0.30
+EndMaterial
+
+BeginMaterial
+  Name = Level2Mat
+  AlbedoColor = 0.85, 0.55, 0.10
+  Roughness = 0.30
+  Metallic = 0.30
+EndMaterial
+
+BeginMaterial
+  Name = Level3Mat
+  AlbedoColor = 0.20, 0.75, 0.25
+  Roughness = 0.30
+  Metallic = 0.30
+EndMaterial
+
+BeginMaterial
+  Name = Level4Mat
+  AlbedoColor = 0.20, 0.55, 0.90
+  Roughness = 0.30
+  Metallic = 0.35
+EndMaterial
+
+BeginMaterial
+  Name = BallMat
+  AlbedoColor = 0.92, 0.92, 0.95
+  Roughness = 0.18
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = BallMatB
+  AlbedoColor = 1.0, 0.75, 0.20
+  Roughness = 0.20
+  Metallic = 0.10
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 50.0
+  Height = 50.0
+EndMesh
+
+BeginMesh
+  Name = Slab
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.7
+  Segments = 28
+EndMesh
+
+# Ground
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 25.0, 0.0, 25.0
+EndObject
+
+# Level 1 (lowest): red, sweeps left-right
+BeginObject
+  Name = Level 1
+  Position = -5.0, 4.0, 0.0
+  Scale = 8.0, 0.5, 3.5
+  Mesh = Slab
+  Material = Level1Mat
+  Collider = box
+  ColliderHalfExtents = 4.0, 0.25, 1.75
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 3.0
+    BeginWaypoint
+      Position = -5.0, 4.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 5.0, 4.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 3.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Level 2: orange, sweeps front-back, opposite phase offset (starts at far end)
+BeginObject
+  Name = Level 2
+  Position = 0.0, 8.0, 5.0
+  Scale = 3.5, 0.5, 8.0
+  Mesh = Slab
+  Material = Level2Mat
+  Collider = box
+  ColliderHalfExtents = 1.75, 0.25, 4.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = linear
+    TotalDuration = 3.5
+    BeginWaypoint
+      Position = 0.0, 8.0, 5.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 8.0, -5.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 3.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Level 3: green, sweeps left-right but narrower gap
+BeginObject
+  Name = Level 3
+  Position = -4.0, 13.0, 1.0
+  Scale = 6.0, 0.5, 3.0
+  Mesh = Slab
+  Material = Level3Mat
+  Collider = box
+  ColliderHalfExtents = 3.0, 0.25, 1.5
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 2.5
+    BeginWaypoint
+      Position = -4.0, 13.0, 1.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 4.0, 13.0, 1.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 2.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Level 4 (highest): blue, sweeps diagonally via loop
+BeginObject
+  Name = Level 4
+  Position = -3.0, 19.0, -3.0
+  Scale = 5.0, 0.5, 5.0
+  Mesh = Slab
+  Material = Level4Mat
+  Collider = box
+  ColliderHalfExtents = 2.5, 0.25, 2.5
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 6.0
+    BeginWaypoint
+      Position = -3.0, 19.0, -3.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 3.0, 19.0, -3.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 2.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 3.0, 19.0, 3.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 4.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -3.0, 19.0, 3.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 6.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# --- Physics balls dropped from above ---
+
+BeginObject
+  Name = Ball A1
+  Position = 0.0, 36.0, 0.0
+  Mesh = Ball
+  Material = BallMat
+  Physics = true
+  Restitution = 0.65
+  Mass = 1.0
+  Collider = sphere
+  ColliderRadius = 0.7
+EndObject
+
+BeginObject
+  Name = Ball A2
+  Position = 2.0, 38.0, 1.5
+  Mesh = Ball
+  Material = BallMat
+  Physics = true
+  Restitution = 0.70
+  Mass = 1.0
+  Collider = sphere
+  ColliderRadius = 0.7
+EndObject
+
+BeginObject
+  Name = Ball A3
+  Position = -2.0, 34.0, -1.0
+  Mesh = Ball
+  Material = BallMat
+  Physics = true
+  Restitution = 0.60
+  Mass = 1.2
+  Collider = sphere
+  ColliderRadius = 0.7
+EndObject
+
+BeginObject
+  Name = Ball B1
+  Position = 1.0, 40.0, -2.0
+  Mesh = Ball
+  Material = BallMatB
+  Physics = true
+  Restitution = 0.75
+  Mass = 0.8
+  Velocity = -0.5, 0.0, 0.3
+  Collider = sphere
+  ColliderRadius = 0.7
+EndObject
+
+BeginObject
+  Name = Ball B2
+  Position = -1.5, 42.0, 2.0
+  Mesh = Ball
+  Material = BallMatB
+  Physics = true
+  Restitution = 0.80
+  Mass = 0.8
+  Velocity = 0.3, 0.0, -0.5
+  Collider = sphere
+  ColliderRadius = 0.7
+EndObject
+
+BeginObject
+  Name = Ball B3
+  Position = 0.5, 44.0, 0.5
+  Mesh = Ball
+  Material = BallMatB
+  Physics = true
+  Restitution = 0.55
+  Mass = 1.5
+  Collider = sphere
+  ColliderRadius = 0.7
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.20, -1.0, 0.30
+  Color = 1.0, 0.95, 0.88
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill Low
+  Type = point
+  Position = 0.0, 5.0, 8.0
+  Color = 0.30, 0.40, 0.65
+  Intensity = 80.0
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = Fill High
+  Type = point
+  Position = 0.0, 30.0, 0.0
+  Color = 0.50, 0.35, 0.55
+  Intensity = 200.0
+  CastsShadows = false
+EndLight

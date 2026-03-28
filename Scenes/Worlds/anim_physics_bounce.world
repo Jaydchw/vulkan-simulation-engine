@@ -1,0 +1,245 @@
+# Combined: Animated Platform + Physics Balls
+# Moving platforms act as surfaces for bouncing physics balls.
+# Animated objects have colliders so physics bodies interact with them.
+
+BeginSettings
+  ClearColor = 0.06, 0.06, 0.1, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.28, 0.28, 0.32
+  Roughness = 0.85
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = PlatformMat
+  AlbedoColor = 0.15, 0.55, 0.85
+  Roughness = 0.3
+  Metallic = 0.4
+EndMaterial
+
+BeginMaterial
+  Name = PlatformMatB
+  AlbedoColor = 0.85, 0.45, 0.1
+  Roughness = 0.3
+  Metallic = 0.4
+EndMaterial
+
+BeginMaterial
+  Name = RedBall
+  AlbedoColor = 0.95, 0.2, 0.2
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = GreenBall
+  AlbedoColor = 0.2, 0.9, 0.3
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = YellowBall
+  AlbedoColor = 1.0, 0.85, 0.1
+  Roughness = 0.35
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = WhiteBall
+  AlbedoColor = 0.95, 0.95, 0.95
+  Roughness = 0.2
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 70.0
+  Height = 70.0
+EndMesh
+
+BeginMesh
+  Name = Platform
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 1.0
+  Segments = 32
+EndMesh
+
+BeginMesh
+  Name = SmallBall
+  Type = sphere
+  Radius = 0.6
+  Segments = 24
+EndMesh
+
+# Static floor
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 35.0, 0.0, 35.0
+EndObject
+
+# === Animated Platforms (have colliders so physics balls land on them) ===
+
+# Blue platform: horizontal shuttle, balls dropped above will land and ride it
+BeginObject
+  Name = Shuttle Platform
+  Position = -12.0, 4.0, 0.0
+  Scale = 6.0, 0.5, 4.0
+  Mesh = Platform
+  Material = PlatformMat
+  Collider = box
+  ColliderHalfExtents = 3.0, 0.25, 2.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 6.0
+    BeginWaypoint
+      Position = -12.0, 4.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 12.0, 4.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 6.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Orange platform: rises and falls, balls bounce off the top
+BeginObject
+  Name = Rising Platform
+  Position = 0.0, 1.0, -10.0
+  Scale = 5.0, 0.5, 5.0
+  Mesh = Platform
+  Material = PlatformMatB
+  Collider = box
+  ColliderHalfExtents = 2.5, 0.25, 2.5
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 4.0
+    BeginWaypoint
+      Position = 0.0, 1.0, -10.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 10.0, -10.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 4.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# === Physics Balls (simulated, gravity-affected, bounce off platforms) ===
+
+# Ball dropped above the shuttle platform
+BeginObject
+  Name = Ball 1
+  Position = -8.0, 18.0, 0.0
+  Mesh = Ball
+  Material = RedBall
+  Physics = true
+  Restitution = 0.7
+  Mass = 1.5
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Ball 2
+  Position = 0.0, 22.0, 0.0
+  Mesh = Ball
+  Material = GreenBall
+  Physics = true
+  Restitution = 0.8
+  Mass = 1.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Ball 3
+  Position = 6.0, 16.0, 0.5
+  Mesh = Ball
+  Material = YellowBall
+  Physics = true
+  Restitution = 0.75
+  Velocity = -2.0, 3.0, 0.0
+  Mass = 2.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+# Balls dropped above the rising platform
+BeginObject
+  Name = Ball 4
+  Position = -1.0, 25.0, -10.0
+  Mesh = Ball
+  Material = WhiteBall
+  Physics = true
+  Restitution = 0.85
+  Mass = 1.0
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Ball 5
+  Position = 2.0, 20.0, -9.0
+  Mesh = SmallBall
+  Material = RedBall
+  Physics = true
+  Restitution = 0.9
+  Mass = 0.5
+  Collider = sphere
+  ColliderRadius = 0.6
+EndObject
+
+BeginObject
+  Name = Ball 6
+  Position = -2.0, 18.0, -11.0
+  Mesh = SmallBall
+  Material = GreenBall
+  Physics = true
+  Restitution = 0.6
+  Mass = 0.7
+  Collider = sphere
+  ColliderRadius = 0.6
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.35, -1.0, 0.4
+  Color = 1.0, 0.97, 0.9
+  Intensity = 2.8
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 20.0, 10.0
+  Color = 0.4, 0.5, 0.7
+  Intensity = 100.0
+  CastsShadows = false
+EndLight

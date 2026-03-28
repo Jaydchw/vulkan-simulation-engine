@@ -47,6 +47,7 @@ void Application::setRegistry(Registry& reg) {
   registry = &reg;
   lightManager->setRegistry(registry);
   lightManager->syncLights();
+  animationSystem->setRegistry(registry);
   physicsSystem->setRegistry(registry);
   spawnerSystem->setRegistry(registry);
   timelineSystem->setRegistry(registry);
@@ -75,6 +76,7 @@ void Application::loadWorld(const std::string& filepath) {
     lightManager->setRegistry(registry);
     lightManager->syncLights();
 
+    animationSystem->setRegistry(registry);
     physicsSystem->setRegistry(registry);
     spawnerSystem->setRegistry(registry);
     timelineSystem->setRegistry(registry);
@@ -86,6 +88,7 @@ void Application::loadWorld(const std::string& filepath) {
     }
 
     savedMaterialIDs.clear();
+    ownerMaterialIDs.fill(INVALID_MATERIAL_ID);
     lastColorByOwner = false;
 
     simState = SimulationState{};
@@ -125,6 +128,7 @@ void Application::loadFBScene(const std::string& filepath) {
     lightManager->setRegistry(registry);
     lightManager->syncLights();
 
+    animationSystem->setRegistry(registry);
     physicsSystem->setRegistry(registry);
     spawnerSystem->setRegistry(registry);
     timelineSystem->setRegistry(registry);
@@ -136,6 +140,7 @@ void Application::loadFBScene(const std::string& filepath) {
     }
 
     savedMaterialIDs.clear();
+    ownerMaterialIDs.fill(INVALID_MATERIAL_ID);
     lastColorByOwner = false;
 
     simState = SimulationState{};
@@ -227,6 +232,8 @@ void Application::simulationThreadFunc() {
         simState.rewinding   = false;
         simState.reversePlay = false;
 
+        if (animationSystem)
+          animationSystem->update(dt * simState.timeSpeed);
         if (spawnerSystem)
           spawnerSystem->update(dt * simState.timeSpeed);
 
@@ -363,9 +370,10 @@ void Application::initVulkan() {
                                                textureManager.get());
   fbSceneLoader  = std::make_unique<FBSceneLoader>(meshManager.get(),
                                                    materialManager.get());
-  physicsSystem  = std::make_unique<PhysicsSystem>();
-  spawnerSystem  = std::make_unique<SpawnerSystem>();
-  timelineSystem = std::make_unique<TimelineSystem>();
+  animationSystem = std::make_unique<AnimationSystem>();
+  physicsSystem   = std::make_unique<PhysicsSystem>();
+  spawnerSystem   = std::make_unique<SpawnerSystem>();
+  timelineSystem  = std::make_unique<TimelineSystem>();
 
   // Networking
   networkManager = std::make_unique<NetworkManager>();
@@ -424,6 +432,7 @@ while (!window->shouldClose()) {
       timelineSystem->restoreInitialSnapshot();
       timelineSystem->clearSnapshots();
     }
+    animationSystem->reset();
     simState.timeHistory.clear();
     simState.currentTime = 0.0f;
     simState.historyIndex = -1;
@@ -1907,7 +1916,7 @@ void Application::applyOwnerColors(bool enable) {
   if (enable) {
     initOwnerMaterials();
 
-    for (const auto& [e, _] : registry->allPhysics()) {
+    for (const auto& [e, _] : registry->allSimulated()) {
       uint8_t ownerID = networkManager->getOwnerPeerID(e);
       if (ownerID == 0 || ownerID > 4) continue;
       auto* matComp = registry->getComponent<MaterialComponent>(e);

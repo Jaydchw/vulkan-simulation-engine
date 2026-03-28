@@ -172,6 +172,7 @@ class Interface {
     int lights = 0;
     int textures = 0;
     int materials = 0;
+    std::string description;
   };
   std::unordered_map<std::string, WorldFileStats> worldFileStats;
 

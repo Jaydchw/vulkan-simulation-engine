@@ -1,0 +1,216 @@
+# Animation Test: LOOP mode
+# Platforms follow closed paths indefinitely
+
+BeginSettings
+  ClearColor = 0.05, 0.1, 0.08, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.2, 0.28, 0.22
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = OrangePlatform
+  AlbedoColor = 1.0, 0.5, 0.1
+  Roughness = 0.35
+  Metallic = 0.2
+EndMaterial
+
+BeginMaterial
+  Name = CyanPlatform
+  AlbedoColor = 0.1, 0.8, 0.85
+  Roughness = 0.35
+  Metallic = 0.2
+EndMaterial
+
+BeginMaterial
+  Name = PurplePlatform
+  AlbedoColor = 0.6, 0.2, 0.9
+  Roughness = 0.35
+  Metallic = 0.2
+EndMaterial
+
+BeginMaterial
+  Name = WhitePlatform
+  AlbedoColor = 0.95, 0.95, 0.95
+  Roughness = 0.5
+  Metallic = 0.05
+EndMaterial
+
+BeginMesh
+  Name = Ground
+  Type = plane
+  Width = 80.0
+  Height = 80.0
+EndMesh
+
+BeginMesh
+  Name = Platform
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginObject
+  Name = Floor
+  Position = 0.0, 0.0, 0.0
+  Mesh = Ground
+  Material = GroundMat
+EndObject
+
+# Orange: square loop in XZ plane
+# total_duration > last waypoint time means the loop-back leg takes that difference
+BeginObject
+  Name = Orange Looper (Square)
+  Position = -8.0, 3.0, -8.0
+  Scale = 3.5, 0.4, 3.5
+  Mesh = Platform
+  Material = OrangePlatform
+  Collider = box
+  ColliderHalfExtents = 1.75, 0.2, 1.75
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 12.0
+    BeginWaypoint
+      Position = -8.0, 3.0, -8.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 8.0, 3.0, -8.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 3.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 8.0, 3.0, 8.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 6.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -8.0, 3.0, 8.0
+      Rotation = 0.0, 270.0, 0.0
+      Time = 9.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Cyan: figure-8 style in XY plane (up and over)
+BeginObject
+  Name = Cyan Looper (Vertical)
+  Position = -15.0, 2.0, 0.0
+  Scale = 3.0, 0.4, 3.0
+  Mesh = Platform
+  Material = CyanPlatform
+  Collider = box
+  ColliderHalfExtents = 1.5, 0.2, 1.5
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 8.0
+    BeginWaypoint
+      Position = -15.0, 2.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -15.0, 10.0, 0.0
+      Rotation = 0.0, 0.0, 20.0
+      Time = 2.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -15.0, 10.0, 10.0
+      Rotation = 0.0, 0.0, -20.0
+      Time = 4.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -15.0, 2.0, 10.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 6.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Purple: diagonal orbit with rotation
+BeginObject
+  Name = Purple Looper (Orbital)
+  Position = 15.0, 5.0, 0.0
+  Scale = 2.5, 0.4, 5.0
+  Mesh = Platform
+  Material = PurplePlatform
+  Collider = box
+  ColliderHalfExtents = 1.25, 0.2, 2.5
+  BeginAnimation
+    PathMode = loop
+    Easing = linear
+    TotalDuration = 10.0
+    BeginWaypoint
+      Position = 15.0, 5.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 20.0, 8.0, -8.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 2.5
+    EndWaypoint
+    BeginWaypoint
+      Position = 15.0, 5.0, -15.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 5.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.0, 2.0, -8.0
+      Rotation = 0.0, 270.0, 0.0
+      Time = 7.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# White: simple fast oscillating platform (2 waypoints, so loop returns quickly)
+BeginObject
+  Name = White Looper (Fast)
+  Position = 0.0, 2.0, 15.0
+  Scale = 4.0, 0.4, 2.0
+  Mesh = Platform
+  Material = WhitePlatform
+  Collider = box
+  ColliderHalfExtents = 2.0, 0.2, 1.0
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 4.0
+    BeginWaypoint
+      Position = -10.0, 2.0, 15.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.0, 2.0, 15.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 2.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.3, -1.0, 0.5
+  Color = 1.0, 0.98, 0.9
+  Intensity = 2.8
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Ambient Fill
+  Type = point
+  Position = 0.0, 25.0, 0.0
+  Color = 0.4, 0.5, 0.4
+  Intensity = 150.0
+  CastsShadows = false
+EndLight

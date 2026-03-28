@@ -282,12 +282,69 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
       float colliderHeight = 1.0f;
       glm::vec3 colliderHalfExtents(0.5f);
       glm::vec3 colliderNormal(0.0f, 1.0f, 0.0f);
+      bool hasAnimation = false;
+      AnimationComponent animComp;
 
       while (std::getline(file, line)) {
         lineNum++;
         line = trim(line);
         if (line.empty() || line[0] == '#') continue;
         if (line == "EndObject") break;
+
+        if (line == "BeginAnimation") {
+          hasAnimation = true;
+          std::string animPathMode = "stop";
+          std::string animEasing   = "linear";
+
+          while (std::getline(file, line)) {
+            lineNum++;
+            line = trim(line);
+            if (line.empty() || line[0] == '#') continue;
+            if (line == "EndAnimation") break;
+
+            if (line == "BeginWaypoint") {
+              AnimationWaypoint wp;
+              while (std::getline(file, line)) {
+                lineNum++;
+                line = trim(line);
+                if (line.empty() || line[0] == '#') continue;
+                if (line == "EndWaypoint") break;
+                const size_t weq = line.find('=');
+                if (weq == std::string::npos) continue;
+                std::string wkey = trim(line.substr(0, weq));
+                std::string wval = trim(line.substr(weq + 1));
+                if (wkey == "Position")
+                  wp.position = parseVec3(wval);
+                else if (wkey == "Rotation") {
+                  glm::vec3 euler = parseVec3(wval);
+                  wp.rotation = glm::quat(glm::radians(euler));
+                } else if (wkey == "Time")
+                  wp.time = parseFloat(wval);
+              }
+              animComp.waypoints.push_back(wp);
+              continue;
+            }
+
+            const size_t aeq = line.find('=');
+            if (aeq == std::string::npos) continue;
+            std::string akey = trim(line.substr(0, aeq));
+            std::string aval = trim(line.substr(aeq + 1));
+
+            if (akey == "PathMode")
+              animPathMode = aval;
+            else if (akey == "Easing")
+              animEasing = aval;
+            else if (akey == "TotalDuration")
+              animComp.totalDuration = parseFloat(aval);
+          }
+
+          if      (animPathMode == "loop")    animComp.pathMode = PathMode::LOOP;
+          else if (animPathMode == "reverse") animComp.pathMode = PathMode::REVERSE;
+          else                                animComp.pathMode = PathMode::STOP;
+
+          animComp.easing = (animEasing == "smoothstep") ? EasingType::SMOOTHSTEP : EasingType::LINEAR;
+          continue;
+        }
 
         const size_t eq = line.find('=');
         if (eq == std::string::npos) continue;
@@ -393,7 +450,9 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
           builder.coneCollider(colliderRadius, colliderHeight);
       }
 
-      builder.build(registry);
+      Entity builtEntity = builder.build(registry);
+      if (hasAnimation && animComp.waypoints.size() >= 2)
+        registry.addComponent<AnimationComponent>(builtEntity, animComp);
       continue;
     }
 
@@ -434,12 +493,12 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
             }
             else if (key == "NamePrefix")    tmpl.namePrefix = val;
             else if (key == "HasRender")     tmpl.hasRender = parseBool(val);
-            else if (key == "Mass")          tmpl.physics.mass = parseFloat(val);
-            else if (key == "Restitution")   tmpl.physics.restitution = parseFloat(val);
-            else if (key == "Damping")       tmpl.physics.damping = parseFloat(val);
-            else if (key == "UseGravity")    tmpl.physics.useGravity = parseBool(val);
-            else if (key == "Velocity")      tmpl.physics.velocity = parseVec3(val);
-            else if (key == "AngularVelocity") tmpl.physics.angularVelocity = parseVec3(val);
+            else if (key == "Mass")          tmpl.simulated.mass = parseFloat(val);
+            else if (key == "Restitution")   tmpl.simulated.restitution = parseFloat(val);
+            else if (key == "Damping")       tmpl.simulated.damping = parseFloat(val);
+            else if (key == "UseGravity")    tmpl.simulated.useGravity = parseBool(val);
+            else if (key == "Velocity")      tmpl.simulated.velocity = parseVec3(val);
+            else if (key == "AngularVelocity") tmpl.simulated.angularVelocity = parseVec3(val);
             else if (key == "Collider")      tmplCollider = val;
             else if (key == "ColliderRadius")      tmpl.collider.radius = parseFloat(val);
             else if (key == "ColliderHeight")      tmpl.collider.height = parseFloat(val);
@@ -484,7 +543,7 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
         else if (key == "Enabled")               spawner.enabled = parseBool(val);
       }
 
-      // Spawner entities carry a no-gravity PhysicsComponent so the network
+      // Spawner entities carry a no-gravity SimulatedComponent so the network
       // ownership system can assign them to a specific peer.  No collider means
       // the physics library never touches them; they stay fixed.
       Entity entity = registry.createEntity();
@@ -492,10 +551,10 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
       TransformComponent tc;
       tc.position = position;
       registry.addComponent<TransformComponent>(entity, tc);
-      PhysicsComponent pc;
+      SimulatedComponent pc;
       pc.useGravity = false;
       pc.damping    = 1.0f;
-      registry.addComponent<PhysicsComponent>(entity, pc);
+      registry.addComponent<SimulatedComponent>(entity, pc);
       registry.addComponent<SpawnerComponent>(entity, spawner);
 
       Debug::log(Debug::Category::OBJECTS, "WorldParser: Created spawner '",

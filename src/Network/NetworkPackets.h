@@ -60,7 +60,7 @@ struct ObjectFastStateEntry {
 struct ObjectPropertyEntry {
   uint32_t entityId;
 
-  // PhysicsComponent
+  // SimulatedComponent
   float mass;
   float restitution;
   float damping;
@@ -103,7 +103,7 @@ struct SpawnEntityPacket {
   float rotW, rotX, rotY, rotZ;
   float scaleX, scaleY, scaleZ;
 
-  // PhysicsComponent
+  // SimulatedComponent
   float velX, velY, velZ;
   float angVelX, angVelY, angVelZ;
   float mass;

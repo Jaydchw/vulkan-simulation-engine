@@ -17,7 +17,7 @@ void TimelineSystem::setRegistry(Registry* reg) {
 FrameSnapshot TimelineSystem::captureFrame() const {
   FrameSnapshot snap;
   if (!registry) return snap;
-  for (const auto& [entity, phys] : registry->allPhysics()) {
+  for (const auto& [entity, phys] : registry->allSimulated()) {
     const auto* transform = registry->getComponent<TransformComponent>(entity);
     if (!transform) continue;
     snap[entity] = {transform->position, phys.velocity};
@@ -29,7 +29,7 @@ void TimelineSystem::applyFrame(const FrameSnapshot& snap) {
   if (!registry) return;
   for (const auto& [entity, state] : snap) {
     auto* transform = registry->getComponent<TransformComponent>(entity);
-    auto* phys = registry->getComponent<PhysicsComponent>(entity);
+    auto* phys = registry->getComponent<SimulatedComponent>(entity);
     if (transform) transform->position = state.position;
     if (phys) phys->velocity = state.velocity;
   }

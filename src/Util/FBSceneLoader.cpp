@@ -157,7 +157,7 @@ FBSceneLoader::Interaction FBSceneLoader::findInteraction(const std::string& a,
     return {};
 }
 
-void FBSceneLoader::buildObject(Registry& registry,
+Entity FBSceneLoader::buildObject(Registry& registry,
                                 const std::string& name,
                                 glm::vec3 position,
                                 glm::vec3 eulerDeg,
@@ -242,7 +242,7 @@ void FBSceneLoader::buildObject(Registry& registry,
                .damping(0.99f);
     }
 
-    builder.build(registry);
+    return builder.build(registry);
 }
 
 void FBSceneLoader::buildSpawner(Registry& registry,
@@ -279,16 +279,16 @@ void FBSceneLoader::buildSpawner(Registry& registry,
     tmpl.weight              = 1.0f;
     tmpl.materialID          = matID;
     tmpl.namePrefix          = name;
-    tmpl.physics.useGravity  = gravityOn;
-    tmpl.physics.damping     = 0.99f;
-    tmpl.physics.restitution = inter.restitution;
+    tmpl.simulated.useGravity  = gravityOn;
+    tmpl.simulated.damping     = 0.99f;
+    tmpl.simulated.restitution = inter.restitution;
 
     switch (spawnerShape) {
         case 1: {
             tmpl.meshID          = meshManager->createSphere(rAvg);
             tmpl.collider.type   = ColliderType::Sphere;
             tmpl.collider.radius = rAvg;
-            tmpl.physics.mass    = density * sphereVol(rAvg);
+            tmpl.simulated.mass    = density * sphereVol(rAvg);
             break;
         }
         case 2: {
@@ -296,7 +296,7 @@ void FBSceneLoader::buildSpawner(Registry& registry,
             tmpl.collider.type     = ColliderType::Cylinder;
             tmpl.collider.radius   = rAvg;
             tmpl.collider.height   = hAvg;
-            tmpl.physics.mass      = density * cylinderVol(rAvg, hAvg);
+            tmpl.simulated.mass      = density * cylinderVol(rAvg, hAvg);
             break;
         }
         case 3: {
@@ -304,7 +304,7 @@ void FBSceneLoader::buildSpawner(Registry& registry,
             tmpl.collider.type     = ColliderType::Capsule;
             tmpl.collider.radius   = rAvg;
             tmpl.collider.height   = hAvg;
-            tmpl.physics.mass      = density * capsuleVol(rAvg, hAvg);
+            tmpl.simulated.mass      = density * capsuleVol(rAvg, hAvg);
             break;
         }
         case 4: {
@@ -312,14 +312,14 @@ void FBSceneLoader::buildSpawner(Registry& registry,
             tmpl.scale                = sAvg;
             tmpl.collider.type        = ColliderType::AABB;
             tmpl.collider.halfExtents = sAvg * 0.5f;
-            tmpl.physics.mass         = density * cuboidVol(sAvg);
+            tmpl.simulated.mass         = density * cuboidVol(sAvg);
             break;
         }
         default: {
             tmpl.meshID          = meshManager->createSphere(0.3f);
             tmpl.collider.type   = ColliderType::Sphere;
             tmpl.collider.radius = 0.3f;
-            tmpl.physics.mass    = density * sphereVol(0.3f);
+            tmpl.simulated.mass    = density * sphereVol(0.3f);
             break;
         }
     }
@@ -490,9 +490,39 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
                 }
             }
 
-            buildObject(registry, name, pos, euler, scale,
-                        shapeType, sphereR, cuboidSz, capsR, capsH, capsR, capsH, planeN,
-                        behavType, linVel, angVelDeg, settings.gravityOn, mat);
+            Entity e = buildObject(registry, name, pos, euler, scale,
+                                   shapeType, sphereR, cuboidSz, capsR, capsH, capsR, capsH, planeN,
+                                   behavType, linVel, angVelDeg, settings.gravityOn, mat);
+
+            if (obj->behaviour_type() == Simulation::Behaviour::AnimatedObject) {
+                if (const auto* anim = obj->behaviour_as_AnimatedObject()) {
+                    AnimationComponent animComp;
+                    animComp.totalDuration = anim->total_duration();
+                    animComp.easing   = (anim->easing() == Simulation::EasingType::SMOOTHSTEP)
+                                        ? EasingType::SMOOTHSTEP : EasingType::LINEAR;
+                    switch (anim->path_mode()) {
+                        case Simulation::PathMode::LOOP:    animComp.pathMode = PathMode::LOOP;    break;
+                        case Simulation::PathMode::REVERSE: animComp.pathMode = PathMode::REVERSE; break;
+                        default:                            animComp.pathMode = PathMode::STOP;    break;
+                    }
+                    if (anim->waypoints()) {
+                        for (const auto* wp : *anim->waypoints()) {
+                            if (!wp) continue;
+                            AnimationWaypoint waypoint;
+                            if (wp->position())
+                                waypoint.position = { wp->position()->x(), wp->position()->y(), wp->position()->z() };
+                            if (wp->rotation()) {
+                                glm::vec3 deg = { wp->rotation()->pitch(), wp->rotation()->yaw(), wp->rotation()->roll() };
+                                waypoint.rotation = eulerToQuat(deg);
+                            }
+                            waypoint.time = wp->time();
+                            animComp.waypoints.push_back(waypoint);
+                        }
+                    }
+                    if (animComp.waypoints.size() >= 2)
+                        registry.addComponent<AnimationComponent>(e, animComp);
+                }
+            }
         }
     }
 
@@ -723,9 +753,36 @@ bool FBSceneLoader::loadJSON(const std::string& filepath, Registry& registry,
             glm::vec3 linVel   = jVec3(bh["linear_velocity"]);
             glm::vec3 angVelD  = jVec3(bh["angular_velocity"]);
 
-            buildObject(registry, nm, t.position, t.eulerDeg, t.scale,
-                        shEnum, sRadius, cuboidSz, cRadius, cHeight, cRadius, cHeight, planeN,
-                        bhEnum, linVel, angVelD, settings.gravityOn, mat);
+            Entity e = buildObject(registry, nm, t.position, t.eulerDeg, t.scale,
+                                   shEnum, sRadius, cuboidSz, cRadius, cHeight, cRadius, cHeight, planeN,
+                                   bhEnum, linVel, angVelD, settings.gravityOn, mat);
+
+            if (bhEnum == 3) {
+                AnimationComponent animComp;
+                animComp.totalDuration = bh["total_duration"].asFloat(1.0f);
+                std::string easingStr  = bh["easing"].asStr("LINEAR");
+                std::string pathStr    = bh["path_mode"].asStr("STOP");
+                animComp.easing   = (easingStr == "SMOOTHSTEP") ? EasingType::SMOOTHSTEP : EasingType::LINEAR;
+                if      (pathStr == "LOOP")    animComp.pathMode = PathMode::LOOP;
+                else if (pathStr == "REVERSE") animComp.pathMode = PathMode::REVERSE;
+                else                           animComp.pathMode = PathMode::STOP;
+                const Json& wps = bh["waypoints"];
+                if (wps.isArray()) {
+                    for (size_t wi = 0; wi < wps.size(); ++wi) {
+                        AnimationWaypoint wp;
+                        wp.position = jVec3(wps[wi]["position"]);
+                        const Json& rot = wps[wi]["rotation"];
+                        if (!rot.isNull()) {
+                            glm::vec3 deg = { rot["pitch"].asFloat(), rot["yaw"].asFloat(), rot["roll"].asFloat() };
+                            wp.rotation = eulerToQuat(deg);
+                        }
+                        wp.time = wps[wi]["time"].asFloat(0.0f);
+                        animComp.waypoints.push_back(wp);
+                    }
+                }
+                if (animComp.waypoints.size() >= 2)
+                    registry.addComponent<AnimationComponent>(e, animComp);
+            }
         }
     }
 

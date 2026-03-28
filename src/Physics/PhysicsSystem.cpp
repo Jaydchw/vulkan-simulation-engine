@@ -62,7 +62,7 @@ void PhysicsSystem::resolveCrossPeerCollisions() {
   auto entities = registry->getEntities();
 
   for (Entity local : entities) {
-    auto* localPhys      = registry->getComponent<PhysicsComponent>(local);
+    auto* localPhys      = registry->getComponent<SimulatedComponent>(local);
     auto* localCollider  = registry->getComponent<ColliderComponent>(local);
     auto* localTransform = registry->getComponent<TransformComponent>(local);
     if (!localPhys || !localCollider || !localTransform) continue;
@@ -76,7 +76,7 @@ void PhysicsSystem::resolveCrossPeerCollisions() {
 
     for (Entity remote : entities) {
       if (remote == local) continue;
-      auto* remotePhys      = registry->getComponent<PhysicsComponent>(remote);
+      auto* remotePhys      = registry->getComponent<SimulatedComponent>(remote);
       auto* remoteCollider  = registry->getComponent<ColliderComponent>(remote);
       auto* remoteTransform = registry->getComponent<TransformComponent>(remote);
       if (!remotePhys || !remoteCollider || !remoteTransform) continue;
@@ -125,13 +125,13 @@ void PhysicsSystem::syncToLibrary() {
 
   auto entities = registry->getEntities();
   for (Entity e : entities) {
-    auto* phys     = registry->getComponent<PhysicsComponent>(e);
+    auto* phys     = registry->getComponent<SimulatedComponent>(e);
     auto* collider = registry->getComponent<ColliderComponent>(e);
     auto* transform = registry->getComponent<TransformComponent>(e);
     if (!collider || !transform) continue;
 
-    // Dynamic (has PhysicsComponent) but not locally owned → skip simulation.
-    // Static objects (no PhysicsComponent) are always added so that locally-
+    // Dynamic (has SimulatedComponent) but not locally owned → skip simulation.
+    // Static objects (no SimulatedComponent) are always added so that locally-
     // owned objects can collide with them.
     if (phys && networkManager && !networkManager->isLocallyOwned(e))
       continue;
@@ -139,22 +139,41 @@ void PhysicsSystem::syncToLibrary() {
     auto* obj = &registry->getPhysicsObject(e);
 
     obj->setPosition(transform->position);
-    obj->setScale(transform->scale);
+    // Collider half-extents and radii are stored in world space,
+    // so scale is not applied here to avoid double-scaling.
+
+    const bool isStatic = !phys;
 
     switch (collider->type) {
       case ColliderType::Sphere:
         obj->setCollider(jphys::Collider::createSphere(collider->radius));
         break;
-      case ColliderType::AABB:
-        obj->setCollider(jphys::Collider::createAABB(collider->halfExtents));
+      case ColliderType::AABB: {
+        glm::vec3 he = collider->halfExtents;
+        if (isStatic) {
+          // Expand axis-aligned bounds to enclose the oriented bounding box
+          // so collision tracks visual rotation of animated/static objects.
+          glm::mat3 R = glm::mat3_cast(transform->rotation);
+          he = glm::vec3(
+            std::abs(R[0][0])*he.x + std::abs(R[1][0])*he.y + std::abs(R[2][0])*he.z,
+            std::abs(R[0][1])*he.x + std::abs(R[1][1])*he.y + std::abs(R[2][1])*he.z,
+            std::abs(R[0][2])*he.x + std::abs(R[1][2])*he.y + std::abs(R[2][2])*he.z
+          );
+        }
+        obj->setCollider(jphys::Collider::createAABB(he));
         break;
-      case ColliderType::Plane:
+      }
+      case ColliderType::Plane: {
+        // Rotate the stored normal by the object's current orientation so
+        // animated/tilted planes collide on the correct face.
+        glm::vec3 worldNormal = transform->rotation * collider->normal;
         if (collider->finite)
           obj->setCollider(jphys::Collider::createFinitePlane(
-              collider->normal, collider->halfExtents));
+              worldNormal, collider->halfExtents));
         else
-          obj->setCollider(jphys::Collider::createPlane(collider->normal));
+          obj->setCollider(jphys::Collider::createPlane(worldNormal));
         break;
+      }
       case ColliderType::Cylinder:
         obj->setCollider(
             jphys::Collider::createCylinder(collider->radius, collider->height));
@@ -183,6 +202,7 @@ void PhysicsSystem::syncToLibrary() {
       if (phys->constantTorque != glm::vec3(0.0f))
         obj->addTorque(phys->constantTorque);
     } else {
+      obj->setOrientation(transform->rotation);
       obj->setStatic(true);
     }
 
@@ -195,12 +215,14 @@ void PhysicsSystem::syncFromLibrary() {
   for (Entity e : entities) {
     auto* collider  = registry->getComponent<ColliderComponent>(e);
     auto* transform = registry->getComponent<TransformComponent>(e);
-    auto* phys      = registry->getComponent<PhysicsComponent>(e);
+    auto* phys      = registry->getComponent<SimulatedComponent>(e);
     if (!collider || !transform) continue;
 
     // Only write back locally-owned dynamic objects; remote ones are updated
     // by NetworkManager::applyRemoteStates() instead.
-    if (phys && networkManager && !networkManager->isLocallyOwned(e))
+    if (!phys) continue;
+
+    if (networkManager && !networkManager->isLocallyOwned(e))
       continue;
 
     const auto& obj = registry->getPhysicsObject(e);

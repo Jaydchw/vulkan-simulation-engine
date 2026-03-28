@@ -1,0 +1,156 @@
+# Default World
+# Physics demonstration with falling balls on a ground plane
+
+BeginSettings
+  ClearColor = 0.08, 0.08, 0.12, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.35, 0.35, 0.4
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = RedBall
+  AlbedoColor = 0.9, 0.15, 0.15
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = BlueBall
+  AlbedoColor = 0.15, 0.3, 0.9
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = GreenBall
+  AlbedoColor = 0.15, 0.85, 0.25
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = YellowBall
+  AlbedoColor = 0.95, 0.85, 0.15
+  Roughness = 0.4
+  Metallic = 0.2
+EndMaterial
+
+BeginMaterial
+  Name = WhiteBall
+  AlbedoColor = 0.95, 0.95, 0.95
+  Roughness = 0.2
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 60.0
+  Height = 60.0
+EndMesh
+
+BeginMesh
+  Name = SmallBall
+  Type = sphere
+  Radius = 1.0
+  Segments = 32
+EndMesh
+
+BeginMesh
+  Name = BigBall
+  Type = sphere
+  Radius = 2.0
+  Segments = 32
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 30.0, 0.0, 30.0
+EndObject
+
+BeginObject
+  Name = Red Ball
+  Position = 0.0, 15.0, 0.0
+  Mesh = SmallBall
+  Material = RedBall
+  Physics = true
+  Restitution = 0.8
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Blue Ball
+  Position = 5.0, 25.0, 0.0
+  Mesh = SmallBall
+  Material = BlueBall
+  Physics = true
+  Restitution = 0.9
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Green Ball
+  Position = -8.0, 10.0, 3.0
+  Mesh = SmallBall
+  Material = GreenBall
+  Physics = true
+  Velocity = 4.0, 8.0, -2.0
+  Restitution = 0.7
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginObject
+  Name = Yellow Ball
+  Position = -3.0, 20.0, -4.0
+  Mesh = BigBall
+  Material = YellowBall
+  Physics = true
+  Mass = 4.0
+  Restitution = 0.6
+  Collider = sphere
+  ColliderRadius = 2.0
+EndObject
+
+BeginObject
+  Name = White Ball
+  Position = 8.0, 12.0, 5.0
+  Mesh = SmallBall
+  Material = WhiteBall
+  Physics = true
+  Restitution = 0.2
+  Collider = sphere
+  ColliderRadius = 1.0
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.4, -1.0, 0.3
+  Color = 1.0, 0.98, 0.92
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill Light
+  Type = point
+  Position = -10.0, 15.0, 10.0
+  Color = 0.6, 0.7, 1.0
+  Intensity = 60.0
+  CastsShadows = false
+EndLight

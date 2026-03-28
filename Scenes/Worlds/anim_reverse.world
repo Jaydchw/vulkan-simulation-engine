@@ -1,0 +1,216 @@
+# Animation Test: REVERSE mode
+# Platforms travel A->B->C->B->A->B->... bouncing back and forth
+
+BeginSettings
+  ClearColor = 0.1, 0.06, 0.1, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.22, 0.18, 0.25
+  Roughness = 0.9
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = RedPlatform
+  AlbedoColor = 1.0, 0.2, 0.3
+  Roughness = 0.3
+  Metallic = 0.3
+EndMaterial
+
+BeginMaterial
+  Name = GoldPlatform
+  AlbedoColor = 1.0, 0.8, 0.1
+  Roughness = 0.25
+  Metallic = 0.6
+EndMaterial
+
+BeginMaterial
+  Name = TealPlatform
+  AlbedoColor = 0.1, 0.75, 0.65
+  Roughness = 0.3
+  Metallic = 0.3
+EndMaterial
+
+BeginMaterial
+  Name = CoralPlatform
+  AlbedoColor = 1.0, 0.45, 0.35
+  Roughness = 0.4
+  Metallic = 0.1
+EndMaterial
+
+BeginMesh
+  Name = Ground
+  Type = plane
+  Width = 70.0
+  Height = 70.0
+EndMesh
+
+BeginMesh
+  Name = Platform
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = ThinPlatform
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginObject
+  Name = Floor
+  Position = 0.0, 0.0, 0.0
+  Mesh = Ground
+  Material = GroundMat
+EndObject
+
+# Red: horizontal back-and-forth with rotation
+BeginObject
+  Name = Red Bouncer (Horizontal)
+  Position = -15.0, 2.5, -5.0
+  Scale = 4.0, 0.5, 2.0
+  Mesh = Platform
+  Material = RedPlatform
+  Collider = box
+  ColliderHalfExtents = 2.0, 0.25, 1.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 6.0
+    BeginWaypoint
+      Position = -15.0, 2.5, -5.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 2.5, -5.0
+      Rotation = 0.0, 45.0, 0.0
+      Time = 3.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 15.0, 2.5, -5.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 6.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Gold: vertical pendulum motion
+BeginObject
+  Name = Gold Bouncer (Pendulum)
+  Position = 0.0, 1.0, 5.0
+  Scale = 3.0, 0.5, 3.0
+  Mesh = Platform
+  Material = GoldPlatform
+  Collider = box
+  ColliderHalfExtents = 1.5, 0.25, 1.5
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 4.0
+    BeginWaypoint
+      Position = 0.0, 1.0, 5.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 8.0, 5.0
+      Rotation = 0.0, 0.0, 30.0
+      Time = 2.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 12.0, 5.0
+      Rotation = 0.0, 0.0, -30.0
+      Time = 4.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Teal: multi-waypoint staircase bounce
+BeginObject
+  Name = Teal Bouncer (Staircase)
+  Position = -5.0, 2.0, -15.0
+  Scale = 3.5, 0.4, 3.5
+  Mesh = Platform
+  Material = TealPlatform
+  Collider = box
+  ColliderHalfExtents = 1.75, 0.2, 1.75
+  BeginAnimation
+    PathMode = reverse
+    Easing = linear
+    TotalDuration = 9.0
+    BeginWaypoint
+      Position = -5.0, 2.0, -15.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -2.0, 5.0, -15.0
+      Rotation = 0.0, 30.0, 0.0
+      Time = 3.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 2.0, 8.0, -15.0
+      Rotation = 0.0, 60.0, 0.0
+      Time = 6.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 6.0, 11.0, -15.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 9.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Coral: wide sweeping arc
+BeginObject
+  Name = Coral Bouncer (Arc)
+  Position = 10.0, 2.0, 10.0
+  Scale = 5.0, 0.4, 2.5
+  Mesh = ThinPlatform
+  Material = CoralPlatform
+  Collider = box
+  ColliderHalfExtents = 2.5, 0.2, 1.25
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 5.0
+    BeginWaypoint
+      Position = 10.0, 2.0, 10.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.0, 9.0, 2.0
+      Rotation = 45.0, 45.0, 0.0
+      Time = 2.5
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.0, 2.0, -5.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 5.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.2, -0.9, 0.4
+  Color = 1.0, 0.9, 1.0
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 20.0, 0.0
+  Color = 0.5, 0.3, 0.6
+  Intensity = 120.0
+  CastsShadows = false
+EndLight

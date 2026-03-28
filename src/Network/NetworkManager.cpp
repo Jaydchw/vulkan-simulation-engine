@@ -139,7 +139,7 @@ void NetworkManager::assignObjectOwnership() {
   if (!registry) return;
 
   std::vector<Entity> dynamicEntities;
-  for (const auto& [e, _] : registry->allPhysics())
+  for (const auto& [e, _] : registry->allSimulated())
     dynamicEntities.push_back(e);
   std::sort(dynamicEntities.begin(), dynamicEntities.end());
 
@@ -766,7 +766,7 @@ void NetworkManager::applyRemoteStates() {
     transform->rotation = state.orientation;
 
     // Keep velocity current for cross-peer collision resolution
-    auto* phys = registry->getComponent<PhysicsComponent>(e);
+    auto* phys = registry->getComponent<SimulatedComponent>(e);
     if (phys) phys->velocity = state.velocity;
 
     auto* physObj = registry->getPhysicsObjectPtr(e);
@@ -789,7 +789,7 @@ void NetworkManager::applyRemoteProperties() {
   for (const auto& props : snapshot) {
     Entity e = static_cast<Entity>(props.entityId);
 
-    auto* phys = registry->getComponent<PhysicsComponent>(e);
+    auto* phys = registry->getComponent<SimulatedComponent>(e);
     if (phys) {
       phys->mass = props.mass;
       phys->restitution = props.restitution;
@@ -813,7 +813,7 @@ void NetworkManager::sendOwnedObjectStates() {
   if (!registry) return;
 
   std::vector<ObjectFastStateEntry> entries;
-  for (const auto& [e, phys] : registry->allPhysics()) {
+  for (const auto& [e, phys] : registry->allSimulated()) {
     if (!isLocallyOwned(e)) continue;
     const auto* transform = registry->getComponent<TransformComponent>(e);
     if (!transform) continue;
@@ -933,7 +933,7 @@ void NetworkManager::sendOwnedObjectProperties() {
   if (!registry) return;
 
   std::vector<ObjectPropertyEntry> entries;
-  for (const auto& [e, phys] : registry->allPhysics()) {
+  for (const auto& [e, phys] : registry->allSimulated()) {
     if (!isLocallyOwned(e)) continue;
     const auto* collider = registry->getComponent<ColliderComponent>(e);
     if (!collider) continue;
@@ -1030,7 +1030,7 @@ void NetworkManager::broadcastSpawnEntity(Entity e) {
   if (!running || !registry) return;
 
   const auto* transform = registry->getComponent<TransformComponent>(e);
-  const auto* phys      = registry->getComponent<PhysicsComponent>(e);
+  const auto* phys      = registry->getComponent<SimulatedComponent>(e);
   const auto* collider  = registry->getComponent<ColliderComponent>(e);
   const auto* nameComp  = registry->getComponent<NameComponent>(e);
   const auto* mesh      = registry->getComponent<MeshComponent>(e);

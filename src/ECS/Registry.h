@@ -20,11 +20,12 @@ class Registry final {
     materials.erase(entity);
     renders.erase(entity);
     lights.erase(entity);
-    physics.erase(entity);
+    simulated.erase(entity);
     colliders.erase(entity);
     physicsObjects.erase(entity);
     spawners.erase(entity);
     cameras.erase(entity);
+    animations.erase(entity);
   }
 
   // Creates an entity with a specific ID (used when replicating remote spawns).
@@ -64,11 +65,11 @@ class Registry final {
   const std::unordered_map<Entity, LightComponent>& allLights() const {
     return lights;
   }
-  const std::unordered_map<Entity, PhysicsComponent>& allPhysics() const {
-    return physics;
+  const std::unordered_map<Entity, SimulatedComponent>& allSimulated() const {
+    return simulated;
   }
-  std::unordered_map<Entity, PhysicsComponent>& allPhysicsMut() {
-    return physics;
+  std::unordered_map<Entity, SimulatedComponent>& allSimulatedMut() {
+    return simulated;
   }
   const std::unordered_map<Entity, ColliderComponent>& allColliders() const {
     return colliders;
@@ -81,6 +82,12 @@ class Registry final {
   }
   const std::unordered_map<Entity, CameraComponent>& allCameras() const {
     return cameras;
+  }
+  const std::unordered_map<Entity, AnimationComponent>& allAnimations() const {
+    return animations;
+  }
+  std::unordered_map<Entity, AnimationComponent>& allAnimationsMut() {
+    return animations;
   }
   jphys::PhysicsObject& getPhysicsObject(Entity entity) {
     return physicsObjects[entity];
@@ -110,11 +117,12 @@ class Registry final {
   std::unordered_map<Entity, MaterialComponent> materials;
   std::unordered_map<Entity, RenderComponent> renders;
   std::unordered_map<Entity, LightComponent> lights;
-  std::unordered_map<Entity, PhysicsComponent> physics;
+  std::unordered_map<Entity, SimulatedComponent> simulated;
   std::unordered_map<Entity, ColliderComponent> colliders;
   std::unordered_map<Entity, jphys::PhysicsObject> physicsObjects;
-  std::unordered_map<Entity, SpawnerComponent> spawners;
-  std::unordered_map<Entity, CameraComponent> cameras;
+  std::unordered_map<Entity, SpawnerComponent>   spawners;
+  std::unordered_map<Entity, CameraComponent>    cameras;
+  std::unordered_map<Entity, AnimationComponent> animations;
 };
 
 template <>
@@ -148,9 +156,9 @@ inline void Registry::addComponent<LightComponent>(Entity entity,
   lights[entity] = c;
 }
 template <>
-inline void Registry::addComponent<PhysicsComponent>(
-    Entity entity, const PhysicsComponent& c) {
-  physics[entity] = c;
+inline void Registry::addComponent<SimulatedComponent>(
+    Entity entity, const SimulatedComponent& c) {
+  simulated[entity] = c;
 }
 template <>
 inline void Registry::addComponent<ColliderComponent>(
@@ -192,10 +200,10 @@ inline LightComponent* Registry::getComponent<LightComponent>(Entity entity) {
   return it != lights.end() ? &it->second : nullptr;
 }
 template <>
-inline PhysicsComponent* Registry::getComponent<PhysicsComponent>(
+inline SimulatedComponent* Registry::getComponent<SimulatedComponent>(
     Entity entity) {
-  auto it = physics.find(entity);
-  return it != physics.end() ? &it->second : nullptr;
+  auto it = simulated.find(entity);
+  return it != simulated.end() ? &it->second : nullptr;
 }
 template <>
 inline ColliderComponent* Registry::getComponent<ColliderComponent>(
@@ -241,10 +249,10 @@ inline const LightComponent* Registry::getComponent<LightComponent>(
   return it != lights.end() ? &it->second : nullptr;
 }
 template <>
-inline const PhysicsComponent* Registry::getComponent<PhysicsComponent>(
+inline const SimulatedComponent* Registry::getComponent<SimulatedComponent>(
     Entity entity) const {
-  auto it = physics.find(entity);
-  return it != physics.end() ? &it->second : nullptr;
+  auto it = simulated.find(entity);
+  return it != simulated.end() ? &it->second : nullptr;
 }
 template <>
 inline const ColliderComponent* Registry::getComponent<ColliderComponent>(
@@ -278,8 +286,8 @@ inline bool Registry::hasComponent<LightComponent>(Entity entity) const {
   return lights.count(entity) > 0;
 }
 template <>
-inline bool Registry::hasComponent<PhysicsComponent>(Entity entity) const {
-  return physics.count(entity) > 0;
+inline bool Registry::hasComponent<SimulatedComponent>(Entity entity) const {
+  return simulated.count(entity) > 0;
 }
 template <>
 inline bool Registry::hasComponent<ColliderComponent>(Entity entity) const {
@@ -324,4 +332,23 @@ inline const CameraComponent* Registry::getComponent<CameraComponent>(Entity ent
 template <>
 inline bool Registry::hasComponent<CameraComponent>(Entity entity) const {
   return cameras.count(entity) > 0;
+}
+
+template <>
+inline void Registry::addComponent<AnimationComponent>(Entity entity, const AnimationComponent& c) {
+  animations[entity] = c;
+}
+template <>
+inline AnimationComponent* Registry::getComponent<AnimationComponent>(Entity entity) {
+  auto it = animations.find(entity);
+  return it != animations.end() ? &it->second : nullptr;
+}
+template <>
+inline const AnimationComponent* Registry::getComponent<AnimationComponent>(Entity entity) const {
+  auto it = animations.find(entity);
+  return it != animations.end() ? &it->second : nullptr;
+}
+template <>
+inline bool Registry::hasComponent<AnimationComponent>(Entity entity) const {
+  return animations.count(entity) > 0;
 }

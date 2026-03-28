@@ -24,6 +24,7 @@
 #include "ECS/Registry.h"
 #include "Resources/TextureManager.h"
 #include "Scene/LightManager.h"
+#include "Animation/AnimationSystem.h"
 #include "Physics/PhysicsSystem.h"
 #include "Spawning/SpawnerSystem.h"
 #include "Timeline/TimelineSystem.h"
@@ -128,6 +129,7 @@ class Application final {
   std::unique_ptr<PostProcessing> postProcessing;
   std::unique_ptr<MainPipeline> mainPipeline;
   std::unique_ptr<Interface> interface;
+  std::unique_ptr<AnimationSystem> animationSystem;
   std::unique_ptr<PhysicsSystem> physicsSystem;
   std::unique_ptr<SpawnerSystem> spawnerSystem;
   std::unique_ptr<TimelineSystem> timelineSystem;

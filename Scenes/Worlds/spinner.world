@@ -1,0 +1,272 @@
+# Spinner: a rotating arm deflects falling balls in unpredictable directions
+# Two spinning arms at different heights and speeds create a chaotic pinball effect.
+
+BeginSettings
+  ClearColor = 0.05, 0.03, 0.08, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.20, 0.18, 0.24
+  Roughness = 0.90
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = ArmMatA
+  AlbedoColor = 0.90, 0.20, 0.55
+  Roughness = 0.20
+  Metallic = 0.60
+EndMaterial
+
+BeginMaterial
+  Name = ArmMatB
+  AlbedoColor = 0.15, 0.70, 0.85
+  Roughness = 0.20
+  Metallic = 0.60
+EndMaterial
+
+BeginMaterial
+  Name = BaseMat
+  AlbedoColor = 0.35, 0.35, 0.40
+  Roughness = 0.60
+  Metallic = 0.40
+EndMaterial
+
+BeginMaterial
+  Name = BallMatA
+  AlbedoColor = 1.0, 1.0, 1.0
+  Roughness = 0.15
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = BallMatB
+  AlbedoColor = 1.0, 0.65, 0.10
+  Roughness = 0.20
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = BallMatC
+  AlbedoColor = 0.45, 0.75, 1.0
+  Roughness = 0.15
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 40.0
+  Height = 40.0
+EndMesh
+
+BeginMesh
+  Name = Arm
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.65
+  Segments = 28
+EndMesh
+
+# Ground
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 20.0, 0.0, 20.0
+EndObject
+
+# Low spinning arm (full 360 loop, fast)
+BeginObject
+  Name = Arm Low
+  Position = -5.0, 5.0, 0.0
+  Scale = 10.0, 0.5, 1.5
+  Mesh = Arm
+  Material = ArmMatA
+  Collider = box
+  ColliderHalfExtents = 5.0, 0.25, 0.75
+  BeginAnimation
+    PathMode = loop
+    Easing = linear
+    TotalDuration = 3.0
+    BeginWaypoint
+      Position = -5.0, 5.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -5.0, 5.0, 0.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 0.75
+    EndWaypoint
+    BeginWaypoint
+      Position = -5.0, 5.0, 0.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 1.5
+    EndWaypoint
+    BeginWaypoint
+      Position = -5.0, 5.0, 0.0
+      Rotation = 0.0, 270.0, 0.0
+      Time = 2.25
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# High spinning arm (looped, slower, opposite direction via waypoint order)
+BeginObject
+  Name = Arm High
+  Position = 4.0, 12.0, 0.0
+  Scale = 8.0, 0.5, 1.5
+  Mesh = Arm
+  Material = ArmMatB
+  Collider = box
+  ColliderHalfExtents = 4.0, 0.25, 0.75
+  BeginAnimation
+    PathMode = loop
+    Easing = linear
+    TotalDuration = 5.0
+    BeginWaypoint
+      Position = 4.0, 12.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 4.0, 12.0, 0.0
+      Rotation = 0.0, 270.0, 0.0
+      Time = 1.25
+    EndWaypoint
+    BeginWaypoint
+      Position = 4.0, 12.0, 0.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 2.5
+    EndWaypoint
+    BeginWaypoint
+      Position = 4.0, 12.0, 0.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 3.75
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# --- Physics balls ---
+
+BeginObject
+  Name = White Ball 1
+  Position = -3.0, 28.0, 0.0
+  Mesh = Ball
+  Material = BallMatA
+  Physics = true
+  Restitution = 0.70
+  Mass = 1.0
+  Collider = sphere
+  ColliderRadius = 0.65
+EndObject
+
+BeginObject
+  Name = White Ball 2
+  Position = 1.0, 30.0, 1.5
+  Mesh = Ball
+  Material = BallMatA
+  Physics = true
+  Restitution = 0.65
+  Mass = 1.0
+  Collider = sphere
+  ColliderRadius = 0.65
+EndObject
+
+BeginObject
+  Name = Orange Ball 1
+  Position = -6.0, 25.0, -1.0
+  Mesh = Ball
+  Material = BallMatB
+  Physics = true
+  Restitution = 0.75
+  Mass = 1.2
+  Velocity = 0.5, 0.0, 0.0
+  Collider = sphere
+  ColliderRadius = 0.65
+EndObject
+
+BeginObject
+  Name = Orange Ball 2
+  Position = 3.0, 32.0, 2.0
+  Mesh = Ball
+  Material = BallMatB
+  Physics = true
+  Restitution = 0.70
+  Mass = 1.0
+  Collider = sphere
+  ColliderRadius = 0.65
+EndObject
+
+BeginObject
+  Name = Blue Ball 1
+  Position = -1.0, 22.0, 3.0
+  Mesh = Ball
+  Material = BallMatC
+  Physics = true
+  Restitution = 0.60
+  Mass = 1.5
+  Velocity = -0.3, 0.0, -0.5
+  Collider = sphere
+  ColliderRadius = 0.65
+EndObject
+
+BeginObject
+  Name = Blue Ball 2
+  Position = 5.0, 26.0, -2.5
+  Mesh = Ball
+  Material = BallMatC
+  Physics = true
+  Restitution = 0.80
+  Mass = 0.8
+  Collider = sphere
+  ColliderRadius = 0.65
+EndObject
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.15, -1.0, 0.25
+  Color = 1.0, 0.95, 0.90
+  Intensity = 2.2
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Glow A
+  Type = point
+  Position = -5.0, 6.0, 0.0
+  Color = 0.90, 0.20, 0.55
+  Intensity = 60.0
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = Glow B
+  Type = point
+  Position = 4.0, 13.0, 0.0
+  Color = 0.15, 0.70, 0.85
+  Intensity = 50.0
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = Ambient
+  Type = point
+  Position = 0.0, 20.0, 10.0
+  Color = 0.25, 0.20, 0.40
+  Intensity = 120.0
+  CastsShadows = false
+EndLight
