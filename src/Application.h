@@ -31,6 +31,7 @@
 #include "Util/Input.h"
 #include "Util/Interface.h"
 #include "Util/WorldParser.h"
+#include "Util/FBSceneLoader.h"
 
 #include <unordered_map>
 
@@ -69,6 +70,7 @@ class Application final {
   void init();
   void setRegistry(Registry& reg);
   void loadWorld(const std::string& filepath);
+  void loadFBScene(const std::string& filepath);
   void run();
 
   MeshManager* getMeshManager() const { return meshManager.get(); }
@@ -82,7 +84,8 @@ class Application final {
  private:
   Registry* registry = nullptr;
   std::unique_ptr<Registry> ownedRegistry;
-  std::unique_ptr<WorldParser> worldParser;
+  std::unique_ptr<WorldParser>   worldParser;
+  std::unique_ptr<FBSceneLoader> fbSceneLoader;
   std::vector<VkImage> swapChainImages;
   std::vector<VkImageView> swapChainImageViews;
   std::vector<VkBuffer> uniformBuffers;

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -53,55 +54,101 @@ void Application::setRegistry(Registry& reg) {
 }
 
 void Application::loadWorld(const std::string& filepath) {
-vkDeviceWaitIdle(device);
+  vkDeviceWaitIdle(device);
 
-if (interface) interface->clearSelection();
+  if (interface) interface->clearSelection();
 
-  materialManager->resetForNewScene();
-  lightManager->resetForNewScene();
+  {
+    std::lock_guard<std::mutex> lock(simMutex);
 
-  ownedRegistry = std::make_unique<Registry>();
-  registry = ownedRegistry.get();
+    materialManager->resetForNewScene();
+    lightManager->resetForNewScene();
 
-  WorldSettings worldSettings;
-  worldParser->load(filepath, *registry, worldSettings);
+    ownedRegistry = std::make_unique<Registry>();
+    registry = ownedRegistry.get();
 
-  sceneSettings.clearColor = worldSettings.clearColor;
+    WorldSettings worldSettings;
+    worldParser->load(filepath, *registry, worldSettings);
 
-  lightManager->setRegistry(registry);
-  lightManager->syncLights();
+    sceneSettings.clearColor = worldSettings.clearColor;
 
-  physicsSystem->setRegistry(registry);
-  spawnerSystem->setRegistry(registry);
-  timelineSystem->setRegistry(registry);
-  timelineSystem->saveInitialSnapshot();
+    lightManager->setRegistry(registry);
+    lightManager->syncLights();
 
-  // Let the network manager know about the new registry and distribute ownership
-  if (networkManager) {
-    networkManager->init(registry);
-    networkManager->assignObjectOwnership();
+    physicsSystem->setRegistry(registry);
+    spawnerSystem->setRegistry(registry);
+    timelineSystem->setRegistry(registry);
+    timelineSystem->saveInitialSnapshot();
+
+    if (networkManager) {
+      networkManager->init(registry);
+      networkManager->assignObjectOwnership();
+    }
+
+    savedMaterialIDs.clear();
+    lastColorByOwner = false;
+
+    simState = SimulationState{};
+    simState.timeSpeed = worldSettings.timeSpeed;
+    simState.physicsAccumulator = 0.0f;
+    if (worldSettings.simulationHz > 0)
+      simState.stepSize = 1.0f / static_cast<float>(worldSettings.simulationHz);
+    simState.maxFps = worldSettings.maxFps;
   }
 
-  // Clear material override cache so colours are re-applied with the new registry.
-  // Do NOT reset colorByOwner — it is user intent and should survive reloads.
-  savedMaterialIDs.clear();
-  lastColorByOwner = false;  // forces a re-broadcast on the next frame so peers re-sync
-
-  simState = SimulationState{};
-  simState.timeSpeed = worldSettings.timeSpeed;
-  simState.physicsAccumulator = 0.0f;
-  if (worldSettings.simulationHz > 0)
-    simState.stepSize = 1.0f / static_cast<float>(worldSettings.simulationHz);
-  simState.maxFps = worldSettings.maxFps;
   lastLoadedWorldPath = filepath;
 
-  if (interface) {
-    interface->setCurrentWorldPath(filepath);
-  }
+  if (interface) interface->setCurrentWorldPath(filepath);
 
   initCamerasFromRegistry();
 
   Debug::log(Debug::Category::MAIN, "Application: Loaded world: ", filepath);
+}
+
+void Application::loadFBScene(const std::string& filepath) {
+  vkDeviceWaitIdle(device);
+
+  if (interface) interface->clearSelection();
+
+  {
+    std::lock_guard<std::mutex> lock(simMutex);
+
+    materialManager->resetForNewScene();
+    lightManager->resetForNewScene();
+
+    ownedRegistry = std::make_unique<Registry>();
+    registry = ownedRegistry.get();
+
+    FBWorldSettings fbSettings;
+    fbSceneLoader->load(filepath, *registry, fbSettings);
+
+    lightManager->setRegistry(registry);
+    lightManager->syncLights();
+
+    physicsSystem->setRegistry(registry);
+    spawnerSystem->setRegistry(registry);
+    timelineSystem->setRegistry(registry);
+    timelineSystem->saveInitialSnapshot();
+
+    if (networkManager) {
+      networkManager->init(registry);
+      networkManager->assignObjectOwnership();
+    }
+
+    savedMaterialIDs.clear();
+    lastColorByOwner = false;
+
+    simState = SimulationState{};
+    simState.physicsAccumulator = 0.0f;
+  }
+
+  lastLoadedWorldPath = filepath;
+
+  if (interface) interface->setCurrentWorldPath(filepath);
+
+  initCamerasFromRegistry();
+
+  Debug::log(Debug::Category::MAIN, "Application: Loaded FB scene: ", filepath);
 }
 
 void Application::run() {
@@ -311,9 +358,11 @@ void Application::initVulkan() {
                             imageAvailableSemaphores, renderFinishedSemaphores,
                             inFlightFences);
 
-  worldParser = std::make_unique<WorldParser>(meshManager.get(),
-                                              materialManager.get(),
-                                              textureManager.get());
+  worldParser    = std::make_unique<WorldParser>(meshManager.get(),
+                                               materialManager.get(),
+                                               textureManager.get());
+  fbSceneLoader  = std::make_unique<FBSceneLoader>(meshManager.get(),
+                                                   materialManager.get());
   physicsSystem  = std::make_unique<PhysicsSystem>();
   spawnerSystem  = std::make_unique<SpawnerSystem>();
   timelineSystem = std::make_unique<TimelineSystem>();
@@ -324,10 +373,15 @@ void Application::initVulkan() {
   physicsSystem->setNetworkManager(networkManager.get());
   spawnerSystem->setNetworkManager(networkManager.get());
 
-  interface->setWorldDirectory("Worlds");
+  interface->setWorldDirectory("Scenes/Worlds");
+  interface->setFBSceneDirectory("Scenes/FBs");
   interface->setWorldLoadCallback([this](const std::string& path) {
-    loadWorld(path);
-    // Broadcast scene change to all peers (unless we're applying a remote one)
+    auto ext = std::filesystem::path(path).extension().string();
+    if (ext == ".fbscene") {
+      loadFBScene(path);
+    } else {
+      loadWorld(path);
+    }
     if (networkManager && !applyingRemoteSceneLoad) {
       networkManager->sendLoadScene(path);
       networkManager->sendOwnedObjectProperties();
@@ -352,7 +406,9 @@ while (!window->shouldClose()) {
   if (simState.reloadRequested) {
     simState.reloadRequested = false;
     if (!lastLoadedWorldPath.empty()) {
-      loadWorld(lastLoadedWorldPath);
+      auto reloadExt = std::filesystem::path(lastLoadedWorldPath).extension().string();
+      if (reloadExt == ".fbscene") loadFBScene(lastLoadedWorldPath);
+      else                         loadWorld(lastLoadedWorldPath);
       if (networkManager && !applyingRemoteSceneLoad) {
         networkManager->sendLoadScene(lastLoadedWorldPath);
         networkManager->sendOwnedObjectProperties();
@@ -600,7 +656,9 @@ while (!window->shouldClose()) {
     std::string remotePath;
     if (networkManager->pollPendingSceneLoad(remotePath) && !remotePath.empty()) {
       applyingRemoteSceneLoad = true;
-      loadWorld(remotePath);
+      auto remoteExt = std::filesystem::path(remotePath).extension().string();
+      if (remoteExt == ".fbscene") loadFBScene(remotePath);
+      else                         loadWorld(remotePath);
       applyingRemoteSceneLoad = false;
     }
 

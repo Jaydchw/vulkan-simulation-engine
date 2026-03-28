@@ -52,7 +52,7 @@ int main() {
                "Initializing Vulkan Simulation Engine...");
     app.init();
 
-    auto worlds = WorldParser::listWorlds("Worlds");
+    auto worlds = WorldParser::listWorlds("Scenes/Worlds");
     if (!worlds.empty()) {
       app.loadWorld(worlds[0]);
     }

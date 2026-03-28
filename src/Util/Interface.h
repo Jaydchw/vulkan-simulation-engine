@@ -125,6 +125,7 @@ class Interface {
 
   void setWorldLoadCallback(std::function<void(const std::string&)> callback);
   void setWorldDirectory(const std::string& dir);
+  void setFBSceneDirectory(const std::string& dir);
   void refreshWorldList();
   void setCurrentWorldPath(const std::string& path);
   void notifyBakeSaved();
@@ -160,8 +161,10 @@ class Interface {
   Entity hoveredEntity = INVALID_ENTITY;
 
   std::string worldDirectory;
+  std::string fbSceneDirectory;
   std::string lastLoadedWorld;
   std::vector<std::string> worldFiles;
+  std::vector<std::string> fbSceneFiles;
   std::function<void(const std::string&)> worldLoadCallback;
 
   struct WorldFileStats {

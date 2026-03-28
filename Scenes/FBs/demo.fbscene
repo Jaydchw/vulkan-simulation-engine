@@ -1,0 +1,151 @@
+{
+  "name": "fb_demo",
+  "description": "Demonstration scene loaded from a FlatBuffer schema-compatible file. Four owned spheres fall onto a steel floor with a repeating sphere spawner.",
+  "gravity_on": true,
+
+  "cameras": [
+    {
+      "name": "Perspective View",
+      "transform": {
+        "position": { "x": 0, "y": 8, "z": 22 },
+        "orientation": { "yaw": 0, "pitch": -15, "roll": 0 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "camera_type": {
+        "type": "PerspectiveCamera",
+        "fov": 60.0,
+        "near": 0.1,
+        "far": 1000.0
+      }
+    }
+  ],
+
+  "materials": [
+    { "name": "rubber",   "density": 1200.0 },
+    { "name": "steel",    "density": 7800.0 },
+    { "name": "wood",     "density":  700.0 },
+    { "name": "concrete", "density": 2400.0 }
+  ],
+
+  "interactions": [
+    { "material_a": "rubber",   "material_b": "rubber",   "restitution": 0.80, "static_friction": 0.60, "dynamic_friction": 0.40 },
+    { "material_a": "rubber",   "material_b": "steel",    "restitution": 0.50, "static_friction": 0.50, "dynamic_friction": 0.30 },
+    { "material_a": "rubber",   "material_b": "concrete", "restitution": 0.55, "static_friction": 0.65, "dynamic_friction": 0.45 },
+    { "material_a": "steel",    "material_b": "steel",    "restitution": 0.30, "static_friction": 0.80, "dynamic_friction": 0.60 },
+    { "material_a": "wood",     "material_b": "concrete", "restitution": 0.35, "static_friction": 0.50, "dynamic_friction": 0.35 }
+  ],
+
+  "objects": [
+    {
+      "name": "floor",
+      "transform": {
+        "position": { "x": 0, "y": 0, "z": 0 },
+        "orientation": { "yaw": 0, "pitch": 0, "roll": 0 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "material": "concrete",
+      "shape": { "type": "Plane", "normal": { "x": 0, "y": 1, "z": 0 } },
+      "behaviour": { "type": "StaticObject" },
+      "collision_type": "SOLID"
+    },
+    {
+      "name": "peer1_sphere",
+      "transform": {
+        "position": { "x": -3, "y": 6, "z": 0 },
+        "orientation": { "yaw": 0, "pitch": 0, "roll": 0 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "material": "rubber",
+      "shape": { "type": "Sphere", "radius": 0.6 },
+      "behaviour": {
+        "type": "SimulatedObject",
+        "linear_velocity":  { "x": 1.5, "y": 0, "z": 0 },
+        "angular_velocity": { "x": 0,   "y": 90, "z": 0 },
+        "owner": "ONE"
+      },
+      "collision_type": "SOLID"
+    },
+    {
+      "name": "peer2_box",
+      "transform": {
+        "position": { "x": 0, "y": 5, "z": 0 },
+        "orientation": { "yaw": 20, "pitch": 0, "roll": 0 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "material": "wood",
+      "shape": { "type": "Cuboid", "size": { "x": 1.0, "y": 1.0, "z": 1.0 } },
+      "behaviour": {
+        "type": "SimulatedObject",
+        "linear_velocity":  { "x": -1, "y": 0,  "z": 0.5 },
+        "angular_velocity": { "x": 0,  "y": 45, "z": 0   },
+        "owner": "TWO"
+      },
+      "collision_type": "SOLID"
+    },
+    {
+      "name": "peer3_cylinder",
+      "transform": {
+        "position": { "x": 3, "y": 6, "z": 0 },
+        "orientation": { "yaw": 0, "pitch": 0, "roll": 0 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "material": "steel",
+      "shape": { "type": "Cylinder", "radius": 0.4, "height": 1.2 },
+      "behaviour": {
+        "type": "SimulatedObject",
+        "linear_velocity":  { "x": -1, "y": 0, "z": 0 },
+        "angular_velocity": { "x": 0,  "y": 0, "z": 0 },
+        "owner": "THREE"
+      },
+      "collision_type": "SOLID"
+    },
+    {
+      "name": "peer4_capsule",
+      "transform": {
+        "position": { "x": 1.5, "y": 8, "z": 2 },
+        "orientation": { "yaw": 0, "pitch": 0, "roll": 0 },
+        "scale": { "x": 1, "y": 1, "z": 1 }
+      },
+      "material": "rubber",
+      "shape": { "type": "Capsule", "radius": 0.35, "height": 1.0 },
+      "behaviour": {
+        "type": "SimulatedObject",
+        "linear_velocity":  { "x": 0, "y": 0, "z": -1 },
+        "angular_velocity": { "x": 0, "y": 0, "z": 0  },
+        "owner": "FOUR"
+      },
+      "collision_type": "SOLID"
+    }
+  ],
+
+  "spawners": [
+    {
+      "type": "SphereSpawner",
+      "base": {
+        "name": "rubber_rain",
+        "start_time": 2.0,
+        "spawn_type": {
+          "type": "RepeatingSpawn",
+          "interval": 0.8,
+          "max_count": 30
+        },
+        "location": {
+          "type": "RandomSphere",
+          "center": { "x": 0, "y": 12, "z": 0 },
+          "radius": 4.0
+        },
+        "linear_velocity": {
+          "min": { "x": -1, "y": -1, "z": -1 },
+          "max": { "x":  1, "y":  0, "z":  1 }
+        },
+        "angular_velocity": {
+          "min": { "x": 0, "y": 0, "z": 0 },
+          "max": { "x": 0, "y": 0, "z": 0 }
+        },
+        "material": "rubber",
+        "owner": "SEQUENTIAL"
+      },
+      "radius_range": { "min": 0.2, "max": 0.5 }
+    }
+  ]
+}

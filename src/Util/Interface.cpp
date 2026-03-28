@@ -1667,6 +1667,11 @@ void Interface::setWorldDirectory(const std::string& dir) {
   refreshWorldList();
 }
 
+void Interface::setFBSceneDirectory(const std::string& dir) {
+  fbSceneDirectory = dir;
+  refreshWorldList();
+}
+
 void Interface::setCurrentWorldPath(const std::string& path) {
   hasBakeFile = std::filesystem::exists(
       std::filesystem::path(path).replace_extension(".worldbake"));
@@ -1684,86 +1689,132 @@ void Interface::refreshWorldList() {
     std::ifstream f(path);
     std::string line;
     while (std::getline(f, line)) {
-      if (line.find("BeginObject") != std::string::npos) stats.objects++;
-      if (line.find("BeginLight") != std::string::npos) stats.lights++;
-      if (line.find("BeginTexture") != std::string::npos) stats.textures++;
+      if (line.find("BeginObject")   != std::string::npos) stats.objects++;
+      if (line.find("BeginLight")    != std::string::npos) stats.lights++;
+      if (line.find("BeginTexture")  != std::string::npos) stats.textures++;
       if (line.find("BeginMaterial") != std::string::npos) stats.materials++;
     }
     worldFileStats[path] = stats;
+  }
+
+  if (!fbSceneDirectory.empty()) {
+    std::error_code ec;
+    fbSceneFiles.clear();
+    if (std::filesystem::exists(fbSceneDirectory, ec)) {
+      for (const auto& entry : std::filesystem::directory_iterator(fbSceneDirectory, ec)) {
+        auto ext = entry.path().extension();
+        if (entry.is_regular_file() && (ext == ".fbscene" || ext == ".bin")) {
+          fbSceneFiles.push_back(entry.path().string());
+        }
+      }
+      std::sort(fbSceneFiles.begin(), fbSceneFiles.end());
+    }
   }
 }
 
 void Interface::renderWorldsMenu() {
   const float s = currentScale;
 
-  if (!lastLoadedWorld.empty()) {
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.22f, 0.36f, 0.22f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.46f, 0.28f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.35f, 0.55f, 0.35f, 1.0f));
-    if (ImGui::Button("  Reload Current Scene  ", ImVec2(-1, 28 * s))) {
-      if (worldLoadCallback) {
-        worldLoadCallback(lastLoadedWorld);
-      }
-    }
-    ImGui::PopStyleColor(3);
-    if (ImGui::IsItemHovered())
-      ImGui::SetTooltip("Reload '%s'\nApplies to all connected peers.",
-                        std::filesystem::path(lastLoadedWorld).stem().string().c_str());
+  auto sepLine = [&]() {
     ImGui::Spacing();
     ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
     ImGui::Separator();
     ImGui::PopStyleColor();
     ImGui::Spacing();
+  };
+
+  auto sectionHeader = [&](const char* label) {
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.60f, 0.70f, 1.0f));
+    ImGui::TextUnformatted(label);
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
+  };
+
+  auto renderEntry = [&](const std::string& path) {
+    std::string displayName = std::filesystem::path(path).stem().string();
+    bool isCurrent = (path == lastLoadedWorld);
+    ImGui::PushID(path.c_str());
+    if (isCurrent) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.50f, 0.70f, 0.95f, 1.0f));
+    if (ImGui::Selectable(displayName.c_str(), isCurrent, 0, ImVec2(0, 0))) {
+      if (worldLoadCallback) {
+        worldLoadCallback(path);
+        lastLoadedWorld = path;
+      }
+    }
+    if (isCurrent) ImGui::PopStyleColor();
+    auto it = worldFileStats.find(path);
+    if (it != worldFileStats.end()) {
+      const auto& ws = it->second;
+      ImGui::SameLine(200 * s);
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
+      ImGui::Text("%d obj  %d lit  %d tex  %d mat", ws.objects, ws.lights, ws.textures, ws.materials);
+      ImGui::PopStyleColor();
+    }
+    ImGui::PopID();
+  };
+
+  if (!lastLoadedWorld.empty()) {
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.22f, 0.36f, 0.22f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.46f, 0.28f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.35f, 0.55f, 0.35f, 1.0f));
+    if (ImGui::Button("  Reload Current Scene  ", ImVec2(-1, 28 * s))) {
+      if (worldLoadCallback) worldLoadCallback(lastLoadedWorld);
+    }
+    ImGui::PopStyleColor(3);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Reload '%s'\nApplies to all connected peers.",
+                        std::filesystem::path(lastLoadedWorld).stem().string().c_str());
+    sepLine();
   }
 
+  // --- Custom Worlds (.world) ---
+  sectionHeader("Custom Worlds");
   if (worldFiles.empty()) {
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
-    ImGui::Text("No .world files found in '%s'",
-                worldDirectory.c_str());
+    ImGui::Text("No .world files found in '%s'", worldDirectory.c_str());
     ImGui::PopStyleColor();
   } else {
     for (const auto& path : worldFiles) {
+      renderEntry(path);
+    }
+  }
+
+  sepLine();
+
+  // --- FlatBuffer Scenes (.fbscene) ---
+  sectionHeader("FlatBuffer Scenes");
+  if (fbSceneFiles.empty()) {
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
+    ImGui::Text("No .fbscene/.bin files found in '%s'", fbSceneDirectory.c_str());
+    ImGui::PopStyleColor();
+  } else {
+    for (const auto& path : fbSceneFiles) {
       std::string displayName = std::filesystem::path(path).stem().string();
       bool isCurrent = (path == lastLoadedWorld);
-
       ImGui::PushID(path.c_str());
-      if (isCurrent) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.50f, 0.70f, 0.95f, 1.0f));
-      }
+      ImGui::PushStyleColor(ImGuiCol_Text, isCurrent ? ImVec4(0.50f, 0.70f, 0.95f, 1.0f)
+                                                     : ImVec4(0.75f, 0.85f, 0.65f, 1.0f));
       if (ImGui::Selectable(displayName.c_str(), isCurrent, 0, ImVec2(0, 0))) {
         if (worldLoadCallback) {
           worldLoadCallback(path);
           lastLoadedWorld = path;
         }
       }
-      if (isCurrent) {
-        ImGui::PopStyleColor();
-      }
-      ImGui::SameLine(200);
-      auto it = worldFileStats.find(path);
-      if (it != worldFileStats.end()) {
-        const auto& ws = it->second;
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
-        ImGui::Text("%d obj  %d lit  %d tex  %d mat", ws.objects,
-                    ws.lights, ws.textures, ws.materials);
-        ImGui::PopStyleColor();
-      }
+      ImGui::PopStyleColor();
       ImGui::PopID();
     }
   }
 
-  ImGui::Spacing();
-  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
-  ImGui::Separator();
-  ImGui::PopStyleColor();
-  ImGui::Spacing();
+  sepLine();
 
-  if (ImGui::Button("Refresh", ImVec2(100 * currentScale, 28 * currentScale))) {
+  if (ImGui::Button("Refresh", ImVec2(100 * s, 28 * s))) {
     refreshWorldList();
   }
   ImGui::SameLine(0, 12);
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
-  ImGui::Text("%d world(s)", static_cast<int>(worldFiles.size()));
+  ImGui::Text("%d world(s)  %d fb scene(s)",
+              static_cast<int>(worldFiles.size()),
+              static_cast<int>(fbSceneFiles.size()));
   ImGui::PopStyleColor();
 }
 
