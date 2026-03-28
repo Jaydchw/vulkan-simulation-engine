@@ -137,6 +137,10 @@ void Application::loadFBScene(const std::string& filepath) {
     if (networkManager) {
       networkManager->init(registry);
       networkManager->assignObjectOwnership();
+      // Item 1: apply explicit peer ownership from SimulatedObject::owner fields,
+      // overriding the auto round-robin assignment above.
+      for (const auto& [entityId, peerID] : fbSettings.entityOwners)
+        networkManager->setEntityOwner(static_cast<Entity>(entityId), peerID);
     }
 
     savedMaterialIDs.clear();

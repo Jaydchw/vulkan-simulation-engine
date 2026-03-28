@@ -147,6 +147,18 @@ struct SpawnerComponent {
   int maxSpawns = -1;  // -1 = unlimited
   bool enabled = true;
 
+  // Burst spawn: fire all maxSpawns at once on the first trigger, then disable.
+  bool burstMode = false;
+
+  // Owner assignment: 0=auto round-robin, 1-4=fixed peer, 5=SEQUENTIAL round-robin across active peers.
+  uint8_t ownerMode = 0;
+
+  // Axis-aligned box spawn location (RandomBox). When useBoxSpawn is true,
+  // spawnPos/positionRandomness are ignored and a point is sampled uniformly from [spawnBoxMin, spawnBoxMax].
+  glm::vec3 spawnBoxMin = glm::vec3(0.0f);
+  glm::vec3 spawnBoxMax = glm::vec3(0.0f);
+  bool useBoxSpawn = false;
+
   // Runtime state — not intended for serialization.
   float timer = 0.0f;
   float currentInterval = -1.0f;  // recomputed after each spawn; -1 triggers first computation

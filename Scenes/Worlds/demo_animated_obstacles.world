@@ -1,0 +1,222 @@
+# Demo: Animated Obstacles
+# A spawner fires a steady stream of balls into an obstacle course of animated platforms.
+# Three platform types: a horizontal shuttle, a vertical lift, and a tilting see-saw.
+# Balls interact with the kinetic surfaces — getting swept, launched, or deflected.
+# Shows animated-object / physics-body momentum transfer.
+
+BeginSettings
+  ClearColor = 0.05, 0.05, 0.10, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+# ---- Materials ----
+
+BeginMaterial
+  Name = FloorMat
+  AlbedoColor = 0.22, 0.22, 0.27
+  Roughness = 0.88
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = ShuttleMat
+  AlbedoColor = 0.15, 0.55, 0.90
+  Roughness = 0.30
+  Metallic = 0.50
+EndMaterial
+
+BeginMaterial
+  Name = LiftMat
+  AlbedoColor = 0.90, 0.55, 0.10
+  Roughness = 0.30
+  Metallic = 0.40
+EndMaterial
+
+BeginMaterial
+  Name = SeeSawMat
+  AlbedoColor = 0.20, 0.80, 0.45
+  Roughness = 0.35
+  Metallic = 0.30
+EndMaterial
+
+BeginMaterial
+  Name = BallMat
+  AlbedoColor = 0.95, 0.92, 0.85
+  Roughness = 0.20
+  Metallic = 0.10
+EndMaterial
+
+# ---- Meshes ----
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 60.0
+  Height = 30.0
+EndMesh
+
+BeginMesh
+  Name = Plank
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.55
+  Segments = 22
+EndMesh
+
+# ---- Static geometry ----
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = FloorMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 30.0, 0.0, 15.0
+EndObject
+
+# ---- Animated platforms ----
+
+# Blue shuttle: sweeps left–right at mid height
+BeginObject
+  Name = Shuttle
+  Position = -10.0, 4.5, 0.0
+  Scale = 7.0, 0.5, 10.0
+  Mesh = Plank
+  Material = ShuttleMat
+  Collider = box
+  ColliderHalfExtents = 3.5, 0.25, 5.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 5.0
+    BeginWaypoint
+      Position = -10.0, 4.5, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.0, 4.5, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 5.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Orange lift: rises and falls — launches balls upward on ascent
+BeginObject
+  Name = Lift
+  Position = 18.0, 1.5, -5.0
+  Scale = 5.0, 0.5, 6.0
+  Mesh = Plank
+  Material = LiftMat
+  Collider = box
+  ColliderHalfExtents = 2.5, 0.25, 3.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 3.5
+    BeginWaypoint
+      Position = 18.0, 1.5, -5.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 18.0, 9.0, -5.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 3.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Green see-saw: tilts back and forth, deflecting balls to one side
+BeginObject
+  Name = SeeSaw
+  Position = 18.0, 3.0, 6.0
+  Scale = 12.0, 0.4, 4.0
+  Mesh = Plank
+  Material = SeeSawMat
+  Collider = box
+  ColliderHalfExtents = 6.0, 0.2, 2.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 4.0
+    BeginWaypoint
+      Position = 18.0, 3.0, 6.0
+      Rotation = 0.0, 0.0, -18.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 18.0, 3.0, 6.0
+      Rotation = 0.0, 0.0, 18.0
+      Time = 4.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# ---- Spawner ----
+
+BeginSpawner
+  Name = Cannon
+  Position = -26.0, 8.0, 0.0
+  SpawnInterval = 0.55
+  SpawnIntervalRandomness = 0.25
+  SpawnDirection = 1.0, -0.15, 0.0
+  DirectionRandomness = 0.18
+  SpawnSpeed = 10.0
+  SpeedRandomness = 0.20
+  PositionRandomness = 2.5
+  AngularVelocityRandomness = 6.0
+  MaxSpawns = 60
+
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = Ball
+    Mesh = Ball
+    Material = BallMat
+    ScaleUniform = 1.0
+    Mass = 1.0
+    Restitution = 0.60
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.55
+  EndTemplate
+
+EndSpawner
+
+# ---- Lighting ----
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.40, -1.0, 0.30
+  Color = 1.0, 0.97, 0.90
+  Intensity = 2.8
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill Left
+  Type = point
+  Position = -20.0, 16.0, 0.0
+  Color = 0.40, 0.50, 0.80
+  Intensity = 120.0
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = Fill Right
+  Type = point
+  Position = 20.0, 12.0, 0.0
+  Color = 0.80, 0.60, 0.30
+  Intensity = 80.0
+  CastsShadows = false
+EndLight

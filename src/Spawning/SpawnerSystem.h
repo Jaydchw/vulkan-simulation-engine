@@ -26,10 +26,17 @@ class SpawnerSystem final {
   NetworkManager* networkManager = nullptr;
   std::mt19937    rng{std::random_device{}()};
 
+  // Counter for SEQUENTIAL spawner ownership — cycles across active peers in order.
+  int seqOwnerNext = 0;
+
   float computeInterval(const SpawnerComponent& spawner);
   SpawnTemplate* selectTemplate(SpawnerComponent& spawner);
   Entity doSpawn(Entity spawnerEntity, SpawnerComponent& spawner, const SpawnTemplate& tmpl);
 
+  // Assign ownership for a freshly-spawned entity according to ownerMode.
+  void assignSpawnedOwner(Entity entity, SpawnerComponent& spawner);
+
   glm::vec3 randomInSphere(float radius);
+  glm::vec3 randomInBox(const glm::vec3& min, const glm::vec3& max);
   glm::vec3 randomConeDir(const glm::vec3& axis, float halfAngle);
 };

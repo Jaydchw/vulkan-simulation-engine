@@ -1,0 +1,366 @@
+# Demo: Full Showcase
+# Everything at once: animated platforms, multi-template spawner, multiple cameras,
+# and central pillar obstacles on an open floor.
+#
+# Cameras:
+#   "Overview"    — wide angle from behind showing the whole arena
+#   "Top Down"    — birds-eye for watching the fill pattern
+#   "Side Track"  — low angle watching objects interact with platforms
+#
+# Systems active:
+#   - Three animated platforms (shuttle, lift, rotating arm)
+#   - One multi-template spawner (spheres 50%, boxes 30%, capsules 20%)
+#   - Physics interactions between spawned objects and animated surfaces
+#   - Network ownership round-robin (enable Color by Owner to see distribution)
+
+BeginSettings
+  ClearColor = 0.04, 0.05, 0.10, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+# ---- Cameras ----
+
+BeginCamera
+  Name = Overview
+  Position = 0.0, 28.0, 55.0
+  Target = 0.0, 4.0, 0.0
+  FOV = 65.0
+  NearPlane = 0.1
+  FarPlane = 800.0
+EndCamera
+
+BeginCamera
+  Name = Top Down
+  Position = 0.0, 65.0, 1.0
+  Target = 0.0, 0.0, 0.0
+  FOV = 55.0
+  NearPlane = 0.5
+  FarPlane = 400.0
+EndCamera
+
+BeginCamera
+  Name = Side Track
+  Position = 40.0, 10.0, 0.0
+  Target = 0.0, 4.0, 0.0
+  FOV = 60.0
+  NearPlane = 0.1
+  FarPlane = 500.0
+EndCamera
+
+# ---- Materials ----
+
+BeginMaterial
+  Name = ArenaMat
+  AlbedoColor = 0.20, 0.20, 0.26
+  Roughness = 0.88
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = PillarMat
+  AlbedoColor = 0.32, 0.30, 0.36
+  Roughness = 0.80
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = ShuttleMat
+  AlbedoColor = 0.15, 0.55, 0.95
+  Roughness = 0.28
+  Metallic = 0.55
+EndMaterial
+
+BeginMaterial
+  Name = LiftMat
+  AlbedoColor = 0.95, 0.55, 0.10
+  Roughness = 0.28
+  Metallic = 0.45
+EndMaterial
+
+BeginMaterial
+  Name = ArmMat
+  AlbedoColor = 0.80, 0.20, 0.65
+  Roughness = 0.35
+  Metallic = 0.40
+EndMaterial
+
+BeginMaterial
+  Name = SphereMat
+  AlbedoColor = 0.90, 0.90, 0.85
+  Roughness = 0.20
+  Metallic = 0.08
+EndMaterial
+
+BeginMaterial
+  Name = BoxMat
+  AlbedoColor = 0.85, 0.42, 0.12
+  Roughness = 0.65
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = CapsuleMat
+  AlbedoColor = 0.25, 0.80, 0.42
+  Roughness = 0.30
+  Metallic = 0.20
+EndMaterial
+
+# ---- Meshes ----
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 60.0
+  Height = 60.0
+EndMesh
+
+BeginMesh
+  Name = Block
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Sphere
+  Type = sphere
+  Radius = 0.55
+  Segments = 22
+EndMesh
+
+BeginMesh
+  Name = Box
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Capsule
+  Type = capsule
+  Radius = 0.38
+  Segments = 18
+EndMesh
+
+# ---- Arena ----
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = ArenaMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 30.0, 0.0, 30.0
+EndObject
+
+# Central pillars — give objects something to interact with
+BeginObject
+  Name = Pillar NW
+  Position = -8.0, 3.5, -8.0
+  Scale = 1.8, 7.0, 1.8
+  Mesh = Block
+  Material = PillarMat
+  Collider = aabb
+  ColliderHalfExtents = 0.9, 3.5, 0.9
+EndObject
+
+BeginObject
+  Name = Pillar NE
+  Position = 8.0, 3.5, -8.0
+  Scale = 1.8, 7.0, 1.8
+  Mesh = Block
+  Material = PillarMat
+  Collider = aabb
+  ColliderHalfExtents = 0.9, 3.5, 0.9
+EndObject
+
+BeginObject
+  Name = Pillar SW
+  Position = -8.0, 3.5, 8.0
+  Scale = 1.8, 7.0, 1.8
+  Mesh = Block
+  Material = PillarMat
+  Collider = aabb
+  ColliderHalfExtents = 0.9, 3.5, 0.9
+EndObject
+
+BeginObject
+  Name = Pillar SE
+  Position = 8.0, 3.5, 8.0
+  Scale = 1.8, 7.0, 1.8
+  Mesh = Block
+  Material = PillarMat
+  Collider = aabb
+  ColliderHalfExtents = 0.9, 3.5, 0.9
+EndObject
+
+# ---- Animated platforms ----
+
+# Blue shuttle — horizontal sweep along X
+BeginObject
+  Name = Shuttle
+  Position = -16.0, 5.0, 0.0
+  Scale = 9.0, 0.5, 12.0
+  Mesh = Block
+  Material = ShuttleMat
+  Collider = box
+  ColliderHalfExtents = 4.5, 0.25, 6.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 7.0
+    BeginWaypoint
+      Position = -16.0, 5.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 16.0, 5.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 7.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Orange lift — rises from floor level to mid height
+BeginObject
+  Name = Lift
+  Position = 20.0, 1.5, -16.0
+  Scale = 6.0, 0.5, 6.0
+  Mesh = Block
+  Material = LiftMat
+  Collider = box
+  ColliderHalfExtents = 3.0, 0.25, 3.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 4.0
+    BeginWaypoint
+      Position = 20.0, 1.5, -16.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 20.0, 11.0, -16.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 4.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# Pink tilting arm — rocks back and forth, deflects objects
+BeginObject
+  Name = Tilt Arm
+  Position = 20.0, 3.5, 16.0
+  Scale = 14.0, 0.4, 3.0
+  Mesh = Block
+  Material = ArmMat
+  Collider = box
+  ColliderHalfExtents = 7.0, 0.2, 1.5
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 5.0
+    BeginWaypoint
+      Position = 20.0, 3.5, 16.0
+      Rotation = 0.0, 0.0, -20.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 20.0, 3.5, 16.0
+      Rotation = 0.0, 0.0, 20.0
+      Time = 5.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# ---- Multi-template spawner ----
+
+BeginSpawner
+  Name = Showcase Spawn
+  Position = 0.0, 26.0, 0.0
+  SpawnInterval = 0.40
+  SpawnIntervalRandomness = 0.30
+  SpawnDirection = 0.0, -1.0, 0.0
+  DirectionRandomness = 0.15
+  SpawnSpeed = 1.2
+  SpeedRandomness = 0.25
+  PositionRandomness = 10.0
+  AngularVelocityRandomness = 8.0
+  MaxSpawns = 100
+
+  # Sphere — most common
+  BeginTemplate
+    Weight = 5.0
+    NamePrefix = Sphere
+    Mesh = Sphere
+    Material = SphereMat
+    ScaleUniform = 1.0
+    Mass = 0.8
+    Restitution = 0.65
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.55
+  EndTemplate
+
+  # Box — medium frequency
+  BeginTemplate
+    Weight = 3.0
+    NamePrefix = Box
+    Mesh = Box
+    Material = BoxMat
+    ScaleUniform = 0.85
+    Mass = 4.0
+    Restitution = 0.22
+    Damping = 0.98
+    UseGravity = true
+    Collider = box
+    ColliderHalfExtents = 0.43, 0.43, 0.43
+  EndTemplate
+
+  # Capsule — least common
+  BeginTemplate
+    Weight = 2.0
+    NamePrefix = Capsule
+    Mesh = Capsule
+    Material = CapsuleMat
+    ScaleUniform = 1.0
+    Mass = 1.4
+    Restitution = 0.45
+    Damping = 0.99
+    UseGravity = true
+    Collider = capsule
+    ColliderRadius = 0.38
+  EndTemplate
+
+EndSpawner
+
+# ---- Lighting ----
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.40, -1.0, 0.35
+  Color = 1.0, 0.97, 0.90
+  Intensity = 2.8
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill Blue
+  Type = point
+  Position = -20.0, 22.0, -20.0
+  Color = 0.40, 0.50, 0.90
+  Intensity = 180.0
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = Fill Warm
+  Type = point
+  Position = 20.0, 18.0, 20.0
+  Color = 0.90, 0.65, 0.35
+  Intensity = 120.0
+  CastsShadows = false
+EndLight

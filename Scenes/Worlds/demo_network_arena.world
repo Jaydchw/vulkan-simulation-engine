@@ -1,0 +1,146 @@
+# Demo: Network Arena
+# A repeating spawner fills the floor with balls distributed round-robin across all active peers.
+# Enable 'Color by Owner' in the Network panel to see the ownership distribution.
+# A sweeping platform keeps the pile in motion so ownership coloring stays visible.
+# Works as a single-player stress test too — all objects owned by Peer 1 by default.
+
+BeginSettings
+  ClearColor = 0.05, 0.07, 0.12, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+# ---- Materials ----
+
+BeginMaterial
+  Name = ArenaMat
+  AlbedoColor = 0.22, 0.22, 0.28
+  Roughness = 0.88
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = SweepMat
+  AlbedoColor = 0.15, 0.50, 0.85
+  Roughness = 0.30
+  Metallic = 0.50
+EndMaterial
+
+BeginMaterial
+  Name = BallMat
+  AlbedoColor = 0.90, 0.88, 0.82
+  Roughness = 0.25
+  Metallic = 0.10
+EndMaterial
+
+# ---- Meshes ----
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 56.0
+  Height = 56.0
+EndMesh
+
+BeginMesh
+  Name = Platform
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.65
+  Segments = 22
+EndMesh
+
+# ---- Arena ----
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = ArenaMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 28.0, 0.0, 28.0
+EndObject
+
+# ---- Sweeping platform — keeps objects moving so ownership colors stay visible ----
+
+BeginObject
+  Name = Sweeper
+  Position = -16.0, 3.0, 0.0
+  Scale = 10.0, 0.6, 20.0
+  Mesh = Platform
+  Material = SweepMat
+  Collider = box
+  ColliderHalfExtents = 5.0, 0.3, 10.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 8.0
+    BeginWaypoint
+      Position = -16.0, 3.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 16.0, 3.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 8.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# ---- Spawner — fills the arena, ownership distributed round-robin ----
+
+BeginSpawner
+  Name = Arena Fill
+  Position = 0.0, 22.0, 0.0
+  SpawnInterval = 0.30
+  SpawnIntervalRandomness = 0.20
+  SpawnDirection = 0.0, -1.0, 0.0
+  DirectionRandomness = 0.08
+  SpawnSpeed = 1.0
+  SpeedRandomness = 0.15
+  PositionRandomness = 11.0
+  AngularVelocityRandomness = 4.0
+  MaxSpawns = 100
+
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = Ball
+    Mesh = Ball
+    Material = BallMat
+    ScaleUniform = 1.0
+    Mass = 1.0
+    Restitution = 0.55
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.65
+  EndTemplate
+
+EndSpawner
+
+# ---- Lighting ----
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.30, -1.0, 0.40
+  Color = 1.0, 0.97, 0.90
+  Intensity = 2.8
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 28.0, 0.0
+  Color = 0.45, 0.55, 0.90
+  Intensity = 200.0
+  CastsShadows = false
+EndLight

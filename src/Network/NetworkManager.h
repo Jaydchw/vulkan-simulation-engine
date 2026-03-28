@@ -92,6 +92,13 @@ public:
     bool isLocallyOwned(Entity e) const;
     uint8_t getOwnerPeerID(Entity e) const;
 
+    // Explicitly pin one entity to a specific peer without redistributing all others.
+    void setEntityOwner(Entity e, uint8_t peerID);
+
+    // Returns the sorted list of currently active peer IDs (local + connected).
+    // Used by SpawnerSystem for SEQUENTIAL round-robin ownership assignment.
+    std::vector<uint8_t> getActivePeerIDs() const;
+
     void sendLoadScene(const std::string& scenePath);
     // Sends static physics properties (mass, collider, etc.) to all connected peers.
     // Call after a new peer connects or after a scene reload.

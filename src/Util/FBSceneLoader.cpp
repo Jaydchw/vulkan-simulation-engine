@@ -258,7 +258,15 @@ void FBSceneLoader::buildSpawner(Registry& registry,
                                  uint8_t   spawnerShape,
                                  float     rMin, float rMax,
                                  float     hMin, float hMax,
-                                 glm::vec3 sMin, glm::vec3 sMax) const
+                                 glm::vec3 sMin, glm::vec3 sMax,
+                                 glm::quat spawnRot,
+                                 glm::vec3 avgAngVel,
+                                 float     angVelRandomness,
+                                 bool      burstMode,
+                                 uint8_t   ownerMode,
+                                 bool      useBoxSpawn,
+                                 glm::vec3 boxMin,
+                                 glm::vec3 boxMax) const
 {
     MaterialID matID   = materialManager->getDefaultMaterial();
     float      density = 1000.0f;
@@ -328,20 +336,27 @@ void FBSceneLoader::buildSpawner(Registry& registry,
     glm::vec3 dir = (speed > 1e-4f) ? glm::normalize(avgLinVel) : glm::vec3(0,1,0);
 
     SpawnerComponent sc;
-    sc.templates          = { tmpl };
-    sc.spawnInterval      = spawnInterval;
-    sc.spawnDirection     = dir;
-    sc.spawnSpeed         = speed;
-    sc.positionRandomness = posRandomness;
-    sc.maxSpawns          = maxSpawns;
-    sc.timer              = -startTime;
-    sc.enabled            = true;
+    sc.templates                 = { tmpl };
+    sc.spawnInterval             = spawnInterval;
+    sc.spawnDirection            = dir;
+    sc.spawnSpeed                = speed;
+    sc.positionRandomness        = posRandomness;
+    sc.maxSpawns                 = maxSpawns;
+    sc.timer                     = -startTime;
+    sc.enabled                   = true;
+    sc.angularVelocity           = avgAngVel;
+    sc.angularVelocityRandomness = angVelRandomness;
+    sc.burstMode                 = burstMode;
+    sc.ownerMode                 = ownerMode;
+    sc.useBoxSpawn               = useBoxSpawn;
+    sc.spawnBoxMin               = boxMin;
+    sc.spawnBoxMax               = boxMax;
 
     Entity e = registry.createEntity();
     registry.addComponent<NameComponent>(e, { name });
     TransformComponent tc;
     tc.position = spawnPos;
-    tc.rotation = glm::quat(1,0,0,0);
+    tc.rotation = spawnRot;
     tc.scale    = glm::vec3(1);
     registry.addComponent<TransformComponent>(e, tc);
     registry.addComponent<SpawnerComponent>(e, sc);
@@ -494,6 +509,16 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
                                    shapeType, sphereR, cuboidSz, capsR, capsH, capsR, capsH, planeN,
                                    behavType, linVel, angVelDeg, settings.gravityOn, mat);
 
+            // Item 1: read SimulatedObject::owner and record explicit peer assignment.
+            if (obj->behaviour_type() == Simulation::Behaviour::SimulatedObject) {
+                if (const auto* sim = obj->behaviour_as_SimulatedObject()) {
+                    // ObjectOwnerType is 0-indexed (ONE=0…FOUR=3); peer IDs are 1-4.
+                    uint8_t peerID = static_cast<uint8_t>(sim->owner()) + 1;
+                    if (peerID >= 1 && peerID <= 4)
+                        settings.entityOwners[static_cast<uint32_t>(e)] = peerID;
+                }
+            }
+
             if (obj->behaviour_type() == Simulation::Behaviour::AnimatedObject) {
                 if (const auto* anim = obj->behaviour_as_AnimatedObject()) {
                     AnimationComponent animComp;
@@ -578,11 +603,14 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
             float       startTime = base->start_time();
             float       interval  = 1.0f;
             int         maxSp     = -1;
+            bool        isBurst   = false;
 
+            // Item 4: SingleBurstSpawn fires all objects at once on first trigger.
             switch (base->spawn_type_type()) {
                 case Simulation::SpawnType::SingleBurstSpawn:
                     if (const auto* sb = base->spawn_type_as_SingleBurstSpawn()) {
-                        interval = 0.01f;
+                        isBurst  = true;
+                        interval = 1.0f;  // irrelevant; burst fires once then disables
                         maxSp    = static_cast<int>(sb->count());
                     }
                     break;
@@ -595,22 +623,34 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
                 default: break;
             }
 
-            glm::vec3 spawnPos  = {};
-            float     posRandom = 0.0f;
+            // Item 3: FixedLocation orientation; Item 6: proper RandomBox distribution.
+            glm::vec3 spawnPos    = {};
+            glm::quat spawnRot    = glm::quat(1,0,0,0);
+            float     posRandom   = 0.0f;
+            bool      useBoxSpawn = false;
+            glm::vec3 boxMin      = {};
+            glm::vec3 boxMax      = {};
 
             switch (base->location_type()) {
                 case Simulation::SpawnLocation::FixedLocation:
                     if (const auto* fl = base->location_as_FixedLocation()) {
-                        if (const auto* t = fl->transform())
+                        if (const auto* t = fl->transform()) {
                             spawnPos = { t->position().x(), t->position().y(), t->position().z() };
+                            // Item 3: preserve the FixedLocation orientation on the spawner entity.
+                            glm::vec3 euler = { t->orientation().yaw(),
+                                                t->orientation().pitch(),
+                                                t->orientation().roll() };
+                            spawnRot = eulerToQuat(euler);
+                        }
                     }
                     break;
                 case Simulation::SpawnLocation::RandomBox:
                     if (const auto* rb = base->location_as_RandomBox(); rb && rb->min() && rb->max()) {
-                        glm::vec3 mn = { rb->min()->x(), rb->min()->y(), rb->min()->z() };
-                        glm::vec3 mx = { rb->max()->x(), rb->max()->y(), rb->max()->z() };
-                        spawnPos  = (mn + mx) * 0.5f;
-                        posRandom = glm::length((mx - mn) * 0.5f);
+                        // Item 6: store min/max for per-axis uniform sampling in SpawnerSystem.
+                        boxMin      = { rb->min()->x(), rb->min()->y(), rb->min()->z() };
+                        boxMax      = { rb->max()->x(), rb->max()->y(), rb->max()->z() };
+                        spawnPos    = (boxMin + boxMax) * 0.5f;  // fallback centre
+                        useBoxSpawn = true;
                     }
                     break;
                 case Simulation::SpawnLocation::RandomSphere:
@@ -631,10 +671,29 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
                 };
             }
 
+            // Item 2: read angular velocity range; average → base, half-range → randomness.
+            glm::vec3 avgAngVel    = {};
+            float     angVelRandom = 0.0f;
+            if (const auto* av = base->angular_velocity()) {
+                glm::vec3 avMin = { av->min().x(), av->min().y(), av->min().z() };
+                glm::vec3 avMax = { av->max().x(), av->max().y(), av->max().z() };
+                avgAngVel    = (avMin + avMax) * 0.5f;
+                angVelRandom = glm::length((avMax - avMin) * 0.5f);
+            }
+
+            // Item 5: map SpawnerOwnerType to ownerMode (0=auto, 1-4=fixed peer, 5=SEQUENTIAL).
+            uint8_t ownerMode = 0;
+            if (base->owner() == Simulation::SpawnerOwnerType::SEQUENTIAL) {
+                ownerMode = 5;
+            } else {
+                ownerMode = static_cast<uint8_t>(base->owner()) + 1;  // ONE=0→1, TWO=1→2, etc.
+            }
+
             std::string spMat = base->material() ? base->material()->str() : "";
 
             buildSpawner(registry, spName, startTime, interval, maxSp, spawnPos, posRandom,
-                         avgLin, settings.gravityOn, spMat, spEnum, rMin, rMax, hMin, hMax, sMin, sMax);
+                         avgLin, settings.gravityOn, spMat, spEnum, rMin, rMax, hMin, hMax, sMin, sMax,
+                         spawnRot, avgAngVel, angVelRandom, isBurst, ownerMode, useBoxSpawn, boxMin, boxMax);
         }
     }
 
@@ -757,6 +816,18 @@ bool FBSceneLoader::loadJSON(const std::string& filepath, Registry& registry,
                                    shEnum, sRadius, cuboidSz, cRadius, cHeight, cRadius, cHeight, planeN,
                                    bhEnum, linVel, angVelD, settings.gravityOn, mat);
 
+            // Item 1 (JSON): read SimulatedObject owner field.
+            if (bhEnum == 2) {
+                std::string ownerStr = bh["owner"].asStr();
+                uint8_t peerID = 0;
+                if      (ownerStr=="ONE")   peerID=1;
+                else if (ownerStr=="TWO")   peerID=2;
+                else if (ownerStr=="THREE") peerID=3;
+                else if (ownerStr=="FOUR")  peerID=4;
+                if (peerID > 0)
+                    settings.entityOwners[static_cast<uint32_t>(e)] = peerID;
+            }
+
             if (bhEnum == 3) {
                 AnimationComponent animComp;
                 animComp.totalDuration = bh["total_duration"].asFloat(1.0f);
@@ -799,24 +870,56 @@ bool FBSceneLoader::loadJSON(const std::string& filepath, Registry& registry,
             else if (spType=="CapsuleSpawner")  spEnum=3;
             else if (spType=="CuboidSpawner")   spEnum=4;
 
-            std::string nm  = base["name"].asStr("Spawner");
-            float startTime = base["start_time"].asFloat(0.0f);
-            float interval  = 1.0f; int maxSp = -1;
-            const Json& st  = base["spawn_type"];
+            std::string nm      = base["name"].asStr("Spawner");
+            float startTime     = base["start_time"].asFloat(0.0f);
+            float interval      = 1.0f; int maxSp = -1; bool isBurst = false;
+            const Json& st      = base["spawn_type"];
             if (!st.isNull()) {
-                if (st["type"].asStr()=="RepeatingSpawn") { interval=st["interval"].asFloat(1.0f); int mc=st["max_count"].asInt(0); if(mc>0)maxSp=mc; }
-                else if (st["type"].asStr()=="SingleBurstSpawn") { interval=0.01f; maxSp=st["count"].asInt(1); }
+                if (st["type"].asStr()=="RepeatingSpawn") {
+                    interval = st["interval"].asFloat(1.0f);
+                    int mc = st["max_count"].asInt(0); if (mc > 0) maxSp = mc;
+                } else if (st["type"].asStr()=="SingleBurstSpawn") {
+                    // Item 4: burst — fire all at once on first trigger.
+                    isBurst  = true;
+                    interval = 1.0f;
+                    maxSp    = st["count"].asInt(1);
+                }
             }
-            glm::vec3 pos={}; float posR=0.0f;
+            // Item 3: FixedLocation orientation; Item 6: proper RandomBox distribution.
+            glm::vec3 pos={}; glm::quat spawnRot=glm::quat(1,0,0,0);
+            float posR=0.0f; bool useBoxSpawn=false;
+            glm::vec3 boxMin={}, boxMax={};
             const Json& loc = base["location"];
             if (!loc.isNull()) {
                 std::string lt=loc["type"].asStr();
-                if      (lt=="FixedLocation")  pos=jTransform(loc["transform"]).position;
-                else if (lt=="RandomBox")      { glm::vec3 mn=jVec3(loc["min"]),mx=jVec3(loc["max"]); pos=(mn+mx)*0.5f; posR=glm::length((mx-mn)*0.5f); }
-                else if (lt=="RandomSphere")   { pos=jVec3(loc["center"]); posR=loc["radius"].asFloat(1.0f); }
+                if (lt=="FixedLocation") {
+                    auto ft = jTransform(loc["transform"]);
+                    pos      = ft.position;
+                    spawnRot = eulerToQuat(ft.eulerDeg);
+                } else if (lt=="RandomBox") {
+                    // Item 6: store full min/max for per-axis uniform sampling.
+                    boxMin = jVec3(loc["min"]); boxMax = jVec3(loc["max"]);
+                    pos = (boxMin + boxMax) * 0.5f;
+                    useBoxSpawn = true;
+                } else if (lt=="RandomSphere") {
+                    pos  = jVec3(loc["center"]);
+                    posR = loc["radius"].asFloat(1.0f);
+                }
             }
             glm::vec3 linMin=jVec3(base["linear_velocity"]["min"]), linMax=jVec3(base["linear_velocity"]["max"]);
             glm::vec3 avgLin=(linMin+linMax)*0.5f;
+            // Item 2: angular velocity range.
+            glm::vec3 angMin=jVec3(base["angular_velocity"]["min"]), angMax=jVec3(base["angular_velocity"]["max"]);
+            glm::vec3 avgAngVel=(angMin+angMax)*0.5f;
+            float angVelRandom=glm::length((angMax-angMin)*0.5f);
+            // Item 5: owner mode (0=auto, 1-4=fixed peer, 5=SEQUENTIAL).
+            uint8_t ownerMode=0;
+            std::string ownerStr=base["owner"].asStr();
+            if      (ownerStr=="ONE")        ownerMode=1;
+            else if (ownerStr=="TWO")        ownerMode=2;
+            else if (ownerStr=="THREE")      ownerMode=3;
+            else if (ownerStr=="FOUR")       ownerMode=4;
+            else if (ownerStr=="SEQUENTIAL") ownerMode=5;
             std::string spMat = base["material"].asStr();
 
             float rMin=0.25f,rMax=0.5f,hMin=0.5f,hMax=1.0f;
@@ -825,7 +928,11 @@ bool FBSceneLoader::loadJSON(const std::string& filepath, Registry& registry,
             else if (spEnum==2||spEnum==3) { rMin=sp["radius_range"]["min"].asFloat(0.25f); rMax=sp["radius_range"]["max"].asFloat(0.5f); hMin=sp["height_range"]["min"].asFloat(0.5f); hMax=sp["height_range"]["max"].asFloat(1.0f); }
             else if (spEnum==4) { sMin=jVec3(sp["size_range"]["min"],{0.5f,0.5f,0.5f}); sMax=jVec3(sp["size_range"]["max"],{1,1,1}); }
 
-            buildSpawner(registry, nm, startTime, interval, maxSp, pos, posR, avgLin, settings.gravityOn, spMat, spEnum, rMin, rMax, hMin, hMax, sMin, sMax);
+            // Item 1 (JSON): read SimulatedObject owner for objects is not available in the
+            // spawner block; it is handled per-object above.  For spawner ownership see ownerMode.
+            buildSpawner(registry, nm, startTime, interval, maxSp, pos, posR, avgLin, settings.gravityOn, spMat,
+                         spEnum, rMin, rMax, hMin, hMax, sMin, sMax,
+                         spawnRot, avgAngVel, angVelRandom, isBurst, ownerMode, useBoxSpawn, boxMin, boxMax);
         }
     }
 

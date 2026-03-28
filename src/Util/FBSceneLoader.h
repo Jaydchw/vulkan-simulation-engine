@@ -13,6 +13,9 @@ struct FBWorldSettings {
     bool gravityOn = true;
     std::string name;
     std::string description;
+    // Explicit ownership overrides loaded from SimulatedObject::owner fields.
+    // Maps entity ID → peer ID (1-4). Applied after auto round-robin assignment.
+    std::unordered_map<uint32_t, uint8_t> entityOwners;
 };
 
 class FBSceneLoader {
@@ -71,7 +74,15 @@ private:
                       uint8_t   spawnerShape,
                       float     rMin, float rMax,
                       float     hMin, float hMax,
-                      glm::vec3 sMin, glm::vec3 sMax) const;
+                      glm::vec3 sMin, glm::vec3 sMax,
+                      glm::quat spawnRot,
+                      glm::vec3 avgAngVel,
+                      float     angVelRandomness,
+                      bool      burstMode,
+                      uint8_t   ownerMode,
+                      bool      useBoxSpawn,
+                      glm::vec3 boxMin,
+                      glm::vec3 boxMax) const;
 
     bool loadBinary(const std::string& filepath, Registry& registry, FBWorldSettings& settings);
     bool loadJSON  (const std::string& filepath, Registry& registry, FBWorldSettings& settings);

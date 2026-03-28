@@ -1,0 +1,310 @@
+# Demo: Material Restitution Comparison
+# Six isolated bays, each with a different floor material.
+# Identical balls are dropped from the same height into each bay.
+# Restitution ranges from near-dead (0.05) to super-bouncy (0.95).
+# Easy to see how the engine's material system affects energy retention.
+
+BeginSettings
+  ClearColor = 0.06, 0.06, 0.08, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+# ---- Floor materials (one per bay) ----
+
+BeginMaterial
+  Name = Mat_005
+  AlbedoColor = 0.60, 0.15, 0.10
+  Roughness = 0.90
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = Mat_025
+  AlbedoColor = 0.65, 0.38, 0.10
+  Roughness = 0.75
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = Mat_050
+  AlbedoColor = 0.60, 0.60, 0.10
+  Roughness = 0.60
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = Mat_065
+  AlbedoColor = 0.20, 0.60, 0.20
+  Roughness = 0.50
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = Mat_080
+  AlbedoColor = 0.15, 0.45, 0.75
+  Roughness = 0.35
+  Metallic = 0.10
+EndMaterial
+
+BeginMaterial
+  Name = Mat_095
+  AlbedoColor = 0.50, 0.15, 0.80
+  Roughness = 0.20
+  Metallic = 0.20
+EndMaterial
+
+BeginMaterial
+  Name = WallMat
+  AlbedoColor = 0.20, 0.20, 0.24
+  Roughness = 0.85
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = BallMat
+  AlbedoColor = 0.95, 0.95, 0.95
+  Roughness = 0.15
+  Metallic = 0.05
+EndMaterial
+
+# ---- Meshes ----
+
+BeginMesh
+  Name = FloorTile
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Divider
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.70
+  Segments = 24
+EndMesh
+
+# ---- Bay layout: 6 bays, each 6 units wide, separated by thin dividers ----
+# Bay centres at x = -15, -9, -3, 3, 9, 15
+
+# Bay 1 — restitution 0.05 (dead)
+BeginObject
+  Name = Floor 005
+  Position = -15.0, 0.0, 0.0
+  Scale = 5.5, 0.4, 12.0
+  Mesh = FloorTile
+  Material = Mat_005
+  Collider = box
+  ColliderHalfExtents = 2.75, 0.2, 6.0
+EndObject
+
+# Bay 2 — restitution 0.25
+BeginObject
+  Name = Floor 025
+  Position = -9.0, 0.0, 0.0
+  Scale = 5.5, 0.4, 12.0
+  Mesh = FloorTile
+  Material = Mat_025
+  Collider = box
+  ColliderHalfExtents = 2.75, 0.2, 6.0
+EndObject
+
+# Bay 3 — restitution 0.50
+BeginObject
+  Name = Floor 050
+  Position = -3.0, 0.0, 0.0
+  Scale = 5.5, 0.4, 12.0
+  Mesh = FloorTile
+  Material = Mat_050
+  Collider = box
+  ColliderHalfExtents = 2.75, 0.2, 6.0
+EndObject
+
+# Bay 4 — restitution 0.65
+BeginObject
+  Name = Floor 065
+  Position = 3.0, 0.0, 0.0
+  Scale = 5.5, 0.4, 12.0
+  Mesh = FloorTile
+  Material = Mat_065
+  Collider = box
+  ColliderHalfExtents = 2.75, 0.2, 6.0
+EndObject
+
+# Bay 5 — restitution 0.80
+BeginObject
+  Name = Floor 080
+  Position = 9.0, 0.0, 0.0
+  Scale = 5.5, 0.4, 12.0
+  Mesh = FloorTile
+  Material = Mat_080
+  Collider = box
+  ColliderHalfExtents = 2.75, 0.2, 6.0
+EndObject
+
+# Bay 6 — restitution 0.95 (super-bouncy)
+BeginObject
+  Name = Floor 095
+  Position = 15.0, 0.0, 0.0
+  Scale = 5.5, 0.4, 12.0
+  Mesh = FloorTile
+  Material = Mat_095
+  Collider = box
+  ColliderHalfExtents = 2.75, 0.2, 6.0
+EndObject
+
+# Dividers between bays (5 dividers)
+BeginObject
+  Name = Div 1
+  Position = -12.0, 4.0, 0.0
+  Scale = 0.4, 8.0, 12.0
+  Mesh = Divider
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 0.2, 4.0, 6.0
+EndObject
+
+BeginObject
+  Name = Div 2
+  Position = -6.0, 4.0, 0.0
+  Scale = 0.4, 8.0, 12.0
+  Mesh = Divider
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 0.2, 4.0, 6.0
+EndObject
+
+BeginObject
+  Name = Div 3
+  Position = 0.0, 4.0, 0.0
+  Scale = 0.4, 8.0, 12.0
+  Mesh = Divider
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 0.2, 4.0, 6.0
+EndObject
+
+BeginObject
+  Name = Div 4
+  Position = 6.0, 4.0, 0.0
+  Scale = 0.4, 8.0, 12.0
+  Mesh = Divider
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 0.2, 4.0, 6.0
+EndObject
+
+BeginObject
+  Name = Div 5
+  Position = 12.0, 4.0, 0.0
+  Scale = 0.4, 8.0, 12.0
+  Mesh = Divider
+  Material = WallMat
+  Collider = aabb
+  ColliderHalfExtents = 0.2, 4.0, 6.0
+EndObject
+
+# ---- Balls — one dropped per bay from same height ----
+
+BeginObject
+  Name = Ball 005
+  Position = -15.0, 16.0, 0.0
+  Mesh = Ball
+  Material = BallMat
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.05
+  Damping = 0.999
+  Collider = sphere
+  ColliderRadius = 0.70
+EndObject
+
+BeginObject
+  Name = Ball 025
+  Position = -9.0, 16.0, 0.0
+  Mesh = Ball
+  Material = BallMat
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.25
+  Damping = 0.999
+  Collider = sphere
+  ColliderRadius = 0.70
+EndObject
+
+BeginObject
+  Name = Ball 050
+  Position = -3.0, 16.0, 0.0
+  Mesh = Ball
+  Material = BallMat
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.50
+  Damping = 0.999
+  Collider = sphere
+  ColliderRadius = 0.70
+EndObject
+
+BeginObject
+  Name = Ball 065
+  Position = 3.0, 16.0, 0.0
+  Mesh = Ball
+  Material = BallMat
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.65
+  Damping = 0.999
+  Collider = sphere
+  ColliderRadius = 0.70
+EndObject
+
+BeginObject
+  Name = Ball 080
+  Position = 9.0, 16.0, 0.0
+  Mesh = Ball
+  Material = BallMat
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.80
+  Damping = 0.999
+  Collider = sphere
+  ColliderRadius = 0.70
+EndObject
+
+BeginObject
+  Name = Ball 095
+  Position = 15.0, 16.0, 0.0
+  Mesh = Ball
+  Material = BallMat
+  Physics = true
+  Mass = 1.0
+  Restitution = 0.95
+  Damping = 0.999
+  Collider = sphere
+  ColliderRadius = 0.70
+EndObject
+
+# ---- Lighting ----
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.10, -1.0, 0.30
+  Color = 1.0, 0.97, 0.92
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 25.0, 6.0
+  Color = 0.50, 0.55, 0.80
+  Intensity = 150.0
+  CastsShadows = false
+EndLight

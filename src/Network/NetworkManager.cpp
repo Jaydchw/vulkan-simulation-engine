@@ -195,6 +195,26 @@ void NetworkManager::assignObjectOwnership() {
             << " (I am peer " << (int)localPeerID << ")\n";
 }
 
+void NetworkManager::setEntityOwner(Entity e, uint8_t peerID) {
+  std::lock_guard<std::mutex> lk(ownershipMutex);
+  ownershipMap[e] = peerID;
+}
+
+std::vector<uint8_t> NetworkManager::getActivePeerIDs() const {
+  std::vector<uint8_t> ids;
+  std::lock_guard<std::mutex> lk(peersMutex);
+  if (simPacketLossPercent >= OWNERSHIP_LOSS_ISOLATION_PCT) {
+    ids.push_back(localPeerID);
+  } else {
+    ids.push_back(localPeerID);
+    for (const auto& p : peers)
+      if (p.connected && p.id != 0) ids.push_back(p.id);
+    std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+  }
+  return ids;
+}
+
 bool NetworkManager::isLocallyOwned(Entity e) const {
   if (!running || localPeerID == 0) return true;
 

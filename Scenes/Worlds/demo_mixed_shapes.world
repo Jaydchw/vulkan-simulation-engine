@@ -1,0 +1,198 @@
+# Demo: Mixed Shape Spawner
+# A single spawner fires a mix of spheres, boxes, and capsules from height.
+# Different masses, restitution, and angular velocity per template let you compare
+# how each shape tumbles and settles.  The arena has a stepped floor so objects
+# pile up at different levels.
+
+BeginSettings
+  ClearColor = 0.07, 0.05, 0.10, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+# ---- Materials ----
+
+BeginMaterial
+  Name = FloorMat
+  AlbedoColor = 0.28, 0.27, 0.32
+  Roughness = 0.88
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = StepMat
+  AlbedoColor = 0.35, 0.32, 0.38
+  Roughness = 0.80
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = SphereMat
+  AlbedoColor = 0.20, 0.65, 1.00
+  Roughness = 0.20
+  Metallic = 0.40
+EndMaterial
+
+BeginMaterial
+  Name = BoxMat
+  AlbedoColor = 0.90, 0.50, 0.15
+  Roughness = 0.60
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = CapsuleMat
+  AlbedoColor = 0.30, 0.85, 0.45
+  Roughness = 0.30
+  Metallic = 0.20
+EndMaterial
+
+# ---- Meshes ----
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 44.0
+  Height = 36.0
+EndMesh
+
+BeginMesh
+  Name = Step
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Sphere
+  Type = sphere
+  Radius = 0.60
+  Segments = 22
+EndMesh
+
+BeginMesh
+  Name = Box
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Capsule
+  Type = capsule
+  Radius = 0.40
+  Segments = 18
+EndMesh
+
+# ---- Static geometry ----
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = FloorMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 22.0, 0.0, 18.0
+EndObject
+
+# Stepped tiers along Z — objects rolling/tumbling down
+BeginObject
+  Name = Step 1
+  Position = 0.0, 1.0, -10.0
+  Scale = 40.0, 2.0, 8.0
+  Mesh = Step
+  Material = StepMat
+  Collider = box
+  ColliderHalfExtents = 20.0, 1.0, 4.0
+EndObject
+
+BeginObject
+  Name = Step 2
+  Position = 0.0, 2.5, 0.0
+  Scale = 40.0, 2.0, 8.0
+  Mesh = Step
+  Material = StepMat
+  Collider = box
+  ColliderHalfExtents = 20.0, 1.0, 4.0
+EndObject
+
+# ---- Spawner: drops mixed shapes from above ----
+
+BeginSpawner
+  Name = ShapeMix
+  Position = 0.0, 22.0, -8.0
+  SpawnInterval = 0.50
+  SpawnIntervalRandomness = 0.30
+  SpawnDirection = 0.0, -1.0, 0.0
+  DirectionRandomness = 0.12
+  SpawnSpeed = 0.8
+  SpeedRandomness = 0.25
+  PositionRandomness = 7.0
+  AngularVelocityRandomness = 9.0
+  MaxSpawns = 80
+
+  # Sphere — light and bouncy
+  BeginTemplate
+    Weight = 4.0
+    NamePrefix = Sphere
+    Mesh = Sphere
+    Material = SphereMat
+    ScaleUniform = 1.0
+    Mass = 0.6
+    Restitution = 0.70
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.60
+  EndTemplate
+
+  # Box — mid mass, low bounce, tumbles a lot
+  BeginTemplate
+    Weight = 3.0
+    NamePrefix = Box
+    Mesh = Box
+    Material = BoxMat
+    ScaleUniform = 0.9
+    Mass = 3.5
+    Restitution = 0.20
+    Damping = 0.98
+    UseGravity = true
+    Collider = box
+    ColliderHalfExtents = 0.45, 0.45, 0.45
+  EndTemplate
+
+  # Capsule — elongated, rolls and tips
+  BeginTemplate
+    Weight = 3.0
+    NamePrefix = Capsule
+    Mesh = Capsule
+    Material = CapsuleMat
+    ScaleUniform = 1.0
+    Mass = 1.2
+    Restitution = 0.45
+    Damping = 0.99
+    UseGravity = true
+    Collider = capsule
+    ColliderRadius = 0.40
+  EndTemplate
+
+EndSpawner
+
+# ---- Lighting ----
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.35, -1.0, 0.50
+  Color = 1.0, 0.96, 0.88
+  Intensity = 2.6
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = 0.0, 20.0, 10.0
+  Color = 0.60, 0.45, 0.90
+  Intensity = 100.0
+  CastsShadows = false
+EndLight

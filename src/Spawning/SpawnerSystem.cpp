@@ -16,10 +16,29 @@ void SpawnerSystem::update(float deltaTime) {
     if (!spawner.enabled) continue;
     if (networkManager && !networkManager->isLocallyOwned(spawnerEntity)) continue;
 
+    spawner.timer += deltaTime;
+
+    // Item 4: SingleBurstSpawn — fire all objects at once when start_time elapses.
+    if (spawner.burstMode) {
+      if (spawner.timer >= 0.0f) {
+        int remaining = (spawner.maxSpawns < 0) ? 1 : (spawner.maxSpawns - spawner.spawnCount);
+        for (int b = 0; b < remaining; ++b) {
+          SpawnTemplate* tmpl = selectTemplate(spawner);
+          if (!tmpl) break;
+          Entity newEntity = doSpawn(spawnerEntity, spawner, *tmpl);
+          spawner.spawnCount++;
+          assignSpawnedOwner(newEntity, spawner);
+          if (networkManager) networkManager->broadcastSpawnEntity(newEntity);
+          Debug::log(Debug::Category::OBJECTS, "SpawnerSystem: Burst-spawned entity ", newEntity,
+                     " from spawner ", spawnerEntity);
+        }
+        spawner.enabled = false;  // burst is done
+      }
+      continue;
+    }
+
     if (spawner.currentInterval < 0.0f)
       spawner.currentInterval = computeInterval(spawner);
-
-    spawner.timer += deltaTime;
 
     while (spawner.timer >= spawner.currentInterval) {
       spawner.timer -= spawner.currentInterval;
@@ -36,10 +55,8 @@ void SpawnerSystem::update(float deltaTime) {
       spawner.spawnCount++;
       spawner.currentInterval = computeInterval(spawner);
 
-      if (networkManager) {
-        networkManager->assignObjectOwnership();
-        networkManager->broadcastSpawnEntity(newEntity);
-      }
+      assignSpawnedOwner(newEntity, spawner);
+      if (networkManager) networkManager->broadcastSpawnEntity(newEntity);
 
       Debug::log(Debug::Category::OBJECTS, "SpawnerSystem: Spawned entity ", newEntity,
                  " from spawner ", spawnerEntity);
@@ -123,11 +140,16 @@ Entity SpawnerSystem::doSpawn(Entity spawnerEntity, SpawnerComponent& spawner,
                                const SpawnTemplate& tmpl) {
   const auto* spawnerTransform = registry->getComponent<TransformComponent>(spawnerEntity);
 
-  // Position
-  glm::vec3 pos = spawnerTransform ? spawnerTransform->position : glm::vec3(0.0f);
-  pos += spawner.spawnOffset;
-  if (spawner.positionRandomness > 0.0f)
-    pos += randomInSphere(spawner.positionRandomness);
+  // Position — Item 6: use per-axis box sampling for RandomBox spawners.
+  glm::vec3 pos;
+  if (spawner.useBoxSpawn) {
+    pos = randomInBox(spawner.spawnBoxMin, spawner.spawnBoxMax);
+  } else {
+    pos = spawnerTransform ? spawnerTransform->position : glm::vec3(0.0f);
+    pos += spawner.spawnOffset;
+    if (spawner.positionRandomness > 0.0f)
+      pos += randomInSphere(spawner.positionRandomness);
+  }
 
   // Launch direction with optional cone scatter
   glm::vec3 dir = glm::length(spawner.spawnDirection) > 1e-6f
@@ -180,6 +202,42 @@ glm::vec3 SpawnerSystem::randomInSphere(float radius) {
   std::uniform_real_distribution<float> ud(0.0f, 1.0f);
   glm::vec3 dir = glm::normalize(glm::vec3(nd(rng), nd(rng), nd(rng)));
   return dir * (std::cbrt(ud(rng)) * radius);
+}
+
+// Item 6: per-axis uniform sampling within an axis-aligned box.
+glm::vec3 SpawnerSystem::randomInBox(const glm::vec3& min, const glm::vec3& max) {
+  std::uniform_real_distribution<float> ux(min.x, max.x);
+  std::uniform_real_distribution<float> uy(min.y, max.y);
+  std::uniform_real_distribution<float> uz(min.z, max.z);
+  return { ux(rng), uy(rng), uz(rng) };
+}
+
+// Item 5: assign ownership of a freshly-spawned entity per the spawner's ownerMode.
+void SpawnerSystem::assignSpawnedOwner(Entity entity, SpawnerComponent& spawner) {
+  if (!networkManager) return;
+
+  if (spawner.ownerMode == 0) {
+    // Auto: redistribute all simulated objects across active peers.
+    networkManager->assignObjectOwnership();
+    return;
+  }
+
+  uint8_t peerID;
+  if (spawner.ownerMode == 5) {
+    // SEQUENTIAL: round-robin across currently active peers.
+    auto activePeers = networkManager->getActivePeerIDs();
+    if (activePeers.empty()) {
+      peerID = networkManager->getLocalPeerID();
+    } else {
+      peerID = activePeers[static_cast<size_t>(seqOwnerNext) % activePeers.size()];
+      ++seqOwnerNext;
+    }
+  } else {
+    // Fixed peer (ownerMode 1-4).
+    peerID = spawner.ownerMode;
+  }
+
+  networkManager->setEntityOwner(entity, peerID);
 }
 
 glm::vec3 SpawnerSystem::randomConeDir(const glm::vec3& axis, float halfAngle) {
