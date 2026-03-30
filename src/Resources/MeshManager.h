@@ -60,6 +60,13 @@ class Mesh final {
   MeshType getType() const { return type; }
   void setType(MeshType t) { type = t; }
 
+  float getBoundingRadius() const { return boundingRadius; }
+  void setBoundingRadius(float r) { boundingRadius = r; }
+
+  uint32_t getIndexCount() const {
+    return static_cast<uint32_t>(indices.size());
+  }
+
  private:
   std::vector<Vertex> vertices;
   std::vector<uint16_t> indices;
@@ -71,6 +78,7 @@ class Mesh final {
   VkDeviceMemory indexBufferMemory = VK_NULL_HANDLE;
 
   MeshType type = MeshType::Custom;
+  float boundingRadius = 0.0f;
 };
 
 class MeshManager final {

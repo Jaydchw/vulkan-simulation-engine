@@ -150,4 +150,68 @@ static void createDescriptorSets(VkDevice device,
   }
 }
 
+// Descriptor set layout for the per-frame instance SSBO (set=3, binding=0).
+// Holds an array of InstanceData structs written on the CPU each frame and
+// read in the vertex shader via gl_InstanceIndex.
+static VkDescriptorSetLayout createInstanceDescriptorSetLayout(
+    VkDevice device) {
+  VkDescriptorSetLayoutBinding binding{};
+  binding.binding = 0;
+  binding.descriptorCount = 1;
+  binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+  binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+  VkDescriptorSetLayoutCreateInfo layoutInfo{};
+  layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  layoutInfo.bindingCount = 1;
+  layoutInfo.pBindings = &binding;
+
+  VkDescriptorSetLayout layout;
+  if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &layout) !=
+      VK_SUCCESS) {
+    throw std::runtime_error(
+        "Failed to create instance descriptor set layout!");
+  }
+  return layout;
+}
+
+// Allocate and write MAX_FRAMES_IN_FLIGHT descriptor sets that each point at
+// the corresponding instance SSBO.
+static void createInstanceDescriptorSets(
+    VkDevice device, VkDescriptorPool pool,
+    VkDescriptorSetLayout instanceLayout, int maxFramesInFlight,
+    const std::vector<VkBuffer>& instanceBuffers,
+    VkDeviceSize instanceBufferSize,
+    std::vector<VkDescriptorSet>& instanceDescSets) {
+  std::vector<VkDescriptorSetLayout> layouts(maxFramesInFlight, instanceLayout);
+  VkDescriptorSetAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  allocInfo.descriptorPool = pool;
+  allocInfo.descriptorSetCount = static_cast<uint32_t>(maxFramesInFlight);
+  allocInfo.pSetLayouts = layouts.data();
+
+  instanceDescSets.resize(maxFramesInFlight);
+  if (vkAllocateDescriptorSets(device, &allocInfo, instanceDescSets.data()) !=
+      VK_SUCCESS) {
+    throw std::runtime_error("Failed to allocate instance descriptor sets!");
+  }
+
+  for (int i = 0; i < maxFramesInFlight; ++i) {
+    VkDescriptorBufferInfo bufInfo{};
+    bufInfo.buffer = instanceBuffers[i];
+    bufInfo.offset = 0;
+    bufInfo.range = instanceBufferSize;
+
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = instanceDescSets[i];
+    write.dstBinding = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write.pBufferInfo = &bufInfo;
+
+    vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+  }
+}
+
 }  // namespace Vulkan

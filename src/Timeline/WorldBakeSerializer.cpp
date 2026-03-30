@@ -86,7 +86,9 @@ bool WorldBakeSerializer::save(const std::string& worldPath,
   for (const auto& frame : snaps) {
     uint32_t entityCount = static_cast<uint32_t>(frame.size());
     f.write(reinterpret_cast<const char*>(&entityCount), sizeof(entityCount));
-    for (const auto& [entity, snap] : frame) {
+    for (size_t ei = 0; ei < frame.entities.size(); ++ei) {
+      const Entity entity = frame.entities[ei];
+      const EntitySnapshot& snap = frame.states[ei];
       f.write(reinterpret_cast<const char*>(&entity), sizeof(entity));
       f.write(reinterpret_cast<const char*>(&snap.position.x), sizeof(float));
       f.write(reinterpret_cast<const char*>(&snap.position.y), sizeof(float));
@@ -185,6 +187,7 @@ bool WorldBakeSerializer::load(const std::string& worldPath,
     f.read(reinterpret_cast<char*>(&entityCount), sizeof(entityCount));
     if (!f) return false;
     FrameSnapshot frame;
+    frame.reserve(entityCount);
     for (uint32_t ei = 0; ei < entityCount; ei++) {
       uint32_t entity = 0;
       EntitySnapshot snap{};
@@ -196,7 +199,7 @@ bool WorldBakeSerializer::load(const std::string& worldPath,
       f.read(reinterpret_cast<char*>(&snap.velocity.y), sizeof(float));
       f.read(reinterpret_cast<char*>(&snap.velocity.z), sizeof(float));
       if (!f) return false;
-      frame[entity] = snap;
+      frame.push(entity, snap);
     }
     frames.push_back(std::move(frame));
   }

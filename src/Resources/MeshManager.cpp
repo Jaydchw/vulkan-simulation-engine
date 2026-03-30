@@ -644,6 +644,11 @@ void MeshManager::createBuffers(Mesh* mesh) const {
   mesh->setVertexBuffer(vBuf);
   mesh->setVertexBufferMemory(vMem);
 
+  // Compute bounding sphere radius (max distance of any vertex from origin)
+  float maxDist = 0.0f;
+  for (const auto& v : vertices) maxDist = std::max(maxDist, glm::length(v.pos));
+  mesh->setBoundingRadius(maxDist);
+
   const VkDeviceSize indexBufferSize = sizeof(uint16_t) * indices.size();
   renderDevice->createBuffer(indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |

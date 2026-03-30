@@ -49,6 +49,20 @@ struct UniformBufferObject {
   alignas(4) float time;
 };
 
+// Maximum number of renderable entities per frame.  The instance SSBO is
+// pre-allocated to this size so no per-frame reallocation is needed.
+constexpr uint32_t MAX_INSTANCES = 65536;
+
+// Per-instance data written to the SSBO each frame and read by the vertex
+// shader via gl_InstanceIndex.  Layout must match the GLSL struct exactly.
+struct InstanceData {
+  alignas(16) glm::mat4 model;
+  alignas(4) uint32_t layerMask;
+  alignas(4) uint32_t cameraLayer;
+  alignas(4) float highlightIntensity;
+  alignas(4) float _pad;
+};
+
 struct PipelineConfigInfo {
   VkPipelineVertexInputStateCreateInfo vertexInputInfo;
   VkPipelineInputAssemblyStateCreateInfo inputAssembly;
@@ -160,6 +174,17 @@ class Application final {
   VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
   VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
   VkDescriptorSetLayout materialDescriptorSetLayout = VK_NULL_HANDLE;
+  VkDescriptorSetLayout instanceDescriptorSetLayout = VK_NULL_HANDLE;
+
+  // Per-frame instance SSBO: holds InstanceData for all batched draw calls
+  std::vector<VkBuffer> instanceSSBOBuffers;
+  std::vector<VkDeviceMemory> instanceSSBOMemory;
+  std::vector<void*> instanceSSBOMapped;
+  std::vector<VkDescriptorSet> instanceDescriptorSets;
+  VkDescriptorPool instanceDescriptorPool = VK_NULL_HANDLE;
+
+  // Combined view-projection matrix stored after Y-flip; used for frustum culling
+  glm::mat4 currentViewProj = glm::mat4(1.0f);
   VkBuffer vertexBuffer = VK_NULL_HANDLE;
   VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
   VkBuffer indexBuffer = VK_NULL_HANDLE;
@@ -238,6 +263,7 @@ class Application final {
   void recreateGraphicsPipeline();
   void createShadowPipeline();
   void createUniformBuffers();
+  void createInstanceSSBOs();
   void drawFrame();
   void recreateSwapChain();
   void cleanupSwapChain();

@@ -1,6 +1,5 @@
 #pragma once
 #include <deque>
-#include <unordered_map>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -14,7 +13,14 @@ struct EntitySnapshot {
   glm::vec3 velocity;
 };
 
-using FrameSnapshot = std::unordered_map<Entity, EntitySnapshot>;
+struct FrameSnapshot {
+  std::vector<Entity> entities;
+  std::vector<EntitySnapshot> states;
+
+  size_t size() const { return entities.size(); }
+  void reserve(size_t n) { entities.reserve(n); states.reserve(n); }
+  void push(Entity e, EntitySnapshot s) { entities.push_back(e); states.push_back(s); }
+};
 
 class TimelineSystem final {
  public:

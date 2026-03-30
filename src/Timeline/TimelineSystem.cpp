@@ -17,17 +17,21 @@ void TimelineSystem::setRegistry(Registry* reg) {
 FrameSnapshot TimelineSystem::captureFrame() const {
   FrameSnapshot snap;
   if (!registry) return snap;
-  for (const auto& [entity, phys] : registry->allSimulated()) {
+  const auto& simulated = registry->allSimulated();
+  snap.reserve(simulated.size());
+  for (const auto& [entity, phys] : simulated) {
     const auto* transform = registry->getComponent<TransformComponent>(entity);
     if (!transform) continue;
-    snap[entity] = {transform->position, phys.velocity};
+    snap.push(entity, {transform->position, phys.velocity});
   }
   return snap;
 }
 
 void TimelineSystem::applyFrame(const FrameSnapshot& snap) {
   if (!registry) return;
-  for (const auto& [entity, state] : snap) {
+  for (size_t i = 0; i < snap.entities.size(); ++i) {
+    const Entity entity = snap.entities[i];
+    const EntitySnapshot& state = snap.states[i];
     auto* transform = registry->getComponent<TransformComponent>(entity);
     auto* phys = registry->getComponent<SimulatedComponent>(entity);
     if (transform) transform->position = state.position;

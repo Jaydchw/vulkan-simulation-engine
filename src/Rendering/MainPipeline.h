@@ -21,6 +21,7 @@ class MainPipeline final {
         descriptorSetLayout(VK_NULL_HANDLE),
         materialDescriptorSetLayout(VK_NULL_HANDLE),
         shadowDescriptorSetLayout(VK_NULL_HANDLE),
+        instanceDescriptorSetLayout(VK_NULL_HANDLE),
         currentPolygonMode(VK_POLYGON_MODE_FILL),
         currentShadingMode(ShadingMode::Phong) {}
 
@@ -36,10 +37,12 @@ class MainPipeline final {
 
   void create(VkDescriptorSetLayout inDescriptorSetLayout,
               VkDescriptorSetLayout inMaterialDescriptorSetLayout,
-              VkDescriptorSetLayout inShadowDescriptorSetLayout) {
+              VkDescriptorSetLayout inShadowDescriptorSetLayout,
+              VkDescriptorSetLayout inInstanceDescriptorSetLayout) {
     descriptorSetLayout = inDescriptorSetLayout;
     materialDescriptorSetLayout = inMaterialDescriptorSetLayout;
     shadowDescriptorSetLayout = inShadowDescriptorSetLayout;
+    instanceDescriptorSetLayout = inInstanceDescriptorSetLayout;
     createPipeline();
   }
 
@@ -78,6 +81,7 @@ class MainPipeline final {
   VkDescriptorSetLayout descriptorSetLayout;
   VkDescriptorSetLayout materialDescriptorSetLayout;
   VkDescriptorSetLayout shadowDescriptorSetLayout;
+  VkDescriptorSetLayout instanceDescriptorSetLayout;
   VkPolygonMode currentPolygonMode;
   ShadingMode currentShadingMode;
 
@@ -188,22 +192,17 @@ class MainPipeline final {
         static_cast<uint32_t>(dynamicStates.size());
     dynamicState.pDynamicStates = dynamicStates.data();
 
-    std::array<VkDescriptorSetLayout, 3> layouts = {descriptorSetLayout,
-                                                    materialDescriptorSetLayout,
-                                                    shadowDescriptorSetLayout};
-    VkPushConstantRange pushConstantRange{};
-    pushConstantRange.stageFlags =
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    pushConstantRange.offset = 0;
-    pushConstantRange.size =
-        sizeof(glm::mat4) + sizeof(glm::vec3) + sizeof(float);
+    // set=0: frame UBO+lights, set=1: material, set=2: shadow maps,
+    // set=3: per-instance SSBO (replaces push constants for the main pass)
+    std::array<VkDescriptorSetLayout, 4> layouts = {
+        descriptorSetLayout, materialDescriptorSetLayout,
+        shadowDescriptorSetLayout, instanceDescriptorSetLayout};
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(layouts.size());
     pipelineLayoutInfo.pSetLayouts = layouts.data();
-    pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+    pipelineLayoutInfo.pushConstantRangeCount = 0;
 
     if (pipelineLayout == VK_NULL_HANDLE) {
       if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr,

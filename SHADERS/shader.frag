@@ -59,18 +59,14 @@ layout(binding = 7, set = 1) uniform sampler2D aoMap;
 
 layout(binding = 0, set = 2) uniform sampler2D shadowMaps[4];
 
-layout(push_constant) uniform PushConstants {
-    mat4 model;
-    uint layerMask;
-    uint cameraLayer;
-    float highlightIntensity;
-} pushConstants;
-
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec3 fragNormal;
 layout(location = 3) in vec3 fragWorldPos;
 layout(location = 4) in vec3 fragLighting;
+layout(location = 5) flat in uint  fragLayerMask;
+layout(location = 6) flat in uint  fragCameraLayer;
+layout(location = 7) flat in float fragHighlightIntensity;
 
 layout(location = 0) out vec4 outColor;
 
@@ -189,7 +185,7 @@ vec3 calculateSunLight(LightData light, int lightIndex, vec3 normal, vec3 viewDi
 }
 
 void main() {
-    if ((pushConstants.layerMask & pushConstants.cameraLayer) == 0) {
+    if ((fragLayerMask & fragCameraLayer) == 0) {
         discard;
     }
 
@@ -229,8 +225,8 @@ void main() {
         outColor = vec4(fragLighting * albedo, alpha);
     }
 
-    if (pushConstants.highlightIntensity > 0.0) {
+    if (fragHighlightIntensity > 0.0) {
         vec3 highlightColor = vec3(0.3, 0.5, 1.0);
-        outColor.rgb = mix(outColor.rgb, outColor.rgb + highlightColor, pushConstants.highlightIntensity);
+        outColor.rgb = mix(outColor.rgb, outColor.rgb + highlightColor, fragHighlightIntensity);
     }
 }

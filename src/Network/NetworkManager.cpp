@@ -541,10 +541,9 @@ void NetworkManager::connectToPeer(const std::string& ip, uint16_t port) {
 }
 
 void NetworkManager::receiveFromPeer(PeerInfo& peer) {
-  // Read all available bytes into the peer's accumulation buffer.
-  // Heap-allocated to avoid a large (65 KB) stack frame.
-  std::vector<uint8_t> tmp(65536);
-  int r = recv(peer.socket, reinterpret_cast<char*>(tmp.data()), static_cast<int>(tmp.size()), 0);
+  // Persistent buffer reused across calls to avoid per-call heap allocation.
+  static thread_local uint8_t tmp[65536];
+  int r = recv(peer.socket, reinterpret_cast<char*>(tmp), sizeof(tmp), 0);
   if (r == 0 || (r == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
     closesocket(peer.socket);
     peer.socket = INVALID_SOCKET;
@@ -556,7 +555,7 @@ void NetworkManager::receiveFromPeer(PeerInfo& peer) {
   }
   if (r > 0) {
     peer.bytesReceived += static_cast<uint64_t>(r);
-    peer.recvBuf.insert(peer.recvBuf.end(), tmp.data(), tmp.data() + r);
+    peer.recvBuf.insert(peer.recvBuf.end(), tmp, tmp + r);
   }
 
   // Process every complete packet in the buffer

@@ -12,6 +12,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include "Util/Debug.h"
+#include "Util/FrustumCuller.h"
 #include "Util/RenderUtils.h"
 #include "Util/ThreadAffinity.h"
 #include "Physics/PhysicsSystem.h"
@@ -402,10 +403,13 @@ void Application::initVulkan() {
   materialManager->init(materialDescriptorSetLayout);
   gizmoRenderMaterialID = materialManager->getDefaultMaterial();
   lightManager->init();
+  instanceDescriptorSetLayout =
+      Vulkan::createInstanceDescriptorSetLayout(device);
   mainPipeline =
       std::make_unique<MainPipeline>(device, swapChainImageFormat, depthFormat);
   mainPipeline->create(descriptorSetLayout, materialDescriptorSetLayout,
-                       lightManager->getShadowDescriptorSetLayout());
+                       lightManager->getShadowDescriptorSetLayout(),
+                       instanceDescriptorSetLayout);
   createShadowPipeline();
   postProcessing = std::make_unique<PostProcessing>(renderDevice.get(), device,
                                                     swapChainImageFormat);
@@ -416,6 +420,7 @@ void Application::initVulkan() {
   Vulkan::createDescriptorSets(device, descriptorPool, descriptorSetLayout,
                                uniformBuffers, lightManager->getLightBuffer(),
                                MAX_FRAMES_IN_FLIGHT, descriptorSets);
+  createInstanceSSBOs();
   Vulkan::createCommandBuffers(device, commandPool, MAX_FRAMES_IN_FLIGHT,
                                commandBuffers);
   Vulkan::createSyncObjects(device, static_cast<int>(swapChainImages.size()),
@@ -967,6 +972,16 @@ void Application::cleanup() {
   if (shadowPipelineLayout != VK_NULL_HANDLE)
     vkDestroyPipelineLayout(device, shadowPipelineLayout, nullptr);
   if (mainPipeline) mainPipeline->cleanup();
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    if (i < static_cast<int>(instanceSSBOBuffers.size())) {
+      vkDestroyBuffer(device, instanceSSBOBuffers[i], nullptr);
+      vkFreeMemory(device, instanceSSBOMemory[i], nullptr);
+    }
+  }
+  if (instanceDescriptorPool != VK_NULL_HANDLE)
+    vkDestroyDescriptorPool(device, instanceDescriptorPool, nullptr);
+  if (instanceDescriptorSetLayout != VK_NULL_HANDLE)
+    vkDestroyDescriptorSetLayout(device, instanceDescriptorSetLayout, nullptr);
   vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
   vkDestroyDescriptorSetLayout(device, materialDescriptorSetLayout, nullptr);
   vkDestroyBuffer(device, indexBuffer, nullptr);
@@ -1004,6 +1019,46 @@ void Application::createUniformBuffers() {
     vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0,
                 &uniformBuffersMapped[i]);
   }
+}
+
+void Application::createInstanceSSBOs() {
+  const VkDeviceSize bufferSize = sizeof(InstanceData) * MAX_INSTANCES;
+
+  instanceSSBOBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+  instanceSSBOMemory.resize(MAX_FRAMES_IN_FLIGHT);
+  instanceSSBOMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+    renderDevice->createBuffer(
+        bufferSize,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        instanceSSBOBuffers[i], instanceSSBOMemory[i]);
+    vkMapMemory(device, instanceSSBOMemory[i], 0, bufferSize, 0,
+                &instanceSSBOMapped[i]);
+  }
+
+  // Dedicated small pool for the instance SSBO descriptor sets
+  VkDescriptorPoolSize poolSize{};
+  poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+  poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+  VkDescriptorPoolCreateInfo poolInfo{};
+  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  poolInfo.poolSizeCount = 1;
+  poolInfo.pPoolSizes = &poolSize;
+  poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+  if (vkCreateDescriptorPool(device, &poolInfo, nullptr,
+                             &instanceDescriptorPool) != VK_SUCCESS) {
+    throw std::runtime_error("Failed to create instance descriptor pool!");
+  }
+
+  Vulkan::createInstanceDescriptorSets(
+      device, instanceDescriptorPool, instanceDescriptorSetLayout,
+      MAX_FRAMES_IN_FLIGHT, instanceSSBOBuffers, bufferSize,
+      instanceDescriptorSets);
 }
 
 void Application::drawFrame() {
@@ -1132,6 +1187,7 @@ lightManager->updateLightBuffer();
         cam ? cam->nearPlane : 0.1f, cam ? cam->farPlane : 50000.0f);
   }
   ubo.proj[1][1] *= -1;
+  currentViewProj = ubo.proj * ubo.view;
   ubo.eyePos = getActiveCameraPosition();
   ubo.time = simState.currentTime;
   std::vector<ShadowMapData> shadowMaps;
@@ -1770,6 +1826,10 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     } shadowPush;
     shadowPush.lightSpaceMatrix = shadowMap.lightSpaceMatrix;
 
+    // Frustum-cull entities against the light's clip frustum so we only
+    // render geometry that can actually cast a shadow into this shadow map.
+    const Frustum lightFrustum = extractFrustum(shadowMap.lightSpaceMatrix);
+
     for (const auto& entity : registry->getEntities()) {
       const auto* renderComp = registry->getComponent<RenderComponent>(entity);
       const auto* meshComp = registry->getComponent<MeshComponent>(entity);
@@ -1777,21 +1837,28 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
       if (!renderComp || !meshComp || !transformComp) continue;
       if (!renderComp->visible || meshComp->meshID == INVALID_MESH_ID)
         continue;
+      const Mesh* const mesh = meshManager->getMesh(meshComp->meshID);
+      if (!mesh || mesh->getVertexBuffer() == VK_NULL_HANDLE) continue;
+
+      // Light-space frustum cull
+      const float maxScale =
+          std::max({std::abs(transformComp->scale.x),
+                    std::abs(transformComp->scale.y),
+                    std::abs(transformComp->scale.z)});
+      if (!sphereInFrustum(lightFrustum, transformComp->position,
+                           mesh->getBoundingRadius() * maxScale))
+        continue;
+
       shadowPush.model = transformComp->getModelMatrix();
       vkCmdPushConstants(commandBuffer, shadowPipelineLayout,
                          VK_SHADER_STAGE_VERTEX_BIT, 0,
                          sizeof(ShadowPushConstants), &shadowPush);
-      const Mesh* const mesh = meshManager->getMesh(meshComp->meshID);
-      if (!mesh || mesh->getVertexBuffer() == VK_NULL_HANDLE) continue;
       VkBuffer vertexBuffers[] = {mesh->getVertexBuffer()};
       VkDeviceSize offsets[] = {0};
       vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
       vkCmdBindIndexBuffer(commandBuffer, mesh->getIndexBuffer(), 0,
                            VK_INDEX_TYPE_UINT16);
-      std::vector<uint16_t> indices;
-      mesh->getIndices(indices);
-      vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1,
-                       0, 0, 0);
+      vkCmdDrawIndexed(commandBuffer, mesh->getIndexCount(), 1, 0, 0, 0);
     }
     vkCmdEndRendering(commandBuffer);
 
@@ -1823,118 +1890,185 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
                     mainPipeline->getPipeline());
   setupViewportScissor(commandBuffer, static_cast<float>(swapChainExtent.width),
                        static_cast<float>(swapChainExtent.height));
-  auto entities = registry->getEntities();
-  for (size_t i = 0; i < entities.size(); ++i) {
-    Entity entity = entities[i];
+
+  // -----------------------------------------------------------------------
+  // Instanced batching + frustum culling
+  // -----------------------------------------------------------------------
+  // Group entities by (materialID, meshID).  After culling, each group is
+  // drawn with a single vkCmdDrawIndexed(instanceCount > 1) reading per-
+  // instance data from a pre-uploaded SSBO at descriptor set=3.
+  // -----------------------------------------------------------------------
+
+  struct BatchKey {
+    RenderMaterialID matID;
+    MeshID meshID;
+    bool operator==(const BatchKey& o) const {
+      return matID == o.matID && meshID == o.meshID;
+    }
+  };
+  struct BatchKeyHash {
+    size_t operator()(const BatchKey& k) const {
+      return std::hash<uint32_t>{}(k.matID) ^
+             (std::hash<uint32_t>{}(k.meshID) * 2654435761u);
+    }
+  };
+
+  const Frustum cameraFrustum = extractFrustum(currentViewProj);
+  const auto entities = registry->getEntities();
+  const Entity selEntity =
+      interface ? interface->getSelectedEntity() : INVALID_ENTITY;
+  const Entity hovEntity =
+      interface ? interface->getHoveredEntity() : INVALID_ENTITY;
+
+  std::unordered_map<BatchKey, std::vector<InstanceData>, BatchKeyHash> batchMap;
+  batchMap.reserve(64);
+
+  for (Entity entity : entities) {
     const auto* renderComp = registry->getComponent<RenderComponent>(entity);
     const auto* meshComp = registry->getComponent<MeshComponent>(entity);
-    const auto* materialComp = registry->getComponent<RenderMaterialComponent>(entity);
-    const auto* transformComp = registry->getComponent<TransformComponent>(entity);
+    const auto* materialComp =
+        registry->getComponent<RenderMaterialComponent>(entity);
+    const auto* transformComp =
+        registry->getComponent<TransformComponent>(entity);
     if (!renderComp || !meshComp || !materialComp || !transformComp) continue;
     if (!renderComp->visible || meshComp->meshID == INVALID_MESH_ID ||
         materialComp->renderMaterialID == INVALID_RENDER_MATERIAL_ID)
       continue;
-    const Mesh* const mesh = meshManager->getMesh(meshComp->meshID);
-    const RenderMaterial* const material =
+    const Mesh* mesh = meshManager->getMesh(meshComp->meshID);
+    const RenderMaterial* material =
         materialManager->getMaterial(materialComp->renderMaterialID);
     if (!mesh || mesh->getVertexBuffer() == VK_NULL_HANDLE || !material ||
         material->getDescriptorSet() == VK_NULL_HANDLE)
       continue;
-    StandardPushConstants pushConstants;
-    pushConstants.model = transformComp->getModelMatrix();
-    pushConstants.layerMask = renderComp->layerMask;
-    pushConstants.cameraLayer = 0xFFFFFFFF;
-    pushConstants.highlightIntensity = 0.0f;
-    if (interface) {
-      if (entity == interface->getSelectedEntity())
-        pushConstants.highlightIntensity = 0.25f;
-      else if (entity == interface->getHoveredEntity())
-        pushConstants.highlightIntensity = 0.12f;
-    }
-    vkCmdPushConstants(
-        commandBuffer, mainPipeline->getPipelineLayout(),
-        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-        sizeof(StandardPushConstants), &pushConstants);
-    VkBuffer vertexBuffers[] = {mesh->getVertexBuffer()};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, mesh->getIndexBuffer(), 0,
-                         VK_INDEX_TYPE_UINT16);
-    VkDescriptorSet descriptorSetsToBind[] = {
-        descriptorSets[currentFrame], material->getDescriptorSet(),
-        lightManager->getShadowDescriptorSet()};
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            mainPipeline->getPipelineLayout(), 0, 3,
-                            descriptorSetsToBind, 0, nullptr);
-    std::vector<uint16_t> indices;
-    mesh->getIndices(indices);
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0,
-                     0, 0);
+
+    // Camera-space frustum cull
+    const float maxScale =
+        std::max({std::abs(transformComp->scale.x),
+                  std::abs(transformComp->scale.y),
+                  std::abs(transformComp->scale.z)});
+    if (!sphereInFrustum(cameraFrustum, transformComp->position,
+                         mesh->getBoundingRadius() * maxScale))
+      continue;
+
+    InstanceData inst{};
+    inst.model = transformComp->getModelMatrix();
+    inst.layerMask = renderComp->layerMask;
+    inst.cameraLayer = 0xFFFFFFFF;
+    inst.highlightIntensity = (entity == selEntity)   ? 0.25f
+                              : (entity == hovEntity) ? 0.12f
+                                                      : 0.0f;
+    batchMap[{materialComp->renderMaterialID, meshComp->meshID}].push_back(
+        inst);
   }
 
-  // Render sphere gizmos for point lights
+  // Append gizmo instances (point-light sphere overlays)
   if (interface && gizmoMeshID != INVALID_MESH_ID) {
     const Mesh* gizmoMesh = meshManager->getMesh(gizmoMeshID);
-    const RenderMaterial* gizmoMat = materialManager->getMaterial(gizmoRenderMaterialID);
+    const RenderMaterial* gizmoMat =
+        materialManager->getMaterial(gizmoRenderMaterialID);
     if (gizmoMesh && gizmoMesh->getVertexBuffer() != VK_NULL_HANDLE &&
         gizmoMat && gizmoMat->getDescriptorSet() != VK_NULL_HANDLE) {
-      // Collect which entities need a gizmo
-      Entity selEntity = interface->getSelectedEntity();
-      Entity hovEntity = interface->getHoveredEntity();
-      bool showAll = interface->getShowLightGizmos();
-
-      auto drawGizmo = [&](Entity e, float highlight) {
+      const bool showAll = interface->getShowLightGizmos();
+      auto addGizmo = [&](Entity e, float highlight) {
         const auto* tc = registry->getComponent<TransformComponent>(e);
         if (!tc) return;
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), tc->position);
-        StandardPushConstants gizmoPush;
-        gizmoPush.model = model;
-        gizmoPush.layerMask = 0xFFFFFFFF;
-        gizmoPush.cameraLayer = 0xFFFFFFFF;
-        gizmoPush.highlightIntensity = highlight;
-        vkCmdPushConstants(
-            commandBuffer, mainPipeline->getPipelineLayout(),
-            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-            sizeof(StandardPushConstants), &gizmoPush);
-        VkBuffer vb[] = {gizmoMesh->getVertexBuffer()};
-        VkDeviceSize off[] = {0};
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vb, off);
-        vkCmdBindIndexBuffer(commandBuffer, gizmoMesh->getIndexBuffer(), 0,
-                             VK_INDEX_TYPE_UINT16);
-        VkDescriptorSet ds[] = {descriptorSets[currentFrame],
-                                gizmoMat->getDescriptorSet(),
-                                lightManager->getShadowDescriptorSet()};
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                mainPipeline->getPipelineLayout(), 0, 3, ds, 0,
-                                nullptr);
-        std::vector<uint16_t> idx;
-        gizmoMesh->getIndices(idx);
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(idx.size()), 1, 0,
-                         0, 0);
+        InstanceData inst{};
+        inst.model = glm::translate(glm::mat4(1.0f), tc->position);
+        inst.layerMask = 0xFFFFFFFF;
+        inst.cameraLayer = 0xFFFFFFFF;
+        inst.highlightIntensity = highlight;
+        batchMap[{gizmoRenderMaterialID, gizmoMeshID}].push_back(inst);
       };
-
       if (showAll) {
-        // Draw a gizmo for every point light
         for (Entity e : entities) {
           if (!registry->hasComponent<LightComponent>(e)) continue;
           const auto* lc = registry->getComponent<LightComponent>(e);
           if (!lc || lc->type == LightType::Sun) continue;
-          float hl = (e == selEntity) ? 0.4f : (e == hovEntity) ? 0.25f : 0.15f;
-          drawGizmo(e, hl);
+          addGizmo(e, (e == selEntity) ? 0.4f : (e == hovEntity) ? 0.25f
+                                                                  : 0.15f);
         }
       } else {
-        // Draw gizmo only for selected or hovered point light
         Entity gizmoEntity = selEntity;
         if (gizmoEntity == INVALID_ENTITY) gizmoEntity = hovEntity;
         if (gizmoEntity != INVALID_ENTITY &&
             registry->hasComponent<LightComponent>(gizmoEntity)) {
           const auto* lc = registry->getComponent<LightComponent>(gizmoEntity);
-          if (lc && lc->type != LightType::Sun) {
-            drawGizmo(gizmoEntity, 0.4f);
-          }
+          if (lc && lc->type != LightType::Sun) addGizmo(gizmoEntity, 0.4f);
         }
       }
     }
+  }
+
+  // Flatten batches into a linear SSBO buffer and build the draw list
+  struct DrawBatch {
+    RenderMaterialID matID;
+    MeshID meshID;
+    uint32_t firstInstance;
+    uint32_t instanceCount;
+  };
+  std::vector<InstanceData> allInstances;
+  std::vector<DrawBatch> drawBatches;
+  allInstances.reserve(std::min<size_t>(entities.size() + 16, MAX_INSTANCES));
+  drawBatches.reserve(batchMap.size());
+
+  for (auto& [key, insts] : batchMap) {
+    if (allInstances.size() + insts.size() > MAX_INSTANCES) break;
+    drawBatches.push_back({key.matID, key.meshID,
+                           static_cast<uint32_t>(allInstances.size()),
+                           static_cast<uint32_t>(insts.size())});
+    allInstances.insert(allInstances.end(), insts.begin(), insts.end());
+  }
+
+  // Sort by material to minimise vkCmdBindDescriptorSets calls
+  std::sort(drawBatches.begin(), drawBatches.end(),
+            [](const DrawBatch& a, const DrawBatch& b) {
+              return a.matID != b.matID ? a.matID < b.matID
+                                       : a.meshID < b.meshID;
+            });
+
+  // Upload all instance transforms to the per-frame SSBO
+  if (!allInstances.empty()) {
+    memcpy(instanceSSBOMapped[currentFrame], allInstances.data(),
+           sizeof(InstanceData) * allInstances.size());
+  }
+
+  // Bind sets that don't change within this pass (set=0, set=2, set=3)
+  const VkPipelineLayout mainLayout = mainPipeline->getPipelineLayout();
+  vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          mainLayout, 0, 1, &descriptorSets[currentFrame], 0,
+                          nullptr);
+  {
+    VkDescriptorSet shadowDS = lightManager->getShadowDescriptorSet();
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            mainLayout, 2, 1, &shadowDS, 0, nullptr);
+  }
+  vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          mainLayout, 3, 1,
+                          &instanceDescriptorSets[currentFrame], 0, nullptr);
+
+  // Issue one draw call per (material, mesh) batch
+  RenderMaterialID lastMat = INVALID_RENDER_MATERIAL_ID;
+  MeshID lastMesh = INVALID_MESH_ID;
+  for (const DrawBatch& batch : drawBatches) {
+    if (batch.matID != lastMat) {
+      const RenderMaterial* mat = materialManager->getMaterial(batch.matID);
+      VkDescriptorSet matDS = mat->getDescriptorSet();
+      vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              mainLayout, 1, 1, &matDS, 0, nullptr);
+      lastMat = batch.matID;
+    }
+    if (batch.meshID != lastMesh) {
+      const Mesh* mesh = meshManager->getMesh(batch.meshID);
+      VkBuffer vb[] = {mesh->getVertexBuffer()};
+      VkDeviceSize off[] = {0};
+      vkCmdBindVertexBuffers(commandBuffer, 0, 1, vb, off);
+      vkCmdBindIndexBuffer(commandBuffer, mesh->getIndexBuffer(), 0,
+                           VK_INDEX_TYPE_UINT16);
+      lastMesh = batch.meshID;
+    }
+    vkCmdDrawIndexed(commandBuffer,
+                     meshManager->getMesh(batch.meshID)->getIndexCount(),
+                     batch.instanceCount, 0, 0, batch.firstInstance);
   }
 
   postProcessing->endOffscreenPass(commandBuffer);
