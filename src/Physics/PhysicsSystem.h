@@ -3,6 +3,7 @@
 #include <vector>
 
 #include <PhysicsWorld.h>
+#include "Physics/PhysicsMaterialManager.h"
 
 class Registry;
 class NetworkManager;
@@ -22,6 +23,8 @@ class PhysicsSystem final {
   // Optional: provide a NetworkManager so only locally-owned objects are simulated.
   // Pass nullptr to simulate all objects (single-player / no network).
   void setNetworkManager(NetworkManager* nm) { networkManager = nm; }
+  // Optional: provide a PhysicsMaterialManager for per-pair interaction lookups.
+  void setPhysicsMaterialManager(PhysicsMaterialManager* pmm) { physMatManager = pmm; }
 
   void update(float deltaTime);
   PhysicsStepTimings timedUpdate(float deltaTime);
@@ -32,8 +35,9 @@ class PhysicsSystem final {
   int getObjectCount() const { return static_cast<int>(world.getObjects().size()); }
 
  private:
-  Registry* registry = nullptr;
-  NetworkManager* networkManager = nullptr;
+  Registry*               registry       = nullptr;
+  NetworkManager*         networkManager = nullptr;
+  PhysicsMaterialManager* physMatManager = nullptr;
   jphys::PhysicsWorld world;
 
   void syncToLibrary();

@@ -87,8 +87,8 @@ void Application::loadWorld(const std::string& filepath) {
       networkManager->assignObjectOwnership();
     }
 
-    savedMaterialIDs.clear();
-    ownerMaterialIDs.fill(INVALID_MATERIAL_ID);
+    savedRenderMaterialIDs.clear();
+    ownerRenderMaterialIDs.fill(INVALID_RENDER_MATERIAL_ID);
     lastColorByOwner = false;
 
     simState = SimulationState{};
@@ -143,8 +143,8 @@ void Application::loadFBScene(const std::string& filepath) {
         networkManager->setEntityOwner(static_cast<Entity>(entityId), peerID);
     }
 
-    savedMaterialIDs.clear();
-    ownerMaterialIDs.fill(INVALID_MATERIAL_ID);
+    savedRenderMaterialIDs.clear();
+    ownerRenderMaterialIDs.fill(INVALID_RENDER_MATERIAL_ID);
     lastColorByOwner = false;
 
     simState = SimulationState{};
@@ -216,6 +216,7 @@ void Application::simulationThreadFunc() {
 
       if (liveMode && (!simState.isPaused || simState.stepFrame)) {
         bool snapshotsOn = interface ? interface->getSnapshotsEnabled() : false;
+        const bool doPerfTiming = interface && interface->isPerfProfilingEnabled();
 
         if (snapshotsOn && !timelineSystem->hasInitialSnapshot())
           timelineSystem->saveInitialSnapshot();
@@ -236,19 +237,45 @@ void Application::simulationThreadFunc() {
         simState.rewinding   = false;
         simState.reversePlay = false;
 
-        if (animationSystem)
-          animationSystem->update(dt * simState.timeSpeed);
-        if (spawnerSystem)
-          spawnerSystem->update(dt * simState.timeSpeed);
+        auto msec = [](Clock::time_point a, Clock::time_point b) -> float {
+          return static_cast<float>(
+              std::chrono::duration<double, std::milli>(b - a).count());
+        };
+
+        const auto tSimStart = doPerfTiming ? Clock::now() : Clock::time_point{};
+
+        {
+          const auto t0 = doPerfTiming ? Clock::now() : Clock::time_point{};
+          if (animationSystem)
+            animationSystem->update(dt * simState.timeSpeed);
+          if (doPerfTiming) simPerf.animationMs.store(msec(t0, Clock::now()));
+        }
+
+        {
+          const auto t0 = doPerfTiming ? Clock::now() : Clock::time_point{};
+          if (spawnerSystem)
+            spawnerSystem->update(dt * simState.timeSpeed);
+          if (doPerfTiming) simPerf.spawnerMs.store(msec(t0, Clock::now()));
+        }
 
         if (simState.stepFrame) {
           // Single-step advance (triggered by the ImGui "Step" button)
           simState.stepFrame = false;
-          physicsSystem->update(simState.stepSize);
+
+          if (doPerfTiming) {
+            PhysicsStepTimings pt = physicsSystem->timedUpdate(simState.stepSize);
+            simPerf.physSyncToMs.store(static_cast<float>(pt.syncToMs));
+            simPerf.physStepMs.store(static_cast<float>(pt.physStepMs));
+            simPerf.physSyncFromMs.store(static_cast<float>(pt.syncFromMs));
+          } else {
+            physicsSystem->update(simState.stepSize);
+          }
           simState.currentTime += simState.stepSize;
 
           if (snapshotsOn) {
+            const auto t0 = doPerfTiming ? Clock::now() : Clock::time_point{};
             timelineSystem->saveSnapshot();
+            if (doPerfTiming) simPerf.snapshotMs.store(msec(t0, Clock::now()));
             simState.timeHistory.push_back(simState.currentTime);
             while (static_cast<int>(simState.timeHistory.size()) >
                    timelineSystem->getSnapshotCount())
@@ -257,21 +284,47 @@ void Application::simulationThreadFunc() {
         } else {
           // Fixed-timestep accumulator — keeps physics deterministic regardless
           // of how fast the render loop or this thread happen to run.
+          double accumPhysMs = 0.0, accumSyncToMs = 0.0, accumPhysStepMs = 0.0;
+          double accumSyncFromMs = 0.0, accumSnapMs = 0.0;
+          int physStepCount = 0;
+
           simState.physicsAccumulator += dt * simState.timeSpeed;
           while (simState.physicsAccumulator >= simState.stepSize) {
-            physicsSystem->update(simState.stepSize);
+            if (doPerfTiming) {
+              PhysicsStepTimings pt = physicsSystem->timedUpdate(simState.stepSize);
+              accumSyncToMs   += pt.syncToMs;
+              accumPhysStepMs += pt.physStepMs;
+              accumSyncFromMs += pt.syncFromMs;
+              ++physStepCount;
+            } else {
+              physicsSystem->update(simState.stepSize);
+            }
             simState.physicsAccumulator -= simState.stepSize;
             simState.currentTime        += simState.stepSize;
 
             if (snapshotsOn) {
+              const auto t0 = doPerfTiming ? Clock::now() : Clock::time_point{};
               timelineSystem->saveSnapshot();
+              if (doPerfTiming)
+                accumSnapMs += std::chrono::duration<double, std::milli>(
+                    Clock::now() - t0).count();
               simState.timeHistory.push_back(simState.currentTime);
               while (static_cast<int>(simState.timeHistory.size()) >
                      timelineSystem->getSnapshotCount())
                 simState.timeHistory.erase(simState.timeHistory.begin());
             }
           }
+
+          if (doPerfTiming && physStepCount > 0) {
+            simPerf.physSyncToMs.store(static_cast<float>(accumSyncToMs));
+            simPerf.physStepMs.store(static_cast<float>(accumPhysStepMs));
+            simPerf.physSyncFromMs.store(static_cast<float>(accumSyncFromMs));
+            simPerf.snapshotMs.store(static_cast<float>(accumSnapMs));
+          }
         }
+
+        if (doPerfTiming)
+          simPerf.totalMs.store(msec(tSimStart, Clock::now()));
 
         // Network send: queue owned-object states for the network thread to
         // transmit.  tickSend() is internally thread-safe (uses deferredMutex).
@@ -340,14 +393,14 @@ void Application::initVulkan() {
                                                 commandPool, graphicsQueue);
   textureManager = std::make_unique<TextureManager>(device, physicalDevice,
                                                     commandPool, graphicsQueue);
-  materialManager = std::make_unique<MaterialManager>(renderDevice.get(),
+  materialManager = std::make_unique<RenderMaterialManager>(renderDevice.get(),
                                                       textureManager.get());
   meshManager = std::make_unique<MeshManager>(renderDevice.get());
   gizmoMeshID = meshManager->createSphere(0.3f, 16);
   lightManager = std::make_unique<LightManager>(renderDevice.get());
   descriptorPool = Vulkan::createDescriptorPool(device, MAX_FRAMES_IN_FLIGHT);
   materialManager->init(materialDescriptorSetLayout);
-  gizmoMaterialID = materialManager->getDefaultMaterial();
+  gizmoRenderMaterialID = materialManager->getDefaultMaterial();
   lightManager->init();
   mainPipeline =
       std::make_unique<MainPipeline>(device, swapChainImageFormat, depthFormat);
@@ -372,11 +425,15 @@ void Application::initVulkan() {
   worldParser    = std::make_unique<WorldParser>(meshManager.get(),
                                                materialManager.get(),
                                                textureManager.get());
+  physicsMaterialManager = std::make_unique<PhysicsMaterialManager>();
   fbSceneLoader  = std::make_unique<FBSceneLoader>(meshManager.get(),
-                                                   materialManager.get());
+                                                   materialManager.get(),
+                                                   physicsMaterialManager.get());
   animationSystem = std::make_unique<AnimationSystem>();
   physicsSystem   = std::make_unique<PhysicsSystem>();
+  physicsSystem->setPhysicsMaterialManager(physicsMaterialManager.get());
   spawnerSystem   = std::make_unique<SpawnerSystem>();
+  spawnerSystem->setPhysicsMaterialManager(physicsMaterialManager.get());
   timelineSystem  = std::make_unique<TimelineSystem>();
 
   // Networking
@@ -810,10 +867,44 @@ while (!window->shouldClose()) {
   }
   } // end !isBaking
 
+    PerformanceMetrics perfMetrics;
+    perfMetrics.frameTimeMs        = deltaTime * 1000.0f;
+    perfMetrics.gpuWaitMs          = perfGpuWaitMs;
+    perfMetrics.uniformBufferMs    = perfUniformBufferMs;
+    perfMetrics.commandBufferMs    = perfCommandBufferMs;
+    perfMetrics.interfaceRenderMs  = perfInterfaceRenderMs;
+    perfMetrics.physSyncToMs       = simPerf.physSyncToMs.load(std::memory_order_relaxed);
+    perfMetrics.physStepMs         = simPerf.physStepMs.load(std::memory_order_relaxed);
+    perfMetrics.physSyncFromMs     = simPerf.physSyncFromMs.load(std::memory_order_relaxed);
+    perfMetrics.animationMs        = simPerf.animationMs.load(std::memory_order_relaxed);
+    perfMetrics.spawnerMs          = simPerf.spawnerMs.load(std::memory_order_relaxed);
+    perfMetrics.snapshotMs         = simPerf.snapshotMs.load(std::memory_order_relaxed);
+    perfMetrics.simThreadTotalMs   = simPerf.totalMs.load(std::memory_order_relaxed);
+    if (registry) {
+      std::lock_guard<std::mutex> lock(simMutex);
+      perfMetrics.entityCount   = static_cast<int>(registry->allNames().size());
+      perfMetrics.simBodyCount  = static_cast<int>(registry->allSimulated().size());
+      perfMetrics.colliderCount = static_cast<int>(registry->allColliders().size());
+      perfMetrics.lightCount    = static_cast<int>(registry->allLights().size());
+      perfMetrics.spawnerCount  = static_cast<int>(registry->allSpawners().size());
+      perfMetrics.animCount     = static_cast<int>(registry->allAnimations().size());
+      if (timelineSystem) {
+        perfMetrics.snapshotCount = timelineSystem->getSnapshotCount();
+        perfMetrics.snapshotMemKB = static_cast<size_t>(perfMetrics.snapshotCount)
+                                  * static_cast<size_t>(perfMetrics.entityCount)
+                                  * 96 / 1024;
+      }
+    }
+    if (networkManager && networkManager->getConnectedPeerCount() >= 1) {
+      perfMetrics.connectedPeers = networkManager->getConnectedPeerCount();
+      perfMetrics.packetLoss     = networkManager->simPacketLossPercent;
+      perfMetrics.latencyMs      = networkManager->simExtraLatencyMs;
+    }
+
     if (simState.isBaking && simState.bakePerformanceMode) {
       auto uiStart = std::chrono::high_resolution_clock::now();
       interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
-                         postProcessing.get(), networkManager.get());
+                         postProcessing.get(), perfMetrics, networkManager.get());
       input.endFrame();
       drawFrame();
       double uiMs = std::chrono::duration<double, std::milli>(
@@ -821,8 +912,12 @@ while (!window->shouldClose()) {
       bakeUiFrameTimeAccum += uiMs;
       ++bakeUiFrameCount;
     } else {
+      using PerfClock = std::chrono::steady_clock;
+      const auto tRender0 = PerfClock::now();
       interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
-                         postProcessing.get(), networkManager.get());
+                         postProcessing.get(), perfMetrics, networkManager.get());
+      perfInterfaceRenderMs = static_cast<float>(
+          std::chrono::duration<double, std::milli>(PerfClock::now() - tRender0).count());
 
       if (networkManager && registry) {
         bool want = networkManager->colorByOwner;
@@ -912,8 +1007,18 @@ void Application::createUniformBuffers() {
 }
 
 void Application::drawFrame() {
+  const bool doPerfTiming = interface && interface->isPerfProfilingEnabled();
+  using FrameClock = std::chrono::steady_clock;
+  auto msec = [](FrameClock::time_point a, FrameClock::time_point b) -> float {
+    return static_cast<float>(
+        std::chrono::duration<double, std::milli>(b - a).count());
+  };
+
+  const auto tGpuWait0 = doPerfTiming ? FrameClock::now() : FrameClock::time_point{};
   vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE,
                   UINT64_MAX);
+  if (doPerfTiming) perfGpuWaitMs = msec(tGpuWait0, FrameClock::now());
+
   uint32_t imageIndex;
   VkResult result = vkAcquireNextImageKHR(
       device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame],
@@ -928,9 +1033,15 @@ void Application::drawFrame() {
     // Hold simMutex while reading registry data into the command buffer so the
     // simulation thread cannot write new physics state at the same time.
     std::lock_guard<std::mutex> lock(simMutex);
+
+    const auto tUbo0 = doPerfTiming ? FrameClock::now() : FrameClock::time_point{};
     updateUniformBuffer(currentFrame);
+    if (doPerfTiming) perfUniformBufferMs = msec(tUbo0, FrameClock::now());
+
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
+    const auto tCmd0 = doPerfTiming ? FrameClock::now() : FrameClock::time_point{};
     recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+    if (doPerfTiming) perfCommandBufferMs = msec(tCmd0, FrameClock::now());
   }
   VkSubmitInfo submitInfo{};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1005,29 +1116,7 @@ void Application::cleanupSwapChain() {
 }
 
 void Application::updateUniformBuffer(uint32_t currentImage) {
-// Compute scene bounding sphere from all entity transforms
-glm::vec3 sceneMin(std::numeric_limits<float>::max());
-glm::vec3 sceneMax(std::numeric_limits<float>::lowest());
-bool hasEntities = false;
-for (const auto& [entity, transform] : registry->allTransforms()) {
-  const glm::vec3& pos = transform.position;
-  const glm::vec3& scl = transform.scale;
-  float maxScale = glm::max(scl.x, glm::max(scl.y, scl.z));
-  sceneMin = glm::min(sceneMin, pos - glm::vec3(maxScale));
-  sceneMax = glm::max(sceneMax, pos + glm::vec3(maxScale));
-  hasEntities = true;
-}
-glm::vec3 sceneCenter;
-float sceneRadius;
-if (hasEntities) {
-  sceneCenter = (sceneMin + sceneMax) * 0.5f;
-  sceneRadius = glm::length(sceneMax - sceneMin) * 0.5f;
-  sceneRadius = glm::clamp(sceneRadius, 10.0f, 5000.0f);
-} else {
-  sceneCenter = glm::vec3(0.0f);
-  sceneRadius = 100.0f;
-}
-lightManager->updateAllShadowMatrices(sceneCenter, sceneRadius);
+lightManager->updateAllShadowMatrices(glm::vec3(0.0f), 1000.0f);
 lightManager->updateLightBuffer();
   UniformBufferObject ubo{};
   ubo.view = getActiveCameraViewMatrix();
@@ -1739,15 +1828,15 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     Entity entity = entities[i];
     const auto* renderComp = registry->getComponent<RenderComponent>(entity);
     const auto* meshComp = registry->getComponent<MeshComponent>(entity);
-    const auto* materialComp = registry->getComponent<MaterialComponent>(entity);
+    const auto* materialComp = registry->getComponent<RenderMaterialComponent>(entity);
     const auto* transformComp = registry->getComponent<TransformComponent>(entity);
     if (!renderComp || !meshComp || !materialComp || !transformComp) continue;
     if (!renderComp->visible || meshComp->meshID == INVALID_MESH_ID ||
-        materialComp->materialID == INVALID_MATERIAL_ID)
+        materialComp->renderMaterialID == INVALID_RENDER_MATERIAL_ID)
       continue;
     const Mesh* const mesh = meshManager->getMesh(meshComp->meshID);
-    const Material* const material =
-        materialManager->getMaterial(materialComp->materialID);
+    const RenderMaterial* const material =
+        materialManager->getMaterial(materialComp->renderMaterialID);
     if (!mesh || mesh->getVertexBuffer() == VK_NULL_HANDLE || !material ||
         material->getDescriptorSet() == VK_NULL_HANDLE)
       continue;
@@ -1786,7 +1875,7 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
   // Render sphere gizmos for point lights
   if (interface && gizmoMeshID != INVALID_MESH_ID) {
     const Mesh* gizmoMesh = meshManager->getMesh(gizmoMeshID);
-    const Material* gizmoMat = materialManager->getMaterial(gizmoMaterialID);
+    const RenderMaterial* gizmoMat = materialManager->getMaterial(gizmoRenderMaterialID);
     if (gizmoMesh && gizmoMesh->getVertexBuffer() != VK_NULL_HANDLE &&
         gizmoMat && gizmoMat->getDescriptorSet() != VK_NULL_HANDLE) {
       // Collect which entities need a gizmo
@@ -1894,7 +1983,7 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
 
 void Application::initOwnerMaterials() {
   if (!materialManager) return;
-  if (ownerMaterialIDs[0] != INVALID_MATERIAL_ID) return; // already created
+  if (ownerRenderMaterialIDs[0] != INVALID_RENDER_MATERIAL_ID) return; // already created
 
   // Peer colours: Red, Green, Blue, Yellow
   static const glm::vec3 colors[4] = {
@@ -1908,9 +1997,9 @@ void Application::initOwnerMaterials() {
       "_net_owner_peer3", "_net_owner_peer4"};
 
   for (int i = 0; i < 4; ++i) {
-    MaterialBuilder b;
+    RenderMaterialBuilder b;
     b.name(names[i]).albedoColor(colors[i]).roughness(0.7f);
-    ownerMaterialIDs[i] = materialManager->registerMaterial(b);
+    ownerRenderMaterialIDs[i] = materialManager->registerMaterial(b);
   }
 }
 
@@ -1923,20 +2012,20 @@ void Application::applyOwnerColors(bool enable) {
     for (const auto& [e, _] : registry->allSimulated()) {
       uint8_t ownerID = networkManager->getOwnerPeerID(e);
       if (ownerID == 0 || ownerID > 4) continue;
-      auto* matComp = registry->getComponent<MaterialComponent>(e);
+      auto* matComp = registry->getComponent<RenderMaterialComponent>(e);
       if (!matComp) continue;
 
-      if (savedMaterialIDs.find(e) == savedMaterialIDs.end())
-        savedMaterialIDs[e] = matComp->materialID;
+      if (savedRenderMaterialIDs.find(e) == savedRenderMaterialIDs.end())
+        savedRenderMaterialIDs[e] = matComp->renderMaterialID;
 
-      matComp->materialID = ownerMaterialIDs[ownerID - 1];
+      matComp->renderMaterialID = ownerRenderMaterialIDs[ownerID - 1];
     }
   } else {
     // Restore original materials
-    for (auto& [e, origID] : savedMaterialIDs) {
-      auto* matComp = registry->getComponent<MaterialComponent>(e);
-      if (matComp) matComp->materialID = origID;
+    for (auto& [e, origID] : savedRenderMaterialIDs) {
+      auto* matComp = registry->getComponent<RenderMaterialComponent>(e);
+      if (matComp) matComp->renderMaterialID = origID;
     }
-    savedMaterialIDs.clear();
+    savedRenderMaterialIDs.clear();
   }
 }

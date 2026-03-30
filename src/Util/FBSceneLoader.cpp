@@ -127,8 +127,9 @@ static int anonCount = 0;
 
 } // namespace
 
-FBSceneLoader::FBSceneLoader(MeshManager* mm, MaterialManager* matm)
-    : meshManager(mm), materialManager(matm) {}
+FBSceneLoader::FBSceneLoader(MeshManager* mm, RenderMaterialManager* matm,
+                             PhysicsMaterialManager* physMatManager)
+    : meshManager(mm), renderMaterialManager(matm), physMatManager(physMatManager) {}
 
 std::vector<std::string> FBSceneLoader::listScenes(const std::string& directory) {
     std::vector<std::string> results;
@@ -144,18 +145,6 @@ std::vector<std::string> FBSceneLoader::listScenes(const std::string& directory)
     return results;
 }
 
-std::string FBSceneLoader::interactionKey(const std::string& a, const std::string& b) {
-    return (a < b) ? (a + ":" + b) : (b + ":" + a);
-}
-
-FBSceneLoader::Interaction FBSceneLoader::findInteraction(const std::string& a,
-                                                          const std::string& b) const {
-    auto it = interactions.find(interactionKey(a, b));
-    if (it != interactions.end()) return it->second;
-    it = interactions.find(interactionKey(a, a));
-    if (it != interactions.end()) return it->second;
-    return {};
-}
 
 Entity FBSceneLoader::buildObject(Registry& registry,
                                 const std::string& name,
@@ -176,16 +165,15 @@ Entity FBSceneLoader::buildObject(Registry& registry,
                                 bool      gravityOn,
                                 const std::string& materialName) const
 {
-    MaterialID matID   = materialManager->getDefaultMaterial();
-    float      density = 1000.0f;
-    {
-        auto mi = namedMaterials.find(materialName);
-        if (mi != namedMaterials.end()) matID = mi->second;
-        auto di = materialDensities.find(materialName);
-        if (di != materialDensities.end()) density = di->second;
+    RenderMaterialID matID = renderMaterialManager->getDefaultMaterial();
+    const PhysicsMaterialID physMatID = physMatManager ? physMatManager->findIDByName(materialName) : INVALID_PHYSICS_MATERIAL_ID;
+    float density = 1000.0f;
+    if (physMatManager) {
+        if (const auto* pm = physMatManager->getMaterial(physMatID)) density = pm->density;
     }
 
-    Interaction inter = findInteraction(materialName, materialName);
+    PhysicsMaterialInteraction inter;
+    if (physMatManager) inter = physMatManager->findInteraction(physMatID, physMatID);
     MeshID meshID = meshManager->getDefaultCube();
     EntityBuilder builder;
 
@@ -232,7 +220,8 @@ Entity FBSceneLoader::buildObject(Registry& registry,
            .rotation(eulerToQuat(eulerDeg))
            .scale(scale)
            .mesh(meshID)
-           .material(matID)
+           .renderMaterial(matID)
+           .physicsMaterial(physMatManager ? physMatManager->findIDByName(materialName) : INVALID_PHYSICS_MATERIAL_ID)
            .restitution(inter.restitution);
 
     if (behaviourType == 2) {
@@ -268,28 +257,28 @@ void FBSceneLoader::buildSpawner(Registry& registry,
                                  glm::vec3 boxMin,
                                  glm::vec3 boxMax) const
 {
-    MaterialID matID   = materialManager->getDefaultMaterial();
-    float      density = 1000.0f;
-    {
-        auto mi = namedMaterials.find(materialName);
-        if (mi != namedMaterials.end()) matID = mi->second;
-        auto di = materialDensities.find(materialName);
-        if (di != materialDensities.end()) density = di->second;
+    RenderMaterialID matID = renderMaterialManager->getDefaultMaterial();
+    const PhysicsMaterialID physMatID = physMatManager ? physMatManager->findIDByName(materialName) : INVALID_PHYSICS_MATERIAL_ID;
+    float density = 1000.0f;
+    if (physMatManager) {
+        if (const auto* pm = physMatManager->getMaterial(physMatID)) density = pm->density;
     }
 
-    Interaction inter = findInteraction(materialName, materialName);
+    PhysicsMaterialInteraction inter;
+    if (physMatManager) inter = physMatManager->findInteraction(physMatID, physMatID);
 
     float rAvg = (rMin + rMax) * 0.5f;
     float hAvg = (hMin + hMax) * 0.5f;
     glm::vec3 sAvg = (sMin + sMax) * 0.5f;
 
     SpawnTemplate tmpl;
-    tmpl.weight              = 1.0f;
-    tmpl.materialID          = matID;
-    tmpl.namePrefix          = name;
-    tmpl.simulated.useGravity  = gravityOn;
-    tmpl.simulated.damping     = 0.99f;
-    tmpl.simulated.restitution = inter.restitution;
+    tmpl.weight                  = 1.0f;
+    tmpl.renderMaterialID        = matID;
+    tmpl.physicsMaterialID       = physMatManager ? physMatManager->findIDByName(materialName) : INVALID_PHYSICS_MATERIAL_ID;
+    tmpl.namePrefix              = name;
+    tmpl.simulated.useGravity    = gravityOn;
+    tmpl.simulated.damping       = 0.99f;
+    tmpl.simulated.restitution   = inter.restitution;
 
     switch (spawnerShape) {
         case 1: {
@@ -386,21 +375,11 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
     settings.description = scene->description() ? scene->description()->str() : "";
     settings.gravityOn   = scene->gravity_on();
 
-    static const glm::vec3 defaultColors[] = {
-        {0.8f,0.8f,0.8f},{0.6f,0.3f,0.1f},{0.2f,0.5f,0.8f},
-        {0.9f,0.7f,0.2f},{0.3f,0.8f,0.3f},{0.8f,0.2f,0.2f}
-    };
-    int colorIdx = 0;
-
     if (scene->materials()) {
         for (const auto* mat : *scene->materials()) {
             if (!mat || !mat->name()) continue;
             std::string n = mat->name()->str();
-            materialDensities[n] = mat->density();
-            glm::vec3 col = defaultColors[colorIdx++ % 6];
-            MaterialBuilder b;
-            b.name(n).albedoColor(col).roughness(0.5f).metallic(0.0f);
-            namedMaterials[n] = materialManager->registerMaterial(b);
+            if (physMatManager) physMatManager->registerMaterial({n, mat->density()});
         }
     }
 
@@ -409,11 +388,12 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
             if (!i || !i->material_a() || !i->material_b()) continue;
             std::string a = i->material_a()->str();
             std::string b = i->material_b()->str();
-            Interaction intr;
-            intr.restitution     = i->restitution();
-            intr.staticFriction  = i->static_friction();
-            intr.dynamicFriction = i->dynamic_friction();
-            interactions[interactionKey(a, b)] = intr;
+            if (physMatManager) {
+                physMatManager->registerInteraction(
+                    physMatManager->findIDByName(a),
+                    physMatManager->findIDByName(b),
+                    { i->restitution(), i->static_friction(), i->dynamic_friction() });
+            }
         }
     }
 
@@ -721,21 +701,13 @@ bool FBSceneLoader::loadJSON(const std::string& filepath, Registry& registry,
     settings.description = root["description"].asStr();
     settings.gravityOn   = root["gravity_on"].asBool(true);
 
-    static const glm::vec3 defColors[] = {
-        {0.8f,0.8f,0.8f},{0.6f,0.3f,0.1f},{0.2f,0.5f,0.8f},
-        {0.9f,0.7f,0.2f},{0.3f,0.8f,0.3f},{0.8f,0.2f,0.2f}
-    };
-    int colorIdx = 0;
     const Json& mats = root["materials"];
     if (mats.isArray()) {
         for (size_t i = 0; i < mats.size(); ++i) {
             std::string n = mats[i]["name"].asStr();
             if (n.empty()) continue;
             float density = mats[i]["density"].asFloat(1000.0f);
-            materialDensities[n] = density;
-            glm::vec3 col = defColors[colorIdx++ % 6];
-            MaterialBuilder b; b.name(n).albedoColor(col).roughness(0.5f).metallic(0.0f);
-            namedMaterials[n] = materialManager->registerMaterial(b);
+            if (physMatManager) physMatManager->registerMaterial({n, density});
         }
     }
 
@@ -744,12 +716,15 @@ bool FBSceneLoader::loadJSON(const std::string& filepath, Registry& registry,
         for (size_t i = 0; i < intr.size(); ++i) {
             std::string a = intr[i]["material_a"].asStr();
             std::string b = intr[i]["material_b"].asStr();
-            if (a.empty()||b.empty()) continue;
-            Interaction it;
-            it.restitution     = intr[i]["restitution"].asFloat(0.5f);
-            it.staticFriction  = intr[i]["static_friction"].asFloat(0.4f);
-            it.dynamicFriction = intr[i]["dynamic_friction"].asFloat(0.3f);
-            interactions[interactionKey(a,b)] = it;
+            if (a.empty() || b.empty()) continue;
+            if (physMatManager) {
+                physMatManager->registerInteraction(
+                    physMatManager->findIDByName(a),
+                    physMatManager->findIDByName(b),
+                    { intr[i]["restitution"].asFloat(0.5f),
+                      intr[i]["static_friction"].asFloat(0.4f),
+                      intr[i]["dynamic_friction"].asFloat(0.3f) });
+            }
         }
     }
 
@@ -942,9 +917,7 @@ bool FBSceneLoader::loadJSON(const std::string& filepath, Registry& registry,
 
 bool FBSceneLoader::load(const std::string& filepath, Registry& registry,
                          FBWorldSettings& settings) {
-    namedMaterials.clear();
-    materialDensities.clear();
-    interactions.clear();
+    if (physMatManager) physMatManager->clear();
     settings = FBWorldSettings{};
 
     auto ext = std::filesystem::path(filepath).extension().string();

@@ -2,12 +2,32 @@
 
 #include <chrono>
 #include <cmath>
+#include <unordered_map>
 #include <vector>
 
 #include "ECS/Components.h"
 #include "ECS/Registry.h"
 #include "Network/NetworkManager.h"
 #include "Util/Debug.h"
+
+namespace {
+
+struct CellKey {
+  int x, y, z;
+  bool operator==(const CellKey& o) const { return x == o.x && y == o.y && z == o.z; }
+};
+
+struct CellKeyHash {
+  size_t operator()(const CellKey& k) const {
+    size_t h = 0;
+    h ^= std::hash<int>{}(k.x) + 0x9e3779b9u + (h << 6) + (h >> 2);
+    h ^= std::hash<int>{}(k.y) + 0x9e3779b9u + (h << 6) + (h >> 2);
+    h ^= std::hash<int>{}(k.z) + 0x9e3779b9u + (h << 6) + (h >> 2);
+    return h;
+  }
+};
+
+} // namespace
 
 PhysicsSystem::PhysicsSystem() {
   Debug::log(Debug::Category::PHYSICS, "PhysicsSystem: Created");
@@ -55,11 +75,70 @@ PhysicsStepTimings PhysicsSystem::timedUpdate(float deltaTime) {
 }
 
 void PhysicsSystem::resolveCrossPeerCollisions() {
-  // Only runs in networked sessions with more than one peer.
   if (!registry || !networkManager) return;
   if (networkManager->getConnectedPeerCount() == 0) return;
 
+  auto boundingRadius = [](const ColliderComponent& c, const glm::vec3& scale) -> float {
+    switch (c.type) {
+      case ColliderType::Sphere:
+        return c.radius * scale.x;
+      case ColliderType::AABB:
+        return glm::length(c.halfExtents * scale);
+      case ColliderType::Cylinder:
+      case ColliderType::Capsule:
+      case ColliderType::Cone:
+        return (std::max)(c.radius * (std::max)(scale.x, scale.z),
+                          (c.height * 0.5f) * scale.y);
+      case ColliderType::Plane:
+        return 0.0f;
+    }
+    return 0.0f;
+  };
+
   auto entities = registry->getEntities();
+
+  struct RemoteBody {
+    Entity    entity;
+    glm::vec3 pos;
+    glm::vec3 vel;
+    float     radius;
+    float     mass;
+  };
+
+  float maxRemoteRadius = 0.0f;
+  std::vector<RemoteBody> remoteBodies;
+  remoteBodies.reserve(entities.size() / 2);
+
+  for (Entity e : entities) {
+    if (networkManager->isLocallyOwned(e)) continue;
+    auto* phys      = registry->getComponent<SimulatedComponent>(e);
+    auto* collider  = registry->getComponent<ColliderComponent>(e);
+    auto* transform = registry->getComponent<TransformComponent>(e);
+    if (!phys || !collider || !transform) continue;
+
+    const float r = boundingRadius(*collider, transform->scale);
+    if (r <= 0.0f) continue;
+
+    maxRemoteRadius = (std::max)(maxRemoteRadius, r);
+    remoteBodies.push_back({e, transform->position, phys->velocity, r,
+                            (phys->mass > 0.0f) ? phys->mass : 1.0f});
+  }
+
+  if (remoteBodies.empty()) return;
+
+  const float cellSize = (std::max)(maxRemoteRadius * 2.0f, 1.0f);
+  const float invCell  = 1.0f / cellSize;
+
+  std::unordered_map<CellKey, std::vector<int>, CellKeyHash> grid;
+  grid.reserve(remoteBodies.size() * 2);
+
+  for (int i = 0; i < static_cast<int>(remoteBodies.size()); ++i) {
+    const glm::vec3& p = remoteBodies[i].pos;
+    CellKey k{static_cast<int>(std::floor(p.x * invCell)),
+              static_cast<int>(std::floor(p.y * invCell)),
+              static_cast<int>(std::floor(p.z * invCell))};
+    grid[k].push_back(i);
+  }
 
   for (Entity local : entities) {
     auto* localPhys      = registry->getComponent<SimulatedComponent>(local);
@@ -67,51 +146,52 @@ void PhysicsSystem::resolveCrossPeerCollisions() {
     auto* localTransform = registry->getComponent<TransformComponent>(local);
     if (!localPhys || !localCollider || !localTransform) continue;
     if (!networkManager->isLocallyOwned(local)) continue;
-    if (localCollider->type != ColliderType::Sphere) continue;
 
-    const float localRadius = localCollider->radius * localTransform->scale.x;
+    const float localRadius = boundingRadius(*localCollider, localTransform->scale);
+    if (localRadius <= 0.0f) continue;
     glm::vec3   localPos    = localTransform->position;
     glm::vec3   localVel    = localPhys->velocity;
     const float localMass   = (localPhys->mass > 0.0f) ? localPhys->mass : 1.0f;
 
-    for (Entity remote : entities) {
-      if (remote == local) continue;
-      auto* remotePhys      = registry->getComponent<SimulatedComponent>(remote);
-      auto* remoteCollider  = registry->getComponent<ColliderComponent>(remote);
-      auto* remoteTransform = registry->getComponent<TransformComponent>(remote);
-      if (!remotePhys || !remoteCollider || !remoteTransform) continue;
-      if (networkManager->isLocallyOwned(remote)) continue;
-      if (remoteCollider->type != ColliderType::Sphere) continue;
+    const float queryR = localRadius + maxRemoteRadius;
+    const int x0 = static_cast<int>(std::floor((localPos.x - queryR) * invCell));
+    const int x1 = static_cast<int>(std::floor((localPos.x + queryR) * invCell));
+    const int y0 = static_cast<int>(std::floor((localPos.y - queryR) * invCell));
+    const int y1 = static_cast<int>(std::floor((localPos.y + queryR) * invCell));
+    const int z0 = static_cast<int>(std::floor((localPos.z - queryR) * invCell));
+    const int z1 = static_cast<int>(std::floor((localPos.z + queryR) * invCell));
 
-      const float remoteRadius = remoteCollider->radius * remoteTransform->scale.x;
-      const glm::vec3 remotePos = remoteTransform->position;
-      const glm::vec3 remoteVel = remotePhys->velocity;
-      const float     remoteMass = (remotePhys->mass > 0.0f) ? remotePhys->mass : 1.0f;
+    for (int cx = x0; cx <= x1; ++cx) {
+      for (int cy = y0; cy <= y1; ++cy) {
+        for (int cz = z0; cz <= z1; ++cz) {
+          auto it = grid.find({cx, cy, cz});
+          if (it == grid.end()) continue;
 
-      const glm::vec3 diff    = localPos - remotePos;
-      const float     distSq  = glm::dot(diff, diff);
-      const float     minDist = localRadius + remoteRadius;
+          for (int ri : it->second) {
+            const RemoteBody& rs = remoteBodies[ri];
+            const glm::vec3 diff   = localPos - rs.pos;
+            const float     distSq = glm::dot(diff, diff);
+            const float     minDist = localRadius + rs.radius;
+            if (distSq >= minDist * minDist || distSq < 1e-10f) continue;
 
-      if (distSq >= minDist * minDist || distSq < 1e-10f) continue;
+            const float     dist   = std::sqrt(distSq);
+            const glm::vec3 normal = diff / dist;
 
-      const float     dist   = std::sqrt(distSq);
-      const glm::vec3 normal = diff / dist;
+            const float relVel = glm::dot(localVel - rs.vel, normal);
+            if (relVel < 0.0f) {
+              const float j = -(1.0f + localPhys->restitution) * relVel /
+                              (1.0f / localMass + 1.0f / rs.mass);
+              localVel += (j / localMass) * normal;
+            }
 
-      // Relative velocity along the collision normal
-      const float relVel = glm::dot(localVel - remoteVel, normal);
-      if (relVel < 0.0f) {
-        // Elastic impulse — each peer only applies its own half
-        const float j = -(1.0f + localPhys->restitution) * relVel /
-                        (1.0f / localMass + 1.0f / remoteMass);
-        localVel += (j / localMass) * normal;
+            localPos += normal * ((minDist - dist) * 0.5f);
+          }
+        }
       }
-
-      // Push local object out of overlap (50% — remote does the other 50%)
-      localPos += normal * ((minDist - dist) * 0.5f);
     }
 
-    localPhys->velocity        = localVel;
-    localTransform->position   = localPos;
+    localPhys->velocity      = localVel;
+    localTransform->position = localPos;
     auto* physObj = registry->getPhysicsObjectPtr(local);
     if (physObj) {
       physObj->setVelocity(localVel);

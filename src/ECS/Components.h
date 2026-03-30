@@ -8,7 +8,8 @@
 enum class EasingType { LINEAR, SMOOTHSTEP };
 enum class PathMode   { STOP, LOOP, REVERSE };
 
-#include "Resources/Material.h"
+#include "Resources/RenderMaterial.h"
+#include "Physics/PhysicsMaterial.h"
 
 using MeshID = uint32_t;
 constexpr MeshID INVALID_MESH_ID = 0;
@@ -35,8 +36,12 @@ struct MeshComponent {
   MeshID meshID = INVALID_MESH_ID;
 };
 
-struct MaterialComponent {
-  MaterialID materialID = INVALID_MATERIAL_ID;
+struct RenderMaterialComponent {
+  RenderMaterialID renderMaterialID = INVALID_RENDER_MATERIAL_ID;
+};
+
+struct PhysicsMaterialComponent {
+  PhysicsMaterialID physicsMaterialID = INVALID_PHYSICS_MATERIAL_ID;
 };
 
 struct RenderComponent {
@@ -91,7 +96,8 @@ struct SpawnTemplate {
 
   bool hasRender = true;
   MeshID meshID = INVALID_MESH_ID;
-  MaterialID materialID = INVALID_MATERIAL_ID;
+  RenderMaterialID renderMaterialID = INVALID_RENDER_MATERIAL_ID;
+  PhysicsMaterialID physicsMaterialID = INVALID_PHYSICS_MATERIAL_ID;
   glm::vec3 scale = glm::vec3(1.0f);
   std::string namePrefix = "Spawned";
 };

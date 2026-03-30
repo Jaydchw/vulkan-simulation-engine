@@ -63,8 +63,14 @@ class EntityBuilder final {
     return *this;
   }
 
-  EntityBuilder& material(MaterialID materialID) {
-    materialComp.materialID = materialID;
+  EntityBuilder& renderMaterial(RenderMaterialID renderMaterialID) {
+    renderMaterialComp.renderMaterialID = renderMaterialID;
+    return *this;
+  }
+
+  EntityBuilder& physicsMaterial(PhysicsMaterialID id) {
+    physicsMaterialComp.physicsMaterialID = id;
+    hasPhysicsMaterial = true;
     return *this;
   }
 
@@ -270,7 +276,7 @@ class EntityBuilder final {
                    "EntityBuilder: Warning - building entity '", nameComp.name,
                    "' with invalid mesh ID");
       }
-      if (materialComp.materialID == INVALID_MATERIAL_ID) {
+      if (renderMaterialComp.renderMaterialID == INVALID_RENDER_MATERIAL_ID) {
         Debug::log(Debug::Category::OBJECTS,
                    "EntityBuilder: Warning - building entity '", nameComp.name,
                    "' with invalid material ID");
@@ -287,11 +293,11 @@ class EntityBuilder final {
                  nameComp.name, "'");
     } else {
       registry.addComponent<MeshComponent>(entity, meshComp);
-      registry.addComponent<MaterialComponent>(entity, materialComp);
+      registry.addComponent<RenderMaterialComponent>(entity, renderMaterialComp);
       registry.addComponent<RenderComponent>(entity, renderComp);
       Debug::log(Debug::Category::OBJECTS, "EntityBuilder: Built entity '",
                  nameComp.name, "' (Mesh: ", meshComp.meshID,
-                 ", Material: ", materialComp.materialID, ")");
+                 ", Material: ", renderMaterialComp.renderMaterialID, ")");
     }
 
     if (hasSimulated) {
@@ -303,6 +309,9 @@ class EntityBuilder final {
     if (hasAnimation) {
       registry.addComponent<AnimationComponent>(entity, animComp);
     }
+    if (hasPhysicsMaterial) {
+      registry.addComponent<PhysicsMaterialComponent>(entity, physicsMaterialComp);
+    }
 
     return entity;
   }
@@ -311,14 +320,16 @@ class EntityBuilder final {
   NameComponent nameComp;
   TransformComponent transformComp;
   MeshComponent meshComp;
-  MaterialComponent materialComp;
+  RenderMaterialComponent renderMaterialComp;
+  PhysicsMaterialComponent physicsMaterialComp;
   RenderComponent renderComp;
   LightComponent lightComp;
   SimulatedComponent simulatedComp;
   ColliderComponent colliderComp;
   AnimationComponent animComp;
-  bool hasLight     = false;
-  bool hasSimulated   = false;
-  bool hasCollider  = false;
-  bool hasAnimation = false;
+  bool hasLight           = false;
+  bool hasSimulated       = false;
+  bool hasCollider        = false;
+  bool hasAnimation       = false;
+  bool hasPhysicsMaterial = false;
 };

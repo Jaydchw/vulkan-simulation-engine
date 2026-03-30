@@ -19,7 +19,7 @@
 #include "Rendering/PushConstants.h"
 #include "Rendering/RenderDevice.h"
 #include "Rendering/Window.h"
-#include "Resources/MaterialManager.h"
+#include "Resources/RenderMaterialManager.h"
 #include "Resources/MeshManager.h"
 #include "ECS/Registry.h"
 #include "Resources/TextureManager.h"
@@ -32,6 +32,7 @@
 #include "Util/Input.h"
 #include "Util/Interface.h"
 #include "Util/WorldParser.h"
+#include "Physics/PhysicsMaterialManager.h"
 #include "Util/FBSceneLoader.h"
 
 #include <unordered_map>
@@ -75,7 +76,7 @@ class Application final {
   void run();
 
   MeshManager* getMeshManager() const { return meshManager.get(); }
-  MaterialManager* getMaterialManager() const { return materialManager.get(); }
+  RenderMaterialManager* getRenderMaterialManager() const { return materialManager.get(); }
   TextureManager* getTextureManager() const { return textureManager.get(); }
   LightManager* getLightManager() const { return lightManager.get(); }
 
@@ -123,12 +124,13 @@ class Application final {
   std::unique_ptr<Window> window;
   std::unique_ptr<RenderDevice> renderDevice;
   std::unique_ptr<TextureManager> textureManager;
-  std::unique_ptr<MaterialManager> materialManager;
+  std::unique_ptr<RenderMaterialManager> materialManager;
   std::unique_ptr<MeshManager> meshManager;
   std::unique_ptr<LightManager> lightManager;
   std::unique_ptr<PostProcessing> postProcessing;
   std::unique_ptr<MainPipeline> mainPipeline;
   std::unique_ptr<Interface> interface;
+  std::unique_ptr<PhysicsMaterialManager> physicsMaterialManager;
   std::unique_ptr<AnimationSystem> animationSystem;
   std::unique_ptr<PhysicsSystem> physicsSystem;
   std::unique_ptr<SpawnerSystem> spawnerSystem;
@@ -137,10 +139,10 @@ class Application final {
 
   // --- Owner-colour material system ---
   // Created once; IDs indexed [0]=peer1(red) [1]=peer2(green) [2]=peer3(blue) [3]=peer4(yellow)
-  std::array<MaterialID, 4> ownerMaterialIDs = {
-      INVALID_MATERIAL_ID, INVALID_MATERIAL_ID,
-      INVALID_MATERIAL_ID, INVALID_MATERIAL_ID};
-  std::unordered_map<Entity, MaterialID> savedMaterialIDs; // original material per entity
+  std::array<RenderMaterialID, 4> ownerRenderMaterialIDs = {
+      INVALID_RENDER_MATERIAL_ID, INVALID_RENDER_MATERIAL_ID,
+      INVALID_RENDER_MATERIAL_ID, INVALID_RENDER_MATERIAL_ID};
+  std::unordered_map<Entity, RenderMaterialID> savedRenderMaterialIDs;
   bool lastColorByOwner = false;
 
   void initOwnerMaterials();
@@ -195,7 +197,13 @@ class Application final {
   bool  ownershipHighLossMode    = false; // hysteresis flag for packet-loss isolation
 
   MeshID gizmoMeshID = INVALID_MESH_ID;
-  MaterialID gizmoMaterialID = INVALID_MATERIAL_ID;
+  RenderMaterialID gizmoRenderMaterialID = INVALID_RENDER_MATERIAL_ID;
+
+  // Shadow area is recomputed every N frames; Y is never adjusted (no vertical drift).
+  static constexpr int SHADOW_UPDATE_INTERVAL = 200;
+  int   shadowUpdateFrameCounter  = 0;
+  float cachedShadowSceneRadius   = 100.0f;
+  glm::vec3 cachedShadowSceneCenter = glm::vec3(0.0f);
 
   // ── Simulation thread (pinned to Core 4+) ────────────────────────────────
   // Runs physicsSystem::update() independently of the render loop so that
@@ -205,6 +213,21 @@ class Application final {
   // Guards shared registry/simState access between the simulation thread
   // (writes physics state) and the render thread (reads for draw calls).
   std::mutex          simMutex;
+
+  struct SimPerfAtomics {
+    std::atomic<float> physSyncToMs{0.0f};
+    std::atomic<float> physStepMs{0.0f};
+    std::atomic<float> physSyncFromMs{0.0f};
+    std::atomic<float> animationMs{0.0f};
+    std::atomic<float> spawnerMs{0.0f};
+    std::atomic<float> snapshotMs{0.0f};
+    std::atomic<float> totalMs{0.0f};
+  } simPerf;
+
+  float perfGpuWaitMs         = 0.0f;
+  float perfUniformBufferMs   = 0.0f;
+  float perfCommandBufferMs   = 0.0f;
+  float perfInterfaceRenderMs = 0.0f;
 
   void initWindow();
   void initVulkan();

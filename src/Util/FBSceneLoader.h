@@ -6,41 +6,28 @@
 #include <glm/glm.hpp>
 
 #include "ECS/Registry.h"
-#include "Resources/MaterialManager.h"
+#include "Physics/PhysicsMaterialManager.h"
+#include "Resources/RenderMaterialManager.h"
 #include "Resources/MeshManager.h"
 
 struct FBWorldSettings {
     bool gravityOn = true;
     std::string name;
     std::string description;
-    // Explicit ownership overrides loaded from SimulatedObject::owner fields.
-    // Maps entity ID → peer ID (1-4). Applied after auto round-robin assignment.
     std::unordered_map<uint32_t, uint8_t> entityOwners;
 };
 
 class FBSceneLoader {
 public:
-    FBSceneLoader(MeshManager* mm, MaterialManager* matm);
+    FBSceneLoader(MeshManager* mm, RenderMaterialManager* matm, PhysicsMaterialManager* physMatManager);
 
     bool load(const std::string& filepath, Registry& registry, FBWorldSettings& settings);
     static std::vector<std::string> listScenes(const std::string& directory);
 
 private:
-    MeshManager* meshManager;
-    MaterialManager* materialManager;
-
-    std::unordered_map<std::string, MaterialID> namedMaterials;
-    std::unordered_map<std::string, float>      materialDensities;
-
-    struct Interaction {
-        float restitution     = 0.5f;
-        float staticFriction  = 0.4f;
-        float dynamicFriction = 0.3f;
-    };
-    std::unordered_map<std::string, Interaction> interactions;
-
-    Interaction     findInteraction(const std::string& matA, const std::string& matB) const;
-    static std::string interactionKey(const std::string& a, const std::string& b);
+    MeshManager*            meshManager;
+    RenderMaterialManager*  renderMaterialManager;
+    PhysicsMaterialManager* physMatManager;
 
     Entity buildObject(Registry& registry,
                        const std::string& name,

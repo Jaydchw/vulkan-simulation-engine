@@ -18,6 +18,7 @@ class Registry final {
     transforms.erase(entity);
     meshes.erase(entity);
     materials.erase(entity);
+    physicsMaterials.erase(entity);
     renders.erase(entity);
     lights.erase(entity);
     simulated.erase(entity);
@@ -56,8 +57,11 @@ class Registry final {
   const std::unordered_map<Entity, MeshComponent>& allMeshes() const {
     return meshes;
   }
-  const std::unordered_map<Entity, MaterialComponent>& allMaterials() const {
+  const std::unordered_map<Entity, RenderMaterialComponent>& allMaterials() const {
     return materials;
+  }
+  const std::unordered_map<Entity, PhysicsMaterialComponent>& allPhysicsMaterials() const {
+    return physicsMaterials;
   }
   const std::unordered_map<Entity, RenderComponent>& allRenders() const {
     return renders;
@@ -114,7 +118,8 @@ class Registry final {
   std::unordered_map<Entity, NameComponent> names;
   std::unordered_map<Entity, TransformComponent> transforms;
   std::unordered_map<Entity, MeshComponent> meshes;
-  std::unordered_map<Entity, MaterialComponent> materials;
+  std::unordered_map<Entity, RenderMaterialComponent> materials;
+  std::unordered_map<Entity, PhysicsMaterialComponent> physicsMaterials;
   std::unordered_map<Entity, RenderComponent> renders;
   std::unordered_map<Entity, LightComponent> lights;
   std::unordered_map<Entity, SimulatedComponent> simulated;
@@ -141,9 +146,14 @@ inline void Registry::addComponent<MeshComponent>(Entity entity,
   meshes[entity] = c;
 }
 template <>
-inline void Registry::addComponent<MaterialComponent>(
-    Entity entity, const MaterialComponent& c) {
+inline void Registry::addComponent<RenderMaterialComponent>(
+    Entity entity, const RenderMaterialComponent& c) {
   materials[entity] = c;
+}
+template <>
+inline void Registry::addComponent<PhysicsMaterialComponent>(
+    Entity entity, const PhysicsMaterialComponent& c) {
+  physicsMaterials[entity] = c;
 }
 template <>
 inline void Registry::addComponent<RenderComponent>(Entity entity,
@@ -183,10 +193,16 @@ inline MeshComponent* Registry::getComponent<MeshComponent>(Entity entity) {
   return it != meshes.end() ? &it->second : nullptr;
 }
 template <>
-inline MaterialComponent* Registry::getComponent<MaterialComponent>(
+inline RenderMaterialComponent* Registry::getComponent<RenderMaterialComponent>(
     Entity entity) {
   auto it = materials.find(entity);
   return it != materials.end() ? &it->second : nullptr;
+}
+template <>
+inline PhysicsMaterialComponent* Registry::getComponent<PhysicsMaterialComponent>(
+    Entity entity) {
+  auto it = physicsMaterials.find(entity);
+  return it != physicsMaterials.end() ? &it->second : nullptr;
 }
 template <>
 inline RenderComponent* Registry::getComponent<RenderComponent>(
@@ -231,10 +247,16 @@ inline const MeshComponent* Registry::getComponent<MeshComponent>(
   return it != meshes.end() ? &it->second : nullptr;
 }
 template <>
-inline const MaterialComponent* Registry::getComponent<MaterialComponent>(
+inline const RenderMaterialComponent* Registry::getComponent<RenderMaterialComponent>(
     Entity entity) const {
   auto it = materials.find(entity);
   return it != materials.end() ? &it->second : nullptr;
+}
+template <>
+inline const PhysicsMaterialComponent* Registry::getComponent<PhysicsMaterialComponent>(
+    Entity entity) const {
+  auto it = physicsMaterials.find(entity);
+  return it != physicsMaterials.end() ? &it->second : nullptr;
 }
 template <>
 inline const RenderComponent* Registry::getComponent<RenderComponent>(
@@ -274,8 +296,12 @@ inline bool Registry::hasComponent<MeshComponent>(Entity entity) const {
   return meshes.count(entity) > 0;
 }
 template <>
-inline bool Registry::hasComponent<MaterialComponent>(Entity entity) const {
+inline bool Registry::hasComponent<RenderMaterialComponent>(Entity entity) const {
   return materials.count(entity) > 0;
+}
+template <>
+inline bool Registry::hasComponent<PhysicsMaterialComponent>(Entity entity) const {
+  return physicsMaterials.count(entity) > 0;
 }
 template <>
 inline bool Registry::hasComponent<RenderComponent>(Entity entity) const {

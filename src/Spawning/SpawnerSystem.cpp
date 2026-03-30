@@ -95,9 +95,9 @@ void SpawnerSystem::applyRemoteSpawn(const SpawnEntityPacket& pkt) {
   collider.finite      = pkt.finite != 0;
   registry->addComponent<ColliderComponent>(entity, collider);
 
-  if (pkt.hasRender && pkt.meshId != INVALID_MESH_ID && pkt.materialId != INVALID_MATERIAL_ID) {
+  if (pkt.hasRender && pkt.meshId != INVALID_MESH_ID && pkt.materialId != INVALID_RENDER_MATERIAL_ID) {
     registry->addComponent<MeshComponent>(entity, {pkt.meshId});
-    registry->addComponent<MaterialComponent>(entity, {pkt.materialId});
+    registry->addComponent<RenderMaterialComponent>(entity, {pkt.materialId});
     registry->addComponent<RenderComponent>(entity, {});
   }
 
@@ -188,10 +188,14 @@ Entity SpawnerSystem::doSpawn(Entity spawnerEntity, SpawnerComponent& spawner,
   registry->addComponent<SimulatedComponent>(entity, phys);
   registry->addComponent<ColliderComponent>(entity, tmpl.collider);
 
-  if (tmpl.hasRender && tmpl.meshID != INVALID_MESH_ID && tmpl.materialID != INVALID_MATERIAL_ID) {
+  if (tmpl.hasRender && tmpl.meshID != INVALID_MESH_ID && tmpl.renderMaterialID != INVALID_RENDER_MATERIAL_ID) {
     registry->addComponent<MeshComponent>(entity, {tmpl.meshID});
-    registry->addComponent<MaterialComponent>(entity, {tmpl.materialID});
+    registry->addComponent<RenderMaterialComponent>(entity, {tmpl.renderMaterialID});
     registry->addComponent<RenderComponent>(entity, {});
+  }
+
+  if (tmpl.physicsMaterialID != INVALID_PHYSICS_MATERIAL_ID) {
+    registry->addComponent<PhysicsMaterialComponent>(entity, {tmpl.physicsMaterialID});
   }
 
   return entity;

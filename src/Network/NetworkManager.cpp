@@ -1054,7 +1054,7 @@ void NetworkManager::broadcastSpawnEntity(Entity e) {
   const auto* collider  = registry->getComponent<ColliderComponent>(e);
   const auto* nameComp  = registry->getComponent<NameComponent>(e);
   const auto* mesh      = registry->getComponent<MeshComponent>(e);
-  const auto* material  = registry->getComponent<MaterialComponent>(e);
+  const auto* material  = registry->getComponent<RenderMaterialComponent>(e);
   const auto* render    = registry->getComponent<RenderComponent>(e);
 
   if (!transform || !phys || !collider) return;
@@ -1097,7 +1097,7 @@ void NetworkManager::broadcastSpawnEntity(Entity e) {
 
   pkt.hasRender  = (render && mesh && material) ? 1 : 0;
   pkt.meshId     = mesh     ? mesh->meshID         : 0;
-  pkt.materialId = material ? material->materialID : 0;
+  pkt.materialId = material ? material->renderMaterialID : 0;
 
   if (nameComp) {
     strncpy_s(pkt.name, sizeof(pkt.name), nameComp->name.c_str(), _TRUNCATE);

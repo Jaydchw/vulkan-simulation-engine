@@ -239,10 +239,19 @@ void Interface::createImGuiRenderPass() {
 void Interface::render(SimulationState& simState, SceneSettings& sceneSettings,
 Registry& registry, MainPipeline* mainPipeline,
 PostProcessing* postProcessing,
+const PerformanceMetrics& perfMetrics,
 NetworkManager* networkManager) {
   ImGui_ImplVulkan_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
+
+  // Update performance history ring buffers each frame (even when menu is closed)
+  if (generalSettings.perfProfilingEnabled) {
+    perfFrameHistory[perfHistoryOffset] = perfMetrics.frameTimeMs;
+    perfSimHistory[perfHistoryOffset]   = perfMetrics.simThreadTotalMs;
+    perfHistoryOffset = (perfHistoryOffset + 1) % PERF_HISTORY_SIZE;
+    if (perfHistoryCount < PERF_HISTORY_SIZE) ++perfHistoryCount;
+  }
 
   // Tint the entire UI with the local peer colour when in a multi-peer session.
   // Each instance gets a distinct hue so you can tell windows apart at a glance.
@@ -312,6 +321,10 @@ NetworkManager* networkManager) {
     }
     if (menuItem("Network")) {
       renderNetworkMenu(networkManager, simState);
+      ImGui::EndMenu();
+    }
+    if (menuItem("Performance")) {
+      renderPerformanceMenu(perfMetrics);
       ImGui::EndMenu();
     }
 
@@ -1309,7 +1322,7 @@ void Interface::renderObjectsMenu(Registry& registry) {
       }
 
       if (registry.hasComponent<MeshComponent>(selectedEntity) ||
-          registry.hasComponent<MaterialComponent>(selectedEntity) ||
+          registry.hasComponent<RenderMaterialComponent>(selectedEntity) ||
           registry.hasComponent<RenderComponent>(selectedEntity)) {
         ImGui::Spacing();
         ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.40f));
@@ -1323,10 +1336,10 @@ void Interface::renderObjectsMenu(Registry& registry) {
             registry.getComponent<MeshComponent>(selectedEntity);
         propRow("Mesh", "#%u", meshComp->meshID);
       }
-      if (registry.hasComponent<MaterialComponent>(selectedEntity)) {
+      if (registry.hasComponent<RenderMaterialComponent>(selectedEntity)) {
         const auto* matComp =
-            registry.getComponent<MaterialComponent>(selectedEntity);
-        propRow("Material", "#%u", matComp->materialID);
+            registry.getComponent<RenderMaterialComponent>(selectedEntity);
+        propRow("Material", "#%u", matComp->renderMaterialID);
       }
       if (registry.hasComponent<RenderComponent>(selectedEntity)) {
         auto* renderComp =
@@ -2262,6 +2275,295 @@ void Interface::renderCamerasMenu(Registry& registry) {
       ImGui::SetNextItemWidth(itemW);
       ImGui::SliderFloat("Far", &cam->farPlane, 100.0f, 100000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
     }
+  }
+}
+
+void Interface::renderPerformanceMenu(const PerformanceMetrics& m) {
+  const float s = currentScale;
+  const float menuW = 420.0f * s;
+  ImGui::SetNextItemWidth(menuW);
+
+  // ── Enable / Disable toggle ───────────────────────────────────────────────
+  bool enabled = generalSettings.perfProfilingEnabled;
+  if (ImGui::Checkbox("Enable Profiling", &enabled)) {
+    generalSettings.perfProfilingEnabled = enabled;
+    if (enabled) {
+      // Reset history so stale zeros don't pollute the graphs
+      std::fill(perfFrameHistory, perfFrameHistory + PERF_HISTORY_SIZE, 0.0f);
+      std::fill(perfSimHistory,   perfSimHistory   + PERF_HISTORY_SIZE, 0.0f);
+      perfHistoryOffset = 0;
+      perfHistoryCount  = 0;
+    }
+  }
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Disabling profiling removes all timing overhead\nand stops updating history graphs.");
+
+  if (!enabled) {
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.50f, 0.50f, 0.55f, 1.0f));
+    ImGui::TextWrapped("Profiling is disabled. Enable above to collect metrics.");
+    ImGui::PopStyleColor();
+    return;
+  }
+
+  ImGui::SameLine(0, 16.0f * s);
+  if (ImGui::SmallButton("Reset History")) {
+    std::fill(perfFrameHistory, perfFrameHistory + PERF_HISTORY_SIZE, 0.0f);
+    std::fill(perfSimHistory,   perfSimHistory   + PERF_HISTORY_SIZE, 0.0f);
+    perfHistoryOffset = 0;
+    perfHistoryCount  = 0;
+  }
+
+  const ImVec4 kDim    = {0.55f, 0.58f, 0.68f, 1.0f};
+  const ImVec4 kVal    = {0.90f, 0.92f, 1.00f, 1.0f};
+  const ImVec4 kGood   = {0.30f, 0.90f, 0.35f, 1.0f};
+  const ImVec4 kWarn   = {0.95f, 0.85f, 0.20f, 1.0f};
+  const ImVec4 kBad    = {0.95f, 0.35f, 0.25f, 1.0f};
+  const ImVec4 kAccent = {0.50f, 0.62f, 0.88f, 1.0f};
+
+  // Compute min / max from the valid portion of the ring buffer
+  const int validCount = perfHistoryCount;
+  float frameMin = 0.0f, frameMax = 0.0f;
+  float simMin   = 0.0f, simMax   = 0.0f;
+  if (validCount > 0) {
+    frameMin = frameMax = perfFrameHistory[0];
+    simMin   = simMax   = perfSimHistory[0];
+    for (int i = 1; i < validCount; ++i) {
+      if (perfFrameHistory[i] < frameMin) frameMin = perfFrameHistory[i];
+      if (perfFrameHistory[i] > frameMax) frameMax = perfFrameHistory[i];
+      if (perfSimHistory[i]   < simMin)   simMin   = perfSimHistory[i];
+      if (perfSimHistory[i]   > simMax)   simMax   = perfSimHistory[i];
+    }
+  }
+  float frameAvg = 0.0f;
+  if (validCount > 0) {
+    for (int i = 0; i < validCount; ++i) frameAvg += perfFrameHistory[i];
+    frameAvg /= static_cast<float>(validCount);
+  }
+
+  // Helper: colored progress-bar row inside a 3-column table
+  // refMs is the "100%" reference (typically 16.67ms = 60fps budget)
+  auto timingRow = [&](const char* label, float ms, float refMs) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TextColored(kDim, "%s", label);
+    ImGui::TableSetColumnIndex(1);
+    char buf[16]; snprintf(buf, sizeof(buf), "%.2f ms", ms);
+    ImGui::TextColored(kVal, "%s", buf);
+    ImGui::TableSetColumnIndex(2);
+    float frac = (refMs > 0.0f) ? std::min(ms / refMs, 1.0f) : 0.0f;
+    ImVec4 col = (frac < 0.5f) ? kGood : (frac < 0.8f) ? kWarn : kBad;
+    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, col);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.16f, 0.16f, 0.21f, 1.0f));
+    char pbId[40]; snprintf(pbId, sizeof(pbId), "##pb_%s", label);
+    ImGui::ProgressBar(frac, ImVec2(-1.0f, 8.0f * s), "");
+    ImGui::PopStyleColor(2);
+  };
+
+  // ── FRAME TIMING ─────────────────────────────────────────────────────────
+  ImGui::Spacing();
+  ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
+  ImGui::Text("FRAME TIMING");
+  ImGui::PopStyleColor();
+  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+  ImGui::Separator();
+  ImGui::PopStyleColor();
+  ImGui::Spacing();
+
+  const float fps = (m.frameTimeMs > 0.0f) ? (1000.0f / m.frameTimeMs) : 0.0f;
+  ImVec4 fpsCol = (fps >= 60.0f) ? kGood : (fps >= 30.0f) ? kWarn : kBad;
+  ImGui::TextColored(fpsCol, "%.1f FPS", fps);
+  ImGui::SameLine(0, 16.0f * s);
+  ImGui::TextColored(kVal, "%.2f ms/frame", m.frameTimeMs);
+  if (validCount > 0) {
+    ImGui::SameLine(0, 16.0f * s);
+    ImGui::TextColored(kDim, "min %.2f  max %.2f  avg %.2f ms",
+                       frameMin, frameMax, frameAvg);
+  }
+
+  {
+    char overlay[32]; snprintf(overlay, sizeof(overlay), "%.2f ms", m.frameTimeMs);
+    float graphH = 50.0f * s;
+    ImGui::PushStyleColor(ImGuiCol_PlotLines, ImVec4(0.45f, 0.75f, 0.95f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg,   ImVec4(0.10f, 0.10f, 0.14f, 1.0f));
+    ImGui::PlotLines("##frh", perfFrameHistory, PERF_HISTORY_SIZE, perfHistoryOffset,
+                     overlay, 0.0f, std::max(frameMax * 1.2f, 33.33f), ImVec2(menuW, graphH));
+    ImGui::PopStyleColor(2);
+  }
+
+  ImGui::Spacing();
+  if (ImGui::BeginTable("##frameBreak", 3,
+        ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoHostExtendX)) {
+    ImGui::TableSetupColumn("Label",   ImGuiTableColumnFlags_WidthStretch, 2.0f);
+    ImGui::TableSetupColumn("Value",   ImGuiTableColumnFlags_WidthStretch, 1.2f);
+    ImGui::TableSetupColumn("Bar",     ImGuiTableColumnFlags_WidthStretch, 2.5f);
+    constexpr float kRef = 16.67f;  // 60fps budget
+    timingRow("GPU Wait",           m.gpuWaitMs,         kRef);
+    timingRow("Uniform Buffer",     m.uniformBufferMs,   kRef);
+    timingRow("Command Buffer",     m.commandBufferMs,   kRef);
+    timingRow("Interface Render",   m.interfaceRenderMs, kRef);
+    // Total separator row
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TextColored(kDim, "Total");
+    ImGui::TableSetColumnIndex(1);
+    char tot[16]; snprintf(tot, sizeof(tot), "%.2f ms", m.frameTimeMs);
+    ImGui::TextColored(kVal, "%s", tot);
+    ImGui::EndTable();
+  }
+
+  // ── SIMULATION THREAD ────────────────────────────────────────────────────
+  ImGui::Spacing();
+  ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
+  ImGui::Text("SIMULATION THREAD");
+  ImGui::PopStyleColor();
+  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+  ImGui::Separator();
+  ImGui::PopStyleColor();
+  ImGui::Spacing();
+
+  ImGui::TextColored(kVal, "%.2f ms / step", m.simThreadTotalMs);
+  if (validCount > 0) {
+    ImGui::SameLine(0, 16.0f * s);
+    ImGui::TextColored(kDim, "min %.2f  max %.2f ms", simMin, simMax);
+  }
+
+  {
+    char overlay[32]; snprintf(overlay, sizeof(overlay), "%.2f ms", m.simThreadTotalMs);
+    float graphH = 50.0f * s;
+    ImGui::PushStyleColor(ImGuiCol_PlotLines, ImVec4(0.65f, 0.45f, 0.95f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg,   ImVec4(0.10f, 0.10f, 0.14f, 1.0f));
+    ImGui::PlotLines("##simh", perfSimHistory, PERF_HISTORY_SIZE, perfHistoryOffset,
+                     overlay, 0.0f, std::max(simMax * 1.2f, 16.67f), ImVec2(menuW, graphH));
+    ImGui::PopStyleColor(2);
+  }
+
+  ImGui::Spacing();
+  if (ImGui::BeginTable("##simBreak", 3,
+        ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoHostExtendX)) {
+    ImGui::TableSetupColumn("Label",   ImGuiTableColumnFlags_WidthStretch, 2.0f);
+    ImGui::TableSetupColumn("Value",   ImGuiTableColumnFlags_WidthStretch, 1.2f);
+    ImGui::TableSetupColumn("Bar",     ImGuiTableColumnFlags_WidthStretch, 2.5f);
+    const float kSimRef = std::max(m.simThreadTotalMs * 1.05f, 1.0f);
+    timingRow("Physics SyncTo",   m.physSyncToMs,   kSimRef);
+    timingRow("Physics Step",     m.physStepMs,     kSimRef);
+    timingRow("Physics SyncFrom", m.physSyncFromMs, kSimRef);
+    timingRow("Animation",        m.animationMs,    kSimRef);
+    timingRow("Spawner",          m.spawnerMs,      kSimRef);
+    timingRow("Snapshot",         m.snapshotMs,     kSimRef);
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TextColored(kDim, "Total");
+    ImGui::TableSetColumnIndex(1);
+    char tot[16]; snprintf(tot, sizeof(tot), "%.2f ms", m.simThreadTotalMs);
+    ImGui::TextColored(kVal, "%s", tot);
+    ImGui::EndTable();
+  }
+
+  // ── ECS & MEMORY ─────────────────────────────────────────────────────────
+  ImGui::Spacing();
+  ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
+  ImGui::Text("ECS & MEMORY");
+  ImGui::PopStyleColor();
+  ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+  ImGui::Separator();
+  ImGui::PopStyleColor();
+  ImGui::Spacing();
+
+  // Two-column entity count table
+  if (ImGui::BeginTable("##ecsCounts", 4,
+        ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoHostExtendX)) {
+    auto countRow = [&](const char* la, int va, const char* lb, int vb) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0); ImGui::TextColored(kDim, "%s", la);
+      ImGui::TableSetColumnIndex(1); ImGui::TextColored(kVal, "%d", va);
+      ImGui::TableSetColumnIndex(2); ImGui::TextColored(kDim, "%s", lb);
+      ImGui::TableSetColumnIndex(3); ImGui::TextColored(kVal, "%d", vb);
+    };
+    countRow("Entities",         m.entityCount,   "Simulated Bodies", m.simBodyCount);
+    countRow("Colliders",        m.colliderCount, "Lights",           m.lightCount);
+    countRow("Spawners",         m.spawnerCount,  "Animated",         m.animCount);
+    ImGui::EndTable();
+  }
+
+  ImGui::Spacing();
+
+  // Component store size estimates
+  // sizeof approx: Name ~32B, Transform ~40B, Simulated ~64B, Collider ~48B
+  // unordered_map node overhead on MSVC: ~64B per element
+  constexpr size_t kMapOverhead = 64;
+  size_t nameKB      = (size_t)m.entityCount   * (32  + kMapOverhead) / 1024;
+  size_t transformKB = (size_t)m.entityCount   * (40  + kMapOverhead) / 1024;
+  size_t simulatedKB = (size_t)m.simBodyCount  * (64  + kMapOverhead) / 1024;
+  size_t colliderKB  = (size_t)m.colliderCount * (48  + kMapOverhead) / 1024;
+  size_t lightKB     = (size_t)m.lightCount    * (76  + kMapOverhead) / 1024;
+  size_t totalEstKB  = nameKB + transformKB + simulatedKB + colliderKB + lightKB;
+
+  ImGui::TextColored(kDim, "Component Storage (estimated heap)");
+  if (ImGui::BeginTable("##compMem", 4,
+        ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoHostExtendX)) {
+    auto memRow = [&](const char* la, size_t va, const char* lb, size_t vb) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0); ImGui::TextColored(kDim, "%s", la);
+      ImGui::TableSetColumnIndex(1); ImGui::TextColored(kVal, "~%zu KB", va);
+      ImGui::TableSetColumnIndex(2); ImGui::TextColored(kDim, "%s", lb);
+      ImGui::TableSetColumnIndex(3); ImGui::TextColored(kVal, "~%zu KB", vb);
+    };
+    memRow("Names",     nameKB,      "Transforms", transformKB);
+    memRow("Simulated", simulatedKB, "Colliders",  colliderKB);
+    memRow("Lights",    lightKB,     "Total est.", totalEstKB);
+    ImGui::EndTable();
+  }
+
+  ImGui::Spacing();
+  ImGui::TextColored(kDim, "Timeline Snapshots");
+  ImGui::SameLine(0, 8.0f * s);
+  ImGui::TextColored(kVal, "%d", m.snapshotCount);
+  ImGui::SameLine(0, 8.0f * s);
+  if (m.snapshotMemKB < 1024)
+    ImGui::TextColored(kDim, "(~%zu KB)", m.snapshotMemKB);
+  else
+    ImGui::TextColored(kDim, "(~%.1f MB)", static_cast<float>(m.snapshotMemKB) / 1024.0f);
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Estimate: snapshotCount * entityCount * 96 bytes\n"
+                      "(EntitySnapshot = 24B data + ~72B map overhead)");
+
+  // ── NETWORK ──────────────────────────────────────────────────────────────
+  if (m.connectedPeers > 0) {
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
+    ImGui::Text("NETWORK");
+    ImGui::PopStyleColor();
+    ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
+    ImGui::Separator();
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
+
+    ImGui::TextColored(kDim, "Peers");
+    ImGui::SameLine(0, 6.0f * s);
+    ImGui::TextColored(kVal, "%d", m.connectedPeers);
+
+    ImGui::SameLine(0, 20.0f * s);
+    ImGui::TextColored(kDim, "TX");
+    ImGui::SameLine(0, 6.0f * s);
+    ImGui::TextColored(kGood, "%.1f KB/s", m.txKBps);
+
+    ImGui::SameLine(0, 20.0f * s);
+    ImGui::TextColored(kDim, "RX");
+    ImGui::SameLine(0, 6.0f * s);
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%.1f KB/s", m.rxKBps);
+
+    ImGui::Spacing();
+    ImGui::TextColored(kDim, "Packet Loss");
+    ImGui::SameLine(0, 6.0f * s);
+    {
+      ImVec4 lc = (m.packetLoss >= 20.0f) ? kBad : (m.packetLoss > 0.0f) ? kWarn : kGood;
+      ImGui::TextColored(lc, "%.1f%%", m.packetLoss);
+    }
+    ImGui::SameLine(0, 20.0f * s);
+    ImGui::TextColored(kDim, "Sim Latency");
+    ImGui::SameLine(0, 6.0f * s);
+    ImGui::TextColored(kWarn, "+%.0f ms", m.latencyMs);
   }
 }
 

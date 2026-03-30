@@ -8,7 +8,7 @@
 #include "ECS/EntityBuilder.h"
 #include "Util/Debug.h"
 
-WorldParser::WorldParser(MeshManager* mm, MaterialManager* matm,
+WorldParser::WorldParser(MeshManager* mm, RenderMaterialManager* matm,
                          TextureManager* tm)
     : meshManager(mm), materialManager(matm), textureManager(tm) {}
 
@@ -177,7 +177,7 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
 
       if (matName.empty()) continue;
 
-      MaterialBuilder builder;
+      RenderMaterialBuilder builder;
       builder.name(matName);
       builder.albedoColor(albedoColor);
       builder.roughness(roughness);
@@ -417,7 +417,7 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
       if (meshIt != namedMeshes.end()) builder.mesh(meshIt->second);
 
       auto matIt = namedMaterials.find(materialRef);
-      if (matIt != namedMaterials.end()) builder.material(matIt->second);
+      if (matIt != namedMaterials.end()) builder.renderMaterial(matIt->second);
 
       if (hasPhysics) {
         builder.mass(mass);
@@ -509,7 +509,7 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
           auto matIt  = namedMaterials.find(tmplMatRef);
           if (meshIt != namedMeshes.end()) tmpl.meshID = meshIt->second;
           else tmpl.hasRender = false;
-          if (matIt != namedMaterials.end()) tmpl.materialID = matIt->second;
+          if (matIt != namedMaterials.end()) tmpl.renderMaterialID = matIt->second;
           else tmpl.hasRender = false;
 
           if (tmplCollider == "sphere")         tmpl.collider.type = ColliderType::Sphere;

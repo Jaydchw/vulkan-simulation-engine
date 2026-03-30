@@ -17,7 +17,7 @@ struct WorldSettings {
 
 class WorldParser final {
  public:
-  WorldParser(MeshManager* mm, MaterialManager* matm, TextureManager* tm);
+  WorldParser(MeshManager* mm, RenderMaterialManager* matm, TextureManager* tm);
 
   bool load(const std::string& filepath, Registry& registry,
             WorldSettings& settings);
@@ -26,11 +26,11 @@ class WorldParser final {
 
  private:
   MeshManager* meshManager;
-  MaterialManager* materialManager;
+  RenderMaterialManager* materialManager;
   TextureManager* textureManager;
 
   std::unordered_map<std::string, TextureID> namedTextures;
-  std::unordered_map<std::string, MaterialID> namedMaterials;
+  std::unordered_map<std::string, RenderMaterialID> namedMaterials;
   std::unordered_map<std::string, MeshID> namedMeshes;
 
   std::string trim(const std::string& str) const;

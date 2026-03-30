@@ -96,6 +96,38 @@ struct GeneralSettings {
   bool showFPS = true;
   bool showLightGizmos = false;
   bool snapshotsEnabled = true;
+  bool perfProfilingEnabled = true;
+};
+
+struct PerformanceMetrics {
+  float physSyncToMs     = 0.0f;
+  float physStepMs       = 0.0f;
+  float physSyncFromMs   = 0.0f;
+  float animationMs      = 0.0f;
+  float spawnerMs        = 0.0f;
+  float snapshotMs       = 0.0f;
+  float simThreadTotalMs = 0.0f;
+
+  float gpuWaitMs          = 0.0f;
+  float uniformBufferMs    = 0.0f;
+  float commandBufferMs    = 0.0f;
+  float interfaceRenderMs  = 0.0f;
+  float frameTimeMs        = 0.0f;
+
+  int    entityCount   = 0;
+  int    simBodyCount  = 0;
+  int    colliderCount = 0;
+  int    lightCount    = 0;
+  int    spawnerCount  = 0;
+  int    animCount     = 0;
+  int    snapshotCount = 0;
+  size_t snapshotMemKB = 0;
+
+  float txKBps         = 0.0f;
+  float rxKBps         = 0.0f;
+  float packetLoss     = 0.0f;
+  float latencyMs      = 0.0f;
+  int   connectedPeers = 0;
 };
 
 class Interface {
@@ -113,6 +145,7 @@ class Interface {
   void render(SimulationState& simState, SceneSettings& sceneSettings,
               Registry& registry, MainPipeline* mainPipeline,
               PostProcessing* postProcessing,
+              const PerformanceMetrics& perfMetrics,
               NetworkManager* networkManager = nullptr);
 
   void draw(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -121,6 +154,7 @@ class Interface {
   Entity getHoveredEntity() const { return hoveredEntity; }
   bool getShowLightGizmos() const { return generalSettings.showLightGizmos; }
   bool getSnapshotsEnabled() const { return generalSettings.snapshotsEnabled; }
+  bool isPerfProfilingEnabled() const { return generalSettings.perfProfilingEnabled; }
   void clearSelection() { selectedEntity = INVALID_ENTITY; hoveredEntity = INVALID_ENTITY; }
 
   void setWorldLoadCallback(std::function<void(const std::string&)> callback);
@@ -184,6 +218,12 @@ class Interface {
   float speedPopupHeight = 0.0f;
   float bakePopupHeight  = 0.0f;
 
+  static constexpr int PERF_HISTORY_SIZE = 120;
+  float perfFrameHistory[PERF_HISTORY_SIZE] = {};
+  float perfSimHistory[PERF_HISTORY_SIZE]   = {};
+  int   perfHistoryOffset = 0;
+  int   perfHistoryCount  = 0;  // saturates at PERF_HISTORY_SIZE
+
   void createDescriptorPool();
   void createImGuiRenderPass();
   void applyScalePreset();
@@ -197,6 +237,7 @@ class Interface {
   void renderSettingsMenu(SimulationState& simState);
   void renderNetworkMenu(NetworkManager* networkManager, SimulationState& simState);
   void renderCamerasMenu(Registry& registry);
+  void renderPerformanceMenu(const PerformanceMetrics& metrics);
 
   int activeCameraIdx = 0;
   bool cameraSwitchPending = false;

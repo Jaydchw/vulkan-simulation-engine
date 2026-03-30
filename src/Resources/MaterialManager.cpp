@@ -1,4 +1,4 @@
-#include "MaterialManager.h"
+#include "RenderMaterialManager.h"
 
 #include <array>
 #include <fstream>
@@ -7,7 +7,7 @@
 
 #include "Util/Debug.h"
 
-MaterialManager::MaterialManager(RenderDevice* rd, TextureManager* tm)
+RenderMaterialManager::RenderMaterialManager(RenderDevice* rd, TextureManager* tm)
     : mtlFilepathToID(),
       materialNameToID(),
       materials(),
@@ -15,20 +15,20 @@ MaterialManager::MaterialManager(RenderDevice* rd, TextureManager* tm)
       textureManager(tm),
       descriptorSetLayout(VK_NULL_HANDLE),
       descriptorPool(VK_NULL_HANDLE),
-      defaultMaterialID(0) {
-  Debug::log(Debug::Category::MATERIALS, "MaterialManager: Constructor called");
+      defaultRenderMaterialID(0) {
+  Debug::log(Debug::Category::MATERIALS, "RenderMaterialManager: Constructor called");
 }
 
-MaterialManager::~MaterialManager() {
+RenderMaterialManager::~RenderMaterialManager() {
   try {
     Debug::log(Debug::Category::MATERIALS,
-               "MaterialManager: Destructor called");
+               "RenderMaterialManager: Destructor called");
     cleanup();
   } catch (...) {
   }
 }
 
-void MaterialManager::init(VkDescriptorSetLayout descSetLayout) {
+void RenderMaterialManager::init(VkDescriptorSetLayout descSetLayout) {
   descriptorSetLayout = descSetLayout;
 
   const VkDevice device = renderDevice->getDevice();
@@ -50,7 +50,7 @@ void MaterialManager::init(VkDescriptorSetLayout descSetLayout) {
   createDefaultMaterial();
 }
 
-void MaterialManager::resetForNewScene() {
+void RenderMaterialManager::resetForNewScene() {
   const VkDevice device = renderDevice->getDevice();
   for (auto& mat : materials) {
     VkBuffer buf = mat->getPropertiesBuffer();
@@ -65,17 +65,17 @@ void MaterialManager::resetForNewScene() {
   createDefaultMaterial();
 }
 
-MaterialID MaterialManager::registerMaterial(Material* material) {
+RenderMaterialID RenderMaterialManager::registerMaterial(RenderMaterial* material) {
   if (!material) {
     Debug::log(Debug::Category::MATERIALS,
-               "MaterialManager: Attempted to register null material!");
-    return defaultMaterialID;
+               "RenderMaterialManager: Attempted to register null material!");
+    return defaultRenderMaterialID;
   }
 
   std::string matName;
   material->getName(matName);
   Debug::log(Debug::Category::MATERIALS,
-             "MaterialManager: Registering material '", matName, "'");
+             "RenderMaterialManager: Registering material '", matName, "'");
 
   if (material->getAlbedoMap() == INVALID_TEXTURE_ID) {
     material->setAlbedoMap(textureManager->getDefaultWhite());
@@ -115,18 +115,18 @@ MaterialID MaterialManager::registerMaterial(Material* material) {
 
   createDescriptorSet(material);
 
-  const MaterialID id = static_cast<MaterialID>(materials.size());
-  materials.push_back(std::unique_ptr<Material>(material));
+  const RenderMaterialID id = static_cast<RenderMaterialID>(materials.size());
+  materials.push_back(std::unique_ptr<RenderMaterial>(material));
 
   Debug::log(Debug::Category::MATERIALS,
-             "MaterialManager: Successfully registered material '", matName,
+             "RenderMaterialManager: Successfully registered material '", matName,
              "' with ID: ", id);
 
   return id;
 }
 
-MaterialID MaterialManager::registerMaterial(const MaterialBuilder& builder) {
-  Material* const material = builder.build();
+RenderMaterialID RenderMaterialManager::registerMaterial(const RenderMaterialBuilder& builder) {
+  RenderMaterial* const material = builder.build();
 
   std::string path;
 
@@ -162,45 +162,45 @@ MaterialID MaterialManager::registerMaterial(const MaterialBuilder& builder) {
   return registerMaterial(material);
 }
 
-Material* MaterialManager::getMaterial(MaterialID id) {
+RenderMaterial* RenderMaterialManager::getMaterial(RenderMaterialID id) {
   if (id >= materials.size()) {
     Debug::log(Debug::Category::MATERIALS,
-               "MaterialManager: Invalid material ID requested: ", id,
+               "RenderMaterialManager: Invalid material ID requested: ", id,
                ", returning default");
-    return materials[defaultMaterialID].get();
+    return materials[defaultRenderMaterialID].get();
   }
   return materials[id].get();
 }
 
-const Material* MaterialManager::getMaterial(MaterialID id) const {
+const RenderMaterial* RenderMaterialManager::getMaterial(RenderMaterialID id) const {
   if (id >= materials.size()) {
     Debug::log(Debug::Category::MATERIALS,
-               "MaterialManager: Invalid material ID requested (const): ", id,
+               "RenderMaterialManager: Invalid material ID requested (const): ", id,
                ", returning default");
-    return materials[defaultMaterialID].get();
+    return materials[defaultRenderMaterialID].get();
   }
   return materials[id].get();
 }
 
-void MaterialManager::updateMaterialProperties(
-    MaterialID id, const MaterialProperties& properties) {
+void RenderMaterialManager::updateRenderMaterialProperties(
+    RenderMaterialID id, const RenderMaterialProperties& properties) {
   if (id >= materials.size()) {
     Debug::log(Debug::Category::MATERIALS,
-               "MaterialManager: Cannot update invalid material ID: ", id);
+               "RenderMaterialManager: Cannot update invalid material ID: ", id);
     return;
   }
 
   Debug::log(Debug::Category::MATERIALS,
-             "MaterialManager: Updating properties for material ID: ", id);
+             "RenderMaterialManager: Updating properties for material ID: ", id);
 
   materials[id]->setProperties(properties);
   updateDescriptorSet(materials[id].get());
 
   Debug::log(Debug::Category::MATERIALS,
-             "MaterialManager: Successfully updated material ID: ", id);
+             "RenderMaterialManager: Successfully updated material ID: ", id);
 }
 
-void MaterialManager::cleanup() {
+void RenderMaterialManager::cleanup() {
   const VkDevice device = renderDevice->getDevice();
   for (auto& mat : materials) {
     VkBuffer buf = mat->getPropertiesBuffer();
@@ -215,15 +215,15 @@ void MaterialManager::cleanup() {
   }
 }
 
-void MaterialManager::createDescriptorSet(Material* material) const {
+void RenderMaterialManager::createDescriptorSet(RenderMaterial* material) const {
   std::string matName;
   material->getName(matName);
   Debug::log(Debug::Category::MATERIALS,
-             "MaterialManager: Creating descriptor set for material '", matName,
+             "RenderMaterialManager: Creating descriptor set for material '", matName,
              "'");
 
   const VkDevice device = renderDevice->getDevice();
-  const VkDeviceSize bufferSize = sizeof(MaterialProperties);
+  const VkDeviceSize bufferSize = sizeof(RenderMaterialProperties);
 
   VkBuffer buffer;
   VkDeviceMemory memory;
@@ -238,7 +238,7 @@ void MaterialManager::createDescriptorSet(Material* material) const {
 
   void* data;
   vkMapMemory(device, memory, 0, bufferSize, 0, &data);
-  MaterialProperties props;
+  RenderMaterialProperties props;
   material->getProperties(props);
   memcpy(data, &props, bufferSize);
   vkUnmapMemory(device, memory);
@@ -265,13 +265,13 @@ void MaterialManager::createDescriptorSet(Material* material) const {
   Debug::log(Debug::Category::MATERIALS, "  - Updated descriptor set bindings");
 }
 
-void MaterialManager::updateDescriptorSet(const Material* material) const {
+void RenderMaterialManager::updateDescriptorSet(const RenderMaterial* material) const {
   const VkDevice device = renderDevice->getDevice();
 
   VkDescriptorBufferInfo bufferInfo{};
   bufferInfo.buffer = material->getPropertiesBuffer();
   bufferInfo.offset = 0;
-  bufferInfo.range = sizeof(MaterialProperties);
+  bufferInfo.range = sizeof(RenderMaterialProperties);
 
   std::array<VkDescriptorImageInfo, 7> imageInfos{};
 
@@ -335,30 +335,30 @@ void MaterialManager::updateDescriptorSet(const Material* material) const {
                          descriptorWrites.data(), 0, nullptr);
 }
 
-MaterialID MaterialManager::loadFromMTL(const std::string& mtlFilepath) {
+RenderMaterialID RenderMaterialManager::loadFromMTL(const std::string& mtlFilepath) {
   auto it = mtlFilepathToID.find(mtlFilepath);
   if (it != mtlFilepathToID.end()) {
     Debug::log(Debug::Category::MATERIALS,
-               "MaterialManager: MTL already loaded: ", mtlFilepath,
+               "RenderMaterialManager: MTL already loaded: ", mtlFilepath,
                " (ID: ", it->second, ")");
     return it->second;
   }
 
   Debug::log(Debug::Category::MATERIALS,
-             "MaterialManager: Loading MTL: ", mtlFilepath);
+             "RenderMaterialManager: Loading MTL: ", mtlFilepath);
 
   std::ifstream file(mtlFilepath);
   if (!file.is_open()) {
     Debug::log(Debug::Category::MATERIALS,
-               "MaterialManager: Failed to open MTL file: ", mtlFilepath,
+               "RenderMaterialManager: Failed to open MTL file: ", mtlFilepath,
                ", returning default material");
-    return defaultMaterialID;
+    return defaultRenderMaterialID;
   }
 
   std::string baseDir =
       mtlFilepath.substr(0, mtlFilepath.find_last_of("/\\") + 1);
-  std::vector<MaterialID> loadedMaterials;
-  Material* currentMaterial = nullptr;
+  std::vector<RenderMaterialID> loadedMaterials;
+  RenderMaterial* currentMaterial = nullptr;
   std::string currentMaterialName;
 
   auto extractFilename = [](const std::string& path) {
@@ -366,7 +366,7 @@ MaterialID MaterialManager::loadFromMTL(const std::string& mtlFilepath) {
     return (lastSlash != std::string::npos) ? path.substr(lastSlash + 1) : path;
   };
 
-  auto finalizeMaterial = [&](Material* mat, const std::string& name) {
+  auto finalizeMaterial = [&](RenderMaterial* mat, const std::string& name) {
     if (!mat) return;
     auto nameIt = materialNameToID.find(name);
     if (nameIt != materialNameToID.end()) {
@@ -375,7 +375,7 @@ MaterialID MaterialManager::loadFromMTL(const std::string& mtlFilepath) {
       loadedMaterials.push_back(nameIt->second);
       delete mat;
     } else {
-      const MaterialID id = registerMaterial(mat);
+      const RenderMaterialID id = registerMaterial(mat);
       loadedMaterials.push_back(id);
       materialNameToID[name] = id;
       mtlFilepathToID[mtlFilepath + "::" + name] = id;
@@ -402,13 +402,13 @@ MaterialID MaterialManager::loadFromMTL(const std::string& mtlFilepath) {
         continue;
       }
 
-      currentMaterial = new Material();
+      currentMaterial = new RenderMaterial();
       currentMaterial->setName(currentMaterialName);
       Debug::log(Debug::Category::MATERIALS,
                  "  - Found material: ", currentMaterialName);
 
     } else if (currentMaterial) {
-      MaterialProperties props;
+      RenderMaterialProperties props;
       currentMaterial->getProperties(props);
 
       if (prefix == "Ns") {
@@ -501,7 +501,7 @@ MaterialID MaterialManager::loadFromMTL(const std::string& mtlFilepath) {
 
   if (!loadedMaterials.empty()) {
     mtlFilepathToID[mtlFilepath] = loadedMaterials[0];
-    Debug::log(Debug::Category::MATERIALS, "MaterialManager: Loaded ",
+    Debug::log(Debug::Category::MATERIALS, "RenderMaterialManager: Loaded ",
                loadedMaterials.size(),
                " materials from MTL, returning first material ID: ",
                loadedMaterials[0]);
@@ -509,27 +509,27 @@ MaterialID MaterialManager::loadFromMTL(const std::string& mtlFilepath) {
   }
 
   Debug::log(Debug::Category::MATERIALS,
-             "MaterialManager: No materials found in MTL, returning default");
-  return defaultMaterialID;
+             "RenderMaterialManager: No materials found in MTL, returning default");
+  return defaultRenderMaterialID;
 }
 
-void MaterialManager::createDefaultMaterial() {
+void RenderMaterialManager::createDefaultMaterial() {
   Debug::log(Debug::Category::MATERIALS,
-             "MaterialManager: Creating default material");
+             "RenderMaterialManager: Creating default material");
 
-  Material* const defaultMat = new Material();
+  RenderMaterial* const defaultMat = new RenderMaterial();
   defaultMat->setName("Default Material");
 
-  MaterialProperties props;
+  RenderMaterialProperties props;
   defaultMat->getProperties(props);
   props.albedoColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
   props.roughness = 0.5f;
   props.metallic = 0.0f;
   defaultMat->setProperties(props);
 
-  defaultMaterialID = registerMaterial(defaultMat);
+  defaultRenderMaterialID = registerMaterial(defaultMat);
 
   Debug::log(
       Debug::Category::MATERIALS,
-      "MaterialManager: Default material created with ID: ", defaultMaterialID);
+      "RenderMaterialManager: Default material created with ID: ", defaultRenderMaterialID);
 }
