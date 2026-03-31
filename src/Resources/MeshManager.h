@@ -48,14 +48,14 @@ class Mesh final {
   VkBuffer getVertexBuffer() const { return vertexBuffer; }
   void setVertexBuffer(VkBuffer buffer) { vertexBuffer = buffer; }
 
-  VkDeviceMemory getVertexBufferMemory() const { return vertexBufferMemory; }
-  void setVertexBufferMemory(VkDeviceMemory mem) { vertexBufferMemory = mem; }
+  VmaAllocation getVertexBufferAllocation() const { return vertexBufferAllocation; }
+  void setVertexBufferAllocation(VmaAllocation alloc) { vertexBufferAllocation = alloc; }
 
   VkBuffer getIndexBuffer() const { return indexBuffer; }
   void setIndexBuffer(VkBuffer buffer) { indexBuffer = buffer; }
 
-  VkDeviceMemory getIndexBufferMemory() const { return indexBufferMemory; }
-  void setIndexBufferMemory(VkDeviceMemory mem) { indexBufferMemory = mem; }
+  VmaAllocation getIndexBufferAllocation() const { return indexBufferAllocation; }
+  void setIndexBufferAllocation(VmaAllocation alloc) { indexBufferAllocation = alloc; }
 
   MeshType getType() const { return type; }
   void setType(MeshType t) { type = t; }
@@ -73,9 +73,9 @@ class Mesh final {
   std::string name;
 
   VkBuffer vertexBuffer = VK_NULL_HANDLE;
-  VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
+  VmaAllocation vertexBufferAllocation = VK_NULL_HANDLE;
   VkBuffer indexBuffer = VK_NULL_HANDLE;
-  VkDeviceMemory indexBufferMemory = VK_NULL_HANDLE;
+  VmaAllocation indexBufferAllocation = VK_NULL_HANDLE;
 
   MeshType type = MeshType::Custom;
   float boundingRadius = 0.0f;

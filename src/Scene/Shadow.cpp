@@ -37,49 +37,15 @@ uint32_t ShadowSystem::createShadowMap(uint32_t lightIndex) {
   shadowMap.lightIndex = lightIndex;
   shadowMap.lightSpaceMatrix = glm::mat4(1.0f);
 
-  VkImageCreateInfo imageInfo{};
-  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.extent.width = SHADOW_MAP_SIZE;
-  imageInfo.extent.height = SHADOW_MAP_SIZE;
-  imageInfo.extent.depth = 1;
-  imageInfo.mipLevels = 1;
-  imageInfo.arrayLayers = 1;
-  imageInfo.format = VK_FORMAT_D32_SFLOAT;
-  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  imageInfo.usage =
-      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-  if (vkCreateImage(renderDevice->getDevice(), &imageInfo, nullptr,
-                    &shadowMap.image) != VK_SUCCESS) {
-    throw std::runtime_error("Failed to create shadow map image!");
-  }
+  renderDevice->createImage(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 1,
+                            VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                            shadowMap.image, shadowMap.allocation);
 
   Debug::log(Debug::Category::SHADOWS, "  - Created shadow map image (",
-             SHADOW_MAP_SIZE, "x", SHADOW_MAP_SIZE, ")");
-
-  VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(renderDevice->getDevice(), shadowMap.image,
-                               &memRequirements);
-
-  VkMemoryAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = renderDevice->findMemoryType(
-      memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-  if (vkAllocateMemory(renderDevice->getDevice(), &allocInfo, nullptr,
-                       &shadowMap.memory) != VK_SUCCESS) {
-    throw std::runtime_error("Failed to allocate shadow map memory!");
-  }
-
-  vkBindImageMemory(renderDevice->getDevice(), shadowMap.image,
-                    shadowMap.memory, 0);
-
-  Debug::log(Debug::Category::SHADOWS, "  - Allocated shadow map memory");
+             SHADOW_MAP_SIZE, "x", SHADOW_MAP_SIZE, ") via VMA");
 
   VkImageViewCreateInfo viewInfo{};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -143,10 +109,8 @@ void ShadowSystem::resetShadowMaps() {
       vkDestroySampler(renderDevice->getDevice(), shadowMap.sampler, nullptr);
     if (shadowMap.imageView != VK_NULL_HANDLE)
       vkDestroyImageView(renderDevice->getDevice(), shadowMap.imageView, nullptr);
-    if (shadowMap.image != VK_NULL_HANDLE)
-      vkDestroyImage(renderDevice->getDevice(), shadowMap.image, nullptr);
-    if (shadowMap.memory != VK_NULL_HANDLE)
-      vkFreeMemory(renderDevice->getDevice(), shadowMap.memory, nullptr);
+    if (shadowMap.image != VK_NULL_HANDLE && shadowMap.allocation != VK_NULL_HANDLE)
+      renderDevice->destroyImage(shadowMap.image, shadowMap.allocation);
   }
   shadowMaps.clear();
   updateDescriptorSet();
@@ -159,36 +123,21 @@ void ShadowSystem::cleanup() {
              shadowMaps.size(), " shadow maps");
 
   for (auto& shadowMap : shadowMaps) {
-    if (shadowMap.sampler != VK_NULL_HANDLE) {
+    if (shadowMap.sampler != VK_NULL_HANDLE)
       vkDestroySampler(renderDevice->getDevice(), shadowMap.sampler, nullptr);
-    }
-    if (shadowMap.imageView != VK_NULL_HANDLE) {
-      vkDestroyImageView(renderDevice->getDevice(), shadowMap.imageView,
-                         nullptr);
-    }
-    if (shadowMap.image != VK_NULL_HANDLE) {
-      vkDestroyImage(renderDevice->getDevice(), shadowMap.image, nullptr);
-    }
-    if (shadowMap.memory != VK_NULL_HANDLE) {
-      vkFreeMemory(renderDevice->getDevice(), shadowMap.memory, nullptr);
-    }
+    if (shadowMap.imageView != VK_NULL_HANDLE)
+      vkDestroyImageView(renderDevice->getDevice(), shadowMap.imageView, nullptr);
+    if (shadowMap.image != VK_NULL_HANDLE && shadowMap.allocation != VK_NULL_HANDLE)
+      renderDevice->destroyImage(shadowMap.image, shadowMap.allocation);
   }
   shadowMaps.clear();
 
-  if (dummyShadowMap.sampler != VK_NULL_HANDLE) {
-    vkDestroySampler(renderDevice->getDevice(), dummyShadowMap.sampler,
-                     nullptr);
-  }
-  if (dummyShadowMap.imageView != VK_NULL_HANDLE) {
-    vkDestroyImageView(renderDevice->getDevice(), dummyShadowMap.imageView,
-                       nullptr);
-  }
-  if (dummyShadowMap.image != VK_NULL_HANDLE) {
-    vkDestroyImage(renderDevice->getDevice(), dummyShadowMap.image, nullptr);
-  }
-  if (dummyShadowMap.memory != VK_NULL_HANDLE) {
-    vkFreeMemory(renderDevice->getDevice(), dummyShadowMap.memory, nullptr);
-  }
+  if (dummyShadowMap.sampler != VK_NULL_HANDLE)
+    vkDestroySampler(renderDevice->getDevice(), dummyShadowMap.sampler, nullptr);
+  if (dummyShadowMap.imageView != VK_NULL_HANDLE)
+    vkDestroyImageView(renderDevice->getDevice(), dummyShadowMap.imageView, nullptr);
+  if (dummyShadowMap.image != VK_NULL_HANDLE && dummyShadowMap.allocation != VK_NULL_HANDLE)
+    renderDevice->destroyImage(dummyShadowMap.image, dummyShadowMap.allocation);
 
   if (shadowDescriptorSet != VK_NULL_HANDLE) {
     shadowDescriptorSet = VK_NULL_HANDLE;
@@ -311,44 +260,12 @@ void ShadowSystem::createDummyShadowMap() {
   Debug::log(Debug::Category::SHADOWS,
              "ShadowSystem: Creating dummy shadow map");
 
-  VkImageCreateInfo imageInfo{};
-  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.extent.width = 1;
-  imageInfo.extent.height = 1;
-  imageInfo.extent.depth = 1;
-  imageInfo.mipLevels = 1;
-  imageInfo.arrayLayers = 1;
-  imageInfo.format = VK_FORMAT_D32_SFLOAT;
-  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  imageInfo.usage =
-      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-  if (vkCreateImage(renderDevice->getDevice(), &imageInfo, nullptr,
-                    &dummyShadowMap.image) != VK_SUCCESS) {
-    throw std::runtime_error("Failed to create dummy shadow map image!");
-  }
-
-  VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(renderDevice->getDevice(), dummyShadowMap.image,
-                               &memRequirements);
-
-  VkMemoryAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = renderDevice->findMemoryType(
-      memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-  if (vkAllocateMemory(renderDevice->getDevice(), &allocInfo, nullptr,
-                       &dummyShadowMap.memory) != VK_SUCCESS) {
-    throw std::runtime_error("Failed to allocate dummy shadow map memory!");
-  }
-
-  vkBindImageMemory(renderDevice->getDevice(), dummyShadowMap.image,
-                    dummyShadowMap.memory, 0);
+  renderDevice->createImage(1, 1, 1,
+                            VK_FORMAT_D32_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                            dummyShadowMap.image, dummyShadowMap.allocation);
 
   VkImageViewCreateInfo viewInfo{};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;

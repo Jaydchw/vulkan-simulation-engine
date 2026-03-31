@@ -6,7 +6,7 @@ LightManager::LightManager(RenderDevice* rd)
       renderDevice(rd),
       lightBufferMapped(nullptr),
       lightBuffer(VK_NULL_HANDLE),
-      lightBufferMemory(VK_NULL_HANDLE),
+      lightBufferAllocation(VK_NULL_HANDLE),
       lightCount(0) {
   Debug::log(Debug::Category::LIGHTS, "LightManager: Constructor called");
 }
@@ -52,7 +52,7 @@ void LightManager::syncLights() {
   shadowSystem->getShadowMaps(shadowMaps);
 
   size_t idx = 0;
-  for (auto& [entity, light] : lightMap) {
+  for (const auto& [entity, light] : lightMap) {
     if (idx >= static_cast<size_t>(lightCount)) {
       auto* lc = registry->getComponent<LightComponent>(entity);
       if (lc && lc->castsShadows && shadowMaps.size() < MAX_SHADOW_CASTERS) {
@@ -143,12 +143,9 @@ void LightManager::cleanup() {
   }
 
   if (lightBuffer != VK_NULL_HANDLE) {
-    vkDestroyBuffer(renderDevice->getDevice(), lightBuffer, nullptr);
+    renderDevice->destroyBuffer(lightBuffer, lightBufferAllocation);
     lightBuffer = VK_NULL_HANDLE;
-  }
-  if (lightBufferMemory != VK_NULL_HANDLE) {
-    vkFreeMemory(renderDevice->getDevice(), lightBufferMemory, nullptr);
-    lightBufferMemory = VK_NULL_HANDLE;
+    lightBufferAllocation = VK_NULL_HANDLE;
   }
 
   Debug::log(Debug::Category::LIGHTS, "LightManager: Cleanup complete");
@@ -221,10 +218,8 @@ void LightManager::createLightBuffer() {
   renderDevice->createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                             lightBuffer, lightBufferMemory);
-
-  vkMapMemory(renderDevice->getDevice(), lightBufferMemory, 0, bufferSize, 0,
-              &lightBufferMapped);
+                             lightBuffer, lightBufferAllocation,
+                             &lightBufferMapped);
 
   LightBufferObject lbo{};
   lbo.numLights = 0;

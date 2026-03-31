@@ -12,7 +12,7 @@
 void SpawnerSystem::update(float deltaTime) {
   if (!registry) return;
 
-  for (auto& [spawnerEntity, spawner] : registry->allSpawnersMut()) {
+  for (auto&& [spawnerEntity, spawner] : registry->allSpawnersMut()) {
     if (!spawner.enabled) continue;
     if (networkManager && !networkManager->isLocallyOwned(spawnerEntity)) continue;
 
@@ -220,15 +220,13 @@ glm::vec3 SpawnerSystem::randomInBox(const glm::vec3& min, const glm::vec3& max)
 void SpawnerSystem::assignSpawnedOwner(Entity entity, SpawnerComponent& spawner) {
   if (!networkManager) return;
 
-  if (spawner.ownerMode == 0) {
-    // Auto: redistribute all simulated objects across active peers.
-    networkManager->assignObjectOwnership();
-    return;
-  }
-
   uint8_t peerID;
-  if (spawner.ownerMode == 5) {
-    // SEQUENTIAL: round-robin across currently active peers.
+  if (spawner.ownerMode == 0 || spawner.ownerMode == 5) {
+    // Auto (0) and SEQUENTIAL (5): round-robin across currently active peers.
+    // ownerMode 0 previously called assignObjectOwnership() on every spawn,
+    // causing O(n²) behaviour (full O(n) redistribution per spawn = n²total).
+    // Full redistribution is still triggered by Application on peer connect/drop,
+    // which is the only time global rebalancing is actually needed.
     auto activePeers = networkManager->getActivePeerIDs();
     if (activePeers.empty()) {
       peerID = networkManager->getLocalPeerID();

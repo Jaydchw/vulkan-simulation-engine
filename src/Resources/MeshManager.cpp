@@ -588,17 +588,12 @@ const Mesh* MeshManager::getMesh(MeshID id) const {
 }
 
 void MeshManager::cleanup() {
-  const VkDevice device = renderDevice->getDevice();
   for (auto& mesh : meshes) {
     if (mesh) {
       if (mesh->getVertexBuffer() != VK_NULL_HANDLE)
-        vkDestroyBuffer(device, mesh->getVertexBuffer(), nullptr);
-      if (mesh->getVertexBufferMemory() != VK_NULL_HANDLE)
-        vkFreeMemory(device, mesh->getVertexBufferMemory(), nullptr);
+        renderDevice->destroyBuffer(mesh->getVertexBuffer(), mesh->getVertexBufferAllocation());
       if (mesh->getIndexBuffer() != VK_NULL_HANDLE)
-        vkDestroyBuffer(device, mesh->getIndexBuffer(), nullptr);
-      if (mesh->getIndexBufferMemory() != VK_NULL_HANDLE)
-        vkFreeMemory(device, mesh->getIndexBufferMemory(), nullptr);
+        renderDevice->destroyBuffer(mesh->getIndexBuffer(), mesh->getIndexBufferAllocation());
     }
   }
   meshes.clear();
@@ -612,7 +607,6 @@ MeshID MeshManager::registerMesh(Mesh* mesh) {
 }
 
 void MeshManager::createBuffers(Mesh* mesh) const {
-  const VkDevice device = renderDevice->getDevice();
   std::vector<Vertex> vertices;
   mesh->getVertices(vertices);
   std::vector<uint16_t> indices;
@@ -620,29 +614,25 @@ void MeshManager::createBuffers(Mesh* mesh) const {
 
   const VkDeviceSize vertexBufferSize = sizeof(Vertex) * vertices.size();
   VkBuffer stagingBuffer;
-  VkDeviceMemory stagingBufferMemory;
+  VmaAllocation stagingAlloc;
+  void* data;
 
   renderDevice->createBuffer(vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                             stagingBuffer, stagingBufferMemory);
-
-  void* data;
-  vkMapMemory(device, stagingBufferMemory, 0, vertexBufferSize, 0, &data);
+                             stagingBuffer, stagingAlloc, &data);
   memcpy(data, vertices.data(), static_cast<size_t>(vertexBufferSize));
-  vkUnmapMemory(device, stagingBufferMemory);
 
   VkBuffer vBuf;
-  VkDeviceMemory vMem;
+  VmaAllocation vAlloc;
   renderDevice->createBuffer(
       vertexBufferSize,
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vBuf, vMem);
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vBuf, vAlloc);
   renderDevice->copyBuffer(stagingBuffer, vBuf, vertexBufferSize);
-  vkDestroyBuffer(device, stagingBuffer, nullptr);
-  vkFreeMemory(device, stagingBufferMemory, nullptr);
+  renderDevice->destroyBuffer(stagingBuffer, stagingAlloc);
   mesh->setVertexBuffer(vBuf);
-  mesh->setVertexBufferMemory(vMem);
+  mesh->setVertexBufferAllocation(vAlloc);
 
   // Compute bounding sphere radius (max distance of any vertex from origin)
   float maxDist = 0.0f;
@@ -653,23 +643,19 @@ void MeshManager::createBuffers(Mesh* mesh) const {
   renderDevice->createBuffer(indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                             stagingBuffer, stagingBufferMemory);
-
-  vkMapMemory(device, stagingBufferMemory, 0, indexBufferSize, 0, &data);
+                             stagingBuffer, stagingAlloc, &data);
   memcpy(data, indices.data(), static_cast<size_t>(indexBufferSize));
-  vkUnmapMemory(device, stagingBufferMemory);
 
   VkBuffer iBuf;
-  VkDeviceMemory iMem;
+  VmaAllocation iAlloc;
   renderDevice->createBuffer(
       indexBufferSize,
       VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, iBuf, iMem);
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, iBuf, iAlloc);
   renderDevice->copyBuffer(stagingBuffer, iBuf, indexBufferSize);
-  vkDestroyBuffer(device, stagingBuffer, nullptr);
-  vkFreeMemory(device, stagingBufferMemory, nullptr);
+  renderDevice->destroyBuffer(stagingBuffer, stagingAlloc);
   mesh->setIndexBuffer(iBuf);
-  mesh->setIndexBufferMemory(iMem);
+  mesh->setIndexBufferAllocation(iAlloc);
 }
 
 void MeshManager::createDefaultMeshes() { defaultCubeID = createCube(1.0f); }

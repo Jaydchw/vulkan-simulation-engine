@@ -101,63 +101,32 @@ void Skybox::loadCubemap(const std::string& folderPath) {
   Debug::log(Debug::Category::SKYBOX, "  Cubemap dimensions: ", width, "x",
              height);
 
-  VkImageCreateInfo imageInfo{};
-  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.extent.width = static_cast<uint32_t>(width);
-  imageInfo.extent.height = static_cast<uint32_t>(height);
-  imageInfo.extent.depth = 1;
-  imageInfo.mipLevels = 1;
-  imageInfo.arrayLayers = 6;
-  imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  imageInfo.usage =
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-
-  if (vkCreateImage(device, &imageInfo, nullptr, &cubemapImage) != VK_SUCCESS) {
-    for (auto* const data : faceData) stbi_image_free(data);
-    throw std::runtime_error("Failed to create cubemap image!");
-  }
-
-  VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(device, cubemapImage, &memRequirements);
-
-  VkMemoryAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = findMemoryType(
-      memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-  if (vkAllocateMemory(device, &allocInfo, nullptr, &cubemapImageMemory) !=
-      VK_SUCCESS) {
-    for (auto* const data : faceData) stbi_image_free(data);
-    throw std::runtime_error("Failed to allocate cubemap image memory!");
-  }
-
-  vkBindImageMemory(device, cubemapImage, cubemapImageMemory, 0);
+  renderDevice->createImage(static_cast<uint32_t>(width),
+                            static_cast<uint32_t>(height), 1,
+                            VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                                VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                            cubemapImage, cubemapAllocation,
+                            /*arrayLayers=*/6, VK_SAMPLE_COUNT_1_BIT,
+                            VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
 
   const VkDeviceSize layerSize = width * height * 4;
   const VkDeviceSize totalSize = layerSize * 6;
 
+  VmaAllocation stagingAlloc;
+  void* mappedData = nullptr;
   VkBuffer stagingBuffer;
-  VkDeviceMemory stagingBufferMemory;
   renderDevice->createBuffer(totalSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                             stagingBuffer, stagingBufferMemory);
+                             stagingBuffer, stagingAlloc, &mappedData);
 
-  void* mappedData = nullptr;
-  vkMapMemory(device, stagingBufferMemory, 0, totalSize, 0, &mappedData);
   for (size_t i = 0; i < 6; i++) {
     memcpy(static_cast<char*>(mappedData) + (layerSize * i), faceData[i],
            layerSize);
     stbi_image_free(faceData[i]);
   }
-  vkUnmapMemory(device, stagingBufferMemory);
 
   const VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
@@ -211,8 +180,7 @@ void Skybox::loadCubemap(const std::string& folderPath) {
 
   endSingleTimeCommands(commandBuffer);
 
-  vkDestroyBuffer(device, stagingBuffer, nullptr);
-  vkFreeMemory(device, stagingBufferMemory, nullptr);
+  renderDevice->destroyBuffer(stagingBuffer, stagingAlloc);
 
   Debug::log(Debug::Category::SKYBOX, "Skybox: Cubemap loaded successfully");
 }
@@ -257,41 +225,19 @@ void Skybox::createSkyboxGeometry() {
   }
 
   const VkDeviceSize vertexBufferSize = sizeof(glm::vec3) * vertices.size();
+  void* vertexData = nullptr;
   renderDevice->createBuffer(vertexBufferSize,
                              VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                             vertexBuffer, vertexBufferMemory);
-
-  void* vertexData = nullptr;
-  vkMapMemory(device, vertexBufferMemory, 0, vertexBufferSize, 0, &vertexData);
+                             vertexBuffer, vertexBufferAlloc, &vertexData);
   memcpy(vertexData, vertices.data(), vertexBufferSize);
-  vkUnmapMemory(device, vertexBufferMemory);
 
   const VkDeviceSize indexBufferSize = sizeof(uint16_t) * indices.size();
+  void* indexData = nullptr;
   renderDevice->createBuffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                             indexBuffer, indexBufferMemory);
-
-  void* indexData = nullptr;
-  vkMapMemory(device, indexBufferMemory, 0, indexBufferSize, 0, &indexData);
+                             indexBuffer, indexBufferAlloc, &indexData);
   memcpy(indexData, indices.data(), indexBufferSize);
-  vkUnmapMemory(device, indexBufferMemory);
-}
-
-uint32_t Skybox::findMemoryType(uint32_t typeFilter,
-                                VkMemoryPropertyFlags properties) const {
-  VkPhysicalDeviceMemoryProperties memProperties;
-  vkGetPhysicalDeviceMemoryProperties(renderDevice->getPhysicalDevice(),
-                                      &memProperties);
-
-  for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-    if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags &
-                                    properties) == properties) {
-      return i;
-    }
-  }
-
-  throw std::runtime_error("Failed to find suitable memory type!");
 }

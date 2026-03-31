@@ -151,6 +151,7 @@
     <ClCompile Include="src\Scene\LightManager.cpp" />
     <ClCompile Include="src\Rendering\PostProcessing.cpp" />
     <ClCompile Include="src\Rendering\RenderDevice.cpp" />
+    <ClCompile Include="src\Rendering\vma_impl.cpp" />
     <ClCompile Include="src\Resources\TextureManager.cpp" />
     <ClCompile Include="src\Scene\Shadow.cpp" />
     <ClCompile Include="src\Scene\Skybox.cpp" />

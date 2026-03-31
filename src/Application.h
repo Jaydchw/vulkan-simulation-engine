@@ -3,8 +3,8 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <winsock2.h>
 #include <vulkan/vulkan.h>
+#include <winsock2.h>
 
 #include <array>
 #include <atomic>
@@ -12,30 +12,30 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
+#include "Animation/AnimationSystem.h"
+#include "ECS/Registry.h"
+#include "Network/NetworkManager.h"
+#include "Physics/PhysicsMaterialManager.h"
+#include "Physics/PhysicsSystem.h"
 #include "Rendering/MainPipeline.h"
 #include "Rendering/PostProcessing.h"
 #include "Rendering/PushConstants.h"
 #include "Rendering/RenderDevice.h"
 #include "Rendering/Window.h"
-#include "Resources/RenderMaterialManager.h"
 #include "Resources/MeshManager.h"
-#include "ECS/Registry.h"
+#include "Resources/RenderMaterialManager.h"
 #include "Resources/TextureManager.h"
 #include "Scene/LightManager.h"
-#include "Animation/AnimationSystem.h"
-#include "Physics/PhysicsSystem.h"
 #include "Spawning/SpawnerSystem.h"
 #include "Timeline/TimelineSystem.h"
-#include "Network/NetworkManager.h"
+#include "Util/FBSceneLoader.h"
 #include "Util/Input.h"
 #include "Util/Interface.h"
 #include "Util/WorldParser.h"
-#include "Physics/PhysicsMaterialManager.h"
-#include "Util/FBSceneLoader.h"
-
-#include <unordered_map>
+#include "vma/vk_mem_alloc.h"
 
 constexpr uint32_t WIDTH = 1280;
 constexpr uint32_t HEIGHT = 720;
@@ -61,6 +61,21 @@ struct InstanceData {
   alignas(4) uint32_t cameraLayer;
   alignas(4) float highlightIntensity;
   alignas(4) float _pad;
+};
+
+// Per-entity snapshot captured from the registry under simMutex each frame.
+// recordCommandBuffer reads exclusively from this flat array so the mutex
+// does not need to be held during the (expensive) shadow + main render passes.
+struct RenderProxy {
+  Entity entity = INVALID_ENTITY;
+  glm::mat4 modelMatrix = glm::mat4(1.0f);
+  glm::vec3 position = glm::vec3(0.0f);
+  float maxAbsScale = 1.0f;
+  MeshID meshID = INVALID_MESH_ID;
+  RenderMaterialID matID = INVALID_RENDER_MATERIAL_ID;
+  bool visible = false;
+  uint32_t layerMask = 0xFFFFFFFF;
+  bool isPointLight = false;  // non-Sun light (for gizmo overlay)
 };
 
 struct PipelineConfigInfo {
@@ -90,7 +105,9 @@ class Application final {
   void run();
 
   MeshManager* getMeshManager() const { return meshManager.get(); }
-  RenderMaterialManager* getRenderMaterialManager() const { return materialManager.get(); }
+  RenderMaterialManager* getRenderMaterialManager() const {
+    return materialManager.get();
+  }
   TextureManager* getTextureManager() const { return textureManager.get(); }
   LightManager* getLightManager() const { return lightManager.get(); }
 
@@ -100,12 +117,12 @@ class Application final {
  private:
   Registry* registry = nullptr;
   std::unique_ptr<Registry> ownedRegistry;
-  std::unique_ptr<WorldParser>   worldParser;
+  std::unique_ptr<WorldParser> worldParser;
   std::unique_ptr<FBSceneLoader> fbSceneLoader;
   std::vector<VkImage> swapChainImages;
   std::vector<VkImageView> swapChainImageViews;
   std::vector<VkBuffer> uniformBuffers;
-  std::vector<VkDeviceMemory> uniformBuffersMemory;
+  std::vector<VmaAllocation> uniformBuffersAlloc;
   std::vector<void*> uniformBuffersMapped;
   std::vector<VkDescriptorSet> descriptorSets;
   std::vector<VkCommandBuffer> commandBuffers;
@@ -152,7 +169,8 @@ class Application final {
   std::unique_ptr<NetworkManager> networkManager;
 
   // --- Owner-colour material system ---
-  // Created once; IDs indexed [0]=peer1(red) [1]=peer2(green) [2]=peer3(blue) [3]=peer4(yellow)
+  // Created once; IDs indexed [0]=peer1(red) [1]=peer2(green) [2]=peer3(blue)
+  // [3]=peer4(yellow)
   std::array<RenderMaterialID, 4> ownerRenderMaterialIDs = {
       INVALID_RENDER_MATERIAL_ID, INVALID_RENDER_MATERIAL_ID,
       INVALID_RENDER_MATERIAL_ID, INVALID_RENDER_MATERIAL_ID};
@@ -178,19 +196,20 @@ class Application final {
 
   // Per-frame instance SSBO: holds InstanceData for all batched draw calls
   std::vector<VkBuffer> instanceSSBOBuffers;
-  std::vector<VkDeviceMemory> instanceSSBOMemory;
+  std::vector<VmaAllocation> instanceSSBOAlloc;
   std::vector<void*> instanceSSBOMapped;
   std::vector<VkDescriptorSet> instanceDescriptorSets;
   VkDescriptorPool instanceDescriptorPool = VK_NULL_HANDLE;
 
-  // Combined view-projection matrix stored after Y-flip; used for frustum culling
+  // Combined view-projection matrix stored after Y-flip; used for frustum
+  // culling
   glm::mat4 currentViewProj = glm::mat4(1.0f);
   VkBuffer vertexBuffer = VK_NULL_HANDLE;
-  VkDeviceMemory vertexBufferMemory = VK_NULL_HANDLE;
+  VmaAllocation vertexBufferAlloc = VK_NULL_HANDLE;
   VkBuffer indexBuffer = VK_NULL_HANDLE;
-  VkDeviceMemory indexBufferMemory = VK_NULL_HANDLE;
+  VmaAllocation indexBufferAlloc = VK_NULL_HANDLE;
   VkImage depthImage = VK_NULL_HANDLE;
-  VkDeviceMemory depthImageMemory = VK_NULL_HANDLE;
+  VmaAllocation depthImageAlloc = VK_NULL_HANDLE;
   VkImageView depthImageView = VK_NULL_HANDLE;
   VkPipeline shadowPipeline = VK_NULL_HANDLE;
   VkPipelineLayout shadowPipelineLayout = VK_NULL_HANDLE;
@@ -212,32 +231,34 @@ class Application final {
 
   bool applyingRemoteSceneLoad = false;
 
-  bool    lastBroadcastPaused        = false;
-  float   lastBroadcastTimeSpeed     = 1.0f;
-  int32_t lastBroadcastHistoryIndex  = -1;
-  bool    lastBroadcastReversePlay   = false;
-  bool    lastBroadcastColorByOwner  = false;
+  bool lastBroadcastPaused = false;
+  float lastBroadcastTimeSpeed = 1.0f;
+  int32_t lastBroadcastHistoryIndex = -1;
+  bool lastBroadcastReversePlay = false;
+  bool lastBroadcastColorByOwner = false;
 
-  float networkSendAccumulator   = 0.0f;
-  bool  ownershipHighLossMode    = false; // hysteresis flag for packet-loss isolation
+  float networkSendAccumulator = 0.0f;
+  bool ownershipHighLossMode =
+      false;  // hysteresis flag for packet-loss isolation
 
   MeshID gizmoMeshID = INVALID_MESH_ID;
   RenderMaterialID gizmoRenderMaterialID = INVALID_RENDER_MATERIAL_ID;
 
-  // Shadow area is recomputed every N frames; Y is never adjusted (no vertical drift).
+  // Shadow area is recomputed every N frames; Y is never adjusted (no vertical
+  // drift).
   static constexpr int SHADOW_UPDATE_INTERVAL = 200;
-  int   shadowUpdateFrameCounter  = 0;
-  float cachedShadowSceneRadius   = 100.0f;
+  int shadowUpdateFrameCounter = 0;
+  float cachedShadowSceneRadius = 100.0f;
   glm::vec3 cachedShadowSceneCenter = glm::vec3(0.0f);
 
   // ── Simulation thread (pinned to Core 4+) ────────────────────────────────
   // Runs physicsSystem::update() independently of the render loop so that
   // simulation Hz and render Hz can be set to different values via ImGui.
-  std::thread         simulationThread;
-  std::atomic<bool>   simRunning{false};
+  std::thread simulationThread;
+  std::atomic<bool> simRunning{false};
   // Guards shared registry/simState access between the simulation thread
   // (writes physics state) and the render thread (reads for draw calls).
-  std::mutex          simMutex;
+  std::mutex simMutex;
 
   struct SimPerfAtomics {
     std::atomic<float> physSyncToMs{0.0f};
@@ -249,9 +270,9 @@ class Application final {
     std::atomic<float> totalMs{0.0f};
   } simPerf;
 
-  float perfGpuWaitMs         = 0.0f;
-  float perfUniformBufferMs   = 0.0f;
-  float perfCommandBufferMs   = 0.0f;
+  float perfGpuWaitMs = 0.0f;
+  float perfUniformBufferMs = 0.0f;
+  float perfCommandBufferMs = 0.0f;
   float perfInterfaceRenderMs = 0.0f;
 
   void initWindow();
@@ -288,6 +309,12 @@ class Application final {
   void updateCameraController(float deltaTime);
   glm::mat4 getActiveCameraViewMatrix() const;
   glm::vec3 getActiveCameraPosition() const;
+
+  // ── Render proxy ─────────────────────────────────────────────────────────
+  // Flat snapshot of per-entity render state.  Populated once per frame under
+  // simMutex so that recordCommandBuffer can run without holding the lock.
+  std::vector<RenderProxy> renderProxies;
+  void buildRenderProxies();
 
   void createDefaultPipelineConfig(PipelineConfigInfo& configInfo) const;
   void setupRenderingCreateInfo(

@@ -54,9 +54,8 @@ void RenderMaterialManager::resetForNewScene() {
   const VkDevice device = renderDevice->getDevice();
   for (auto& mat : materials) {
     VkBuffer buf = mat->getPropertiesBuffer();
-    VkDeviceMemory mem = mat->getPropertiesBufferMemory();
-    if (buf != VK_NULL_HANDLE) vkDestroyBuffer(device, buf, nullptr);
-    if (mem != VK_NULL_HANDLE) vkFreeMemory(device, mem, nullptr);
+    VmaAllocation alloc = mat->getPropertiesBufferAllocation();
+    if (buf != VK_NULL_HANDLE) renderDevice->destroyBuffer(buf, alloc);
   }
   materials.clear();
   mtlFilepathToID.clear();
@@ -204,9 +203,8 @@ void RenderMaterialManager::cleanup() {
   const VkDevice device = renderDevice->getDevice();
   for (auto& mat : materials) {
     VkBuffer buf = mat->getPropertiesBuffer();
-    VkDeviceMemory mem = mat->getPropertiesBufferMemory();
-    if (buf != VK_NULL_HANDLE) vkDestroyBuffer(device, buf, nullptr);
-    if (mem != VK_NULL_HANDLE) vkFreeMemory(device, mem, nullptr);
+    VmaAllocation alloc = mat->getPropertiesBufferAllocation();
+    if (buf != VK_NULL_HANDLE) renderDevice->destroyBuffer(buf, alloc);
   }
   materials.clear();
   if (descriptorPool != VK_NULL_HANDLE) {
@@ -226,22 +224,20 @@ void RenderMaterialManager::createDescriptorSet(RenderMaterial* material) const 
   const VkDeviceSize bufferSize = sizeof(RenderMaterialProperties);
 
   VkBuffer buffer;
-  VkDeviceMemory memory;
+  VmaAllocation allocation;
+  void* data;
 
   renderDevice->createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                             buffer, memory);
+                             buffer, allocation, &data);
 
   material->setPropertiesBuffer(buffer);
-  material->setPropertiesBufferMemory(memory);
+  material->setPropertiesBufferAllocation(allocation);
 
-  void* data;
-  vkMapMemory(device, memory, 0, bufferSize, 0, &data);
   RenderMaterialProperties props;
   material->getProperties(props);
   memcpy(data, &props, bufferSize);
-  vkUnmapMemory(device, memory);
 
   Debug::log(Debug::Category::MATERIALS, "  - Created properties buffer");
 

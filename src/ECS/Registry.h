@@ -1,11 +1,17 @@
 #pragma once
 #include <optional>
-#include <unordered_map>
 #include <vector>
 
+#include "ECS/ComponentStore.h"
 #include "ECS/Components.h"
 #include "ECS/Entity.h"
 #include <PhysicsObject.h>
+
+// All component types except PhysicsObject (which is managed separately by the
+// physics library) are stored in a ComponentStore<T> — a dense parallel-vector
+// structure that keeps each component type contiguous in memory.  This ensures
+// that hot iteration paths (renderer, physics, timeline) read linearly from
+// cache-friendly memory rather than chasing scattered heap-node pointers.
 
 class Registry final {
  public:
@@ -48,333 +54,111 @@ class Registry final {
   template <typename T>
   bool hasComponent(Entity entity) const;
 
-  const std::unordered_map<Entity, NameComponent>& allNames() const {
-    return names;
+  // Returns a reference to the flat entity list; no heap allocation per call.
+  const std::vector<Entity>& getEntities() const {
+    return names.entityList();
   }
-  const std::unordered_map<Entity, TransformComponent>& allTransforms() const {
-    return transforms;
-  }
-  const std::unordered_map<Entity, MeshComponent>& allMeshes() const {
-    return meshes;
-  }
-  const std::unordered_map<Entity, RenderMaterialComponent>& allMaterials() const {
-    return materials;
-  }
-  const std::unordered_map<Entity, PhysicsMaterialComponent>& allPhysicsMaterials() const {
-    return physicsMaterials;
-  }
-  const std::unordered_map<Entity, RenderComponent>& allRenders() const {
-    return renders;
-  }
-  const std::unordered_map<Entity, LightComponent>& allLights() const {
-    return lights;
-  }
-  const std::unordered_map<Entity, SimulatedComponent>& allSimulated() const {
-    return simulated;
-  }
-  std::unordered_map<Entity, SimulatedComponent>& allSimulatedMut() {
-    return simulated;
-  }
-  const std::unordered_map<Entity, ColliderComponent>& allColliders() const {
-    return colliders;
-  }
-  const std::unordered_map<Entity, SpawnerComponent>& allSpawners() const {
-    return spawners;
-  }
-  std::unordered_map<Entity, SpawnerComponent>& allSpawnersMut() {
-    return spawners;
-  }
-  const std::unordered_map<Entity, CameraComponent>& allCameras() const {
-    return cameras;
-  }
-  const std::unordered_map<Entity, AnimationComponent>& allAnimations() const {
-    return animations;
-  }
-  std::unordered_map<Entity, AnimationComponent>& allAnimationsMut() {
-    return animations;
-  }
+
+  // ── Per-component-type accessors ────────────────────────────────────────────
+  const ComponentStore<NameComponent>&             allNames()             const { return names; }
+  const ComponentStore<TransformComponent>&        allTransforms()        const { return transforms; }
+  const ComponentStore<MeshComponent>&             allMeshes()            const { return meshes; }
+  const ComponentStore<RenderMaterialComponent>&   allMaterials()         const { return materials; }
+  const ComponentStore<PhysicsMaterialComponent>&  allPhysicsMaterials()  const { return physicsMaterials; }
+  const ComponentStore<RenderComponent>&           allRenders()           const { return renders; }
+  const ComponentStore<LightComponent>&            allLights()            const { return lights; }
+  const ComponentStore<SimulatedComponent>&        allSimulated()         const { return simulated; }
+  ComponentStore<SimulatedComponent>&              allSimulatedMut()            { return simulated; }
+  const ComponentStore<ColliderComponent>&         allColliders()         const { return colliders; }
+  const ComponentStore<SpawnerComponent>&          allSpawners()          const { return spawners; }
+  ComponentStore<SpawnerComponent>&                allSpawnersMut()             { return spawners; }
+  const ComponentStore<CameraComponent>&           allCameras()           const { return cameras; }
+  const ComponentStore<AnimationComponent>&        allAnimations()        const { return animations; }
+  ComponentStore<AnimationComponent>&              allAnimationsMut()           { return animations; }
+
   jphys::PhysicsObject& getPhysicsObject(Entity entity) {
     return physicsObjects[entity];
   }
   const jphys::PhysicsObject& getPhysicsObject(Entity entity) const {
     return physicsObjects.at(entity);
   }
-  // Returns nullptr if the entity has no PhysicsObject (safe alternative to at())
   jphys::PhysicsObject* getPhysicsObjectPtr(Entity entity) {
     auto it = physicsObjects.find(entity);
     return it != physicsObjects.end() ? &it->second : nullptr;
   }
 
-  std::vector<Entity> getEntities() const {
-    std::vector<Entity> result;
-    for (const auto& [entity, _] : names) {
-      result.push_back(entity);
-    }
-    return result;
-  }
-
  private:
   Entity nextEntity;
-  std::unordered_map<Entity, NameComponent> names;
-  std::unordered_map<Entity, TransformComponent> transforms;
-  std::unordered_map<Entity, MeshComponent> meshes;
-  std::unordered_map<Entity, RenderMaterialComponent> materials;
-  std::unordered_map<Entity, PhysicsMaterialComponent> physicsMaterials;
-  std::unordered_map<Entity, RenderComponent> renders;
-  std::unordered_map<Entity, LightComponent> lights;
-  std::unordered_map<Entity, SimulatedComponent> simulated;
-  std::unordered_map<Entity, ColliderComponent> colliders;
+
+  ComponentStore<NameComponent>            names;
+  ComponentStore<TransformComponent>       transforms;
+  ComponentStore<MeshComponent>            meshes;
+  ComponentStore<RenderMaterialComponent>  materials;
+  ComponentStore<PhysicsMaterialComponent> physicsMaterials;
+  ComponentStore<RenderComponent>          renders;
+  ComponentStore<LightComponent>           lights;
+  ComponentStore<SimulatedComponent>       simulated;
+  ComponentStore<ColliderComponent>        colliders;
+  ComponentStore<SpawnerComponent>         spawners;
+  ComponentStore<CameraComponent>          cameras;
+  ComponentStore<AnimationComponent>       animations;
+
+  // PhysicsObject is owned by the physics library and uses a map directly.
   std::unordered_map<Entity, jphys::PhysicsObject> physicsObjects;
-  std::unordered_map<Entity, SpawnerComponent>   spawners;
-  std::unordered_map<Entity, CameraComponent>    cameras;
-  std::unordered_map<Entity, AnimationComponent> animations;
 };
 
-template <>
-inline void Registry::addComponent<NameComponent>(Entity entity,
-                                                  const NameComponent& c) {
-  names[entity] = c;
-}
-template <>
-inline void Registry::addComponent<TransformComponent>(
-    Entity entity, const TransformComponent& c) {
-  transforms[entity] = c;
-}
-template <>
-inline void Registry::addComponent<MeshComponent>(Entity entity,
-                                                  const MeshComponent& c) {
-  meshes[entity] = c;
-}
-template <>
-inline void Registry::addComponent<RenderMaterialComponent>(
-    Entity entity, const RenderMaterialComponent& c) {
-  materials[entity] = c;
-}
-template <>
-inline void Registry::addComponent<PhysicsMaterialComponent>(
-    Entity entity, const PhysicsMaterialComponent& c) {
-  physicsMaterials[entity] = c;
-}
-template <>
-inline void Registry::addComponent<RenderComponent>(Entity entity,
-                                                    const RenderComponent& c) {
-  renders[entity] = c;
-}
-template <>
-inline void Registry::addComponent<LightComponent>(Entity entity,
-                                                   const LightComponent& c) {
-  lights[entity] = c;
-}
-template <>
-inline void Registry::addComponent<SimulatedComponent>(
-    Entity entity, const SimulatedComponent& c) {
-  simulated[entity] = c;
-}
-template <>
-inline void Registry::addComponent<ColliderComponent>(
-    Entity entity, const ColliderComponent& c) {
-  colliders[entity] = c;
-}
+// ── addComponent specialisations ────────────────────────────────────────────
+template <> inline void Registry::addComponent<NameComponent>(Entity e, const NameComponent& c)            { names.insert(e, c); }
+template <> inline void Registry::addComponent<TransformComponent>(Entity e, const TransformComponent& c)  { transforms.insert(e, c); }
+template <> inline void Registry::addComponent<MeshComponent>(Entity e, const MeshComponent& c)            { meshes.insert(e, c); }
+template <> inline void Registry::addComponent<RenderMaterialComponent>(Entity e, const RenderMaterialComponent& c) { materials.insert(e, c); }
+template <> inline void Registry::addComponent<PhysicsMaterialComponent>(Entity e, const PhysicsMaterialComponent& c) { physicsMaterials.insert(e, c); }
+template <> inline void Registry::addComponent<RenderComponent>(Entity e, const RenderComponent& c)        { renders.insert(e, c); }
+template <> inline void Registry::addComponent<LightComponent>(Entity e, const LightComponent& c)          { lights.insert(e, c); }
+template <> inline void Registry::addComponent<SimulatedComponent>(Entity e, const SimulatedComponent& c)  { simulated.insert(e, c); }
+template <> inline void Registry::addComponent<ColliderComponent>(Entity e, const ColliderComponent& c)    { colliders.insert(e, c); }
+template <> inline void Registry::addComponent<SpawnerComponent>(Entity e, const SpawnerComponent& c)      { spawners.insert(e, c); }
+template <> inline void Registry::addComponent<CameraComponent>(Entity e, const CameraComponent& c)        { cameras.insert(e, c); }
+template <> inline void Registry::addComponent<AnimationComponent>(Entity e, const AnimationComponent& c)  { animations.insert(e, c); }
 
-template <>
-inline NameComponent* Registry::getComponent<NameComponent>(Entity entity) {
-  auto it = names.find(entity);
-  return it != names.end() ? &it->second : nullptr;
-}
-template <>
-inline TransformComponent* Registry::getComponent<TransformComponent>(
-    Entity entity) {
-  auto it = transforms.find(entity);
-  return it != transforms.end() ? &it->second : nullptr;
-}
-template <>
-inline MeshComponent* Registry::getComponent<MeshComponent>(Entity entity) {
-  auto it = meshes.find(entity);
-  return it != meshes.end() ? &it->second : nullptr;
-}
-template <>
-inline RenderMaterialComponent* Registry::getComponent<RenderMaterialComponent>(
-    Entity entity) {
-  auto it = materials.find(entity);
-  return it != materials.end() ? &it->second : nullptr;
-}
-template <>
-inline PhysicsMaterialComponent* Registry::getComponent<PhysicsMaterialComponent>(
-    Entity entity) {
-  auto it = physicsMaterials.find(entity);
-  return it != physicsMaterials.end() ? &it->second : nullptr;
-}
-template <>
-inline RenderComponent* Registry::getComponent<RenderComponent>(
-    Entity entity) {
-  auto it = renders.find(entity);
-  return it != renders.end() ? &it->second : nullptr;
-}
-template <>
-inline LightComponent* Registry::getComponent<LightComponent>(Entity entity) {
-  auto it = lights.find(entity);
-  return it != lights.end() ? &it->second : nullptr;
-}
-template <>
-inline SimulatedComponent* Registry::getComponent<SimulatedComponent>(
-    Entity entity) {
-  auto it = simulated.find(entity);
-  return it != simulated.end() ? &it->second : nullptr;
-}
-template <>
-inline ColliderComponent* Registry::getComponent<ColliderComponent>(
-    Entity entity) {
-  auto it = colliders.find(entity);
-  return it != colliders.end() ? &it->second : nullptr;
-}
+// ── getComponent specialisations ────────────────────────────────────────────
+template <> inline NameComponent*            Registry::getComponent<NameComponent>(Entity e)            { return names.get(e); }
+template <> inline TransformComponent*       Registry::getComponent<TransformComponent>(Entity e)       { return transforms.get(e); }
+template <> inline MeshComponent*            Registry::getComponent<MeshComponent>(Entity e)            { return meshes.get(e); }
+template <> inline RenderMaterialComponent*  Registry::getComponent<RenderMaterialComponent>(Entity e)  { return materials.get(e); }
+template <> inline PhysicsMaterialComponent* Registry::getComponent<PhysicsMaterialComponent>(Entity e) { return physicsMaterials.get(e); }
+template <> inline RenderComponent*          Registry::getComponent<RenderComponent>(Entity e)          { return renders.get(e); }
+template <> inline LightComponent*           Registry::getComponent<LightComponent>(Entity e)           { return lights.get(e); }
+template <> inline SimulatedComponent*       Registry::getComponent<SimulatedComponent>(Entity e)       { return simulated.get(e); }
+template <> inline ColliderComponent*        Registry::getComponent<ColliderComponent>(Entity e)        { return colliders.get(e); }
+template <> inline SpawnerComponent*         Registry::getComponent<SpawnerComponent>(Entity e)         { return spawners.get(e); }
+template <> inline CameraComponent*          Registry::getComponent<CameraComponent>(Entity e)          { return cameras.get(e); }
+template <> inline AnimationComponent*       Registry::getComponent<AnimationComponent>(Entity e)       { return animations.get(e); }
 
-template <>
-inline const NameComponent* Registry::getComponent<NameComponent>(
-    Entity entity) const {
-  auto it = names.find(entity);
-  return it != names.end() ? &it->second : nullptr;
-}
-template <>
-inline const TransformComponent* Registry::getComponent<TransformComponent>(
-    Entity entity) const {
-  auto it = transforms.find(entity);
-  return it != transforms.end() ? &it->second : nullptr;
-}
-template <>
-inline const MeshComponent* Registry::getComponent<MeshComponent>(
-    Entity entity) const {
-  auto it = meshes.find(entity);
-  return it != meshes.end() ? &it->second : nullptr;
-}
-template <>
-inline const RenderMaterialComponent* Registry::getComponent<RenderMaterialComponent>(
-    Entity entity) const {
-  auto it = materials.find(entity);
-  return it != materials.end() ? &it->second : nullptr;
-}
-template <>
-inline const PhysicsMaterialComponent* Registry::getComponent<PhysicsMaterialComponent>(
-    Entity entity) const {
-  auto it = physicsMaterials.find(entity);
-  return it != physicsMaterials.end() ? &it->second : nullptr;
-}
-template <>
-inline const RenderComponent* Registry::getComponent<RenderComponent>(
-    Entity entity) const {
-  auto it = renders.find(entity);
-  return it != renders.end() ? &it->second : nullptr;
-}
-template <>
-inline const LightComponent* Registry::getComponent<LightComponent>(
-    Entity entity) const {
-  auto it = lights.find(entity);
-  return it != lights.end() ? &it->second : nullptr;
-}
-template <>
-inline const SimulatedComponent* Registry::getComponent<SimulatedComponent>(
-    Entity entity) const {
-  auto it = simulated.find(entity);
-  return it != simulated.end() ? &it->second : nullptr;
-}
-template <>
-inline const ColliderComponent* Registry::getComponent<ColliderComponent>(
-    Entity entity) const {
-  auto it = colliders.find(entity);
-  return it != colliders.end() ? &it->second : nullptr;
-}
+// ── const getComponent specialisations ──────────────────────────────────────
+template <> inline const NameComponent*            Registry::getComponent<NameComponent>(Entity e)            const { return names.get(e); }
+template <> inline const TransformComponent*       Registry::getComponent<TransformComponent>(Entity e)       const { return transforms.get(e); }
+template <> inline const MeshComponent*            Registry::getComponent<MeshComponent>(Entity e)            const { return meshes.get(e); }
+template <> inline const RenderMaterialComponent*  Registry::getComponent<RenderMaterialComponent>(Entity e)  const { return materials.get(e); }
+template <> inline const PhysicsMaterialComponent* Registry::getComponent<PhysicsMaterialComponent>(Entity e) const { return physicsMaterials.get(e); }
+template <> inline const RenderComponent*          Registry::getComponent<RenderComponent>(Entity e)          const { return renders.get(e); }
+template <> inline const LightComponent*           Registry::getComponent<LightComponent>(Entity e)           const { return lights.get(e); }
+template <> inline const SimulatedComponent*       Registry::getComponent<SimulatedComponent>(Entity e)       const { return simulated.get(e); }
+template <> inline const ColliderComponent*        Registry::getComponent<ColliderComponent>(Entity e)        const { return colliders.get(e); }
+template <> inline const SpawnerComponent*         Registry::getComponent<SpawnerComponent>(Entity e)         const { return spawners.get(e); }
+template <> inline const CameraComponent*          Registry::getComponent<CameraComponent>(Entity e)          const { return cameras.get(e); }
+template <> inline const AnimationComponent*       Registry::getComponent<AnimationComponent>(Entity e)       const { return animations.get(e); }
 
-template <>
-inline bool Registry::hasComponent<NameComponent>(Entity entity) const {
-  return names.count(entity) > 0;
-}
-template <>
-inline bool Registry::hasComponent<TransformComponent>(Entity entity) const {
-  return transforms.count(entity) > 0;
-}
-template <>
-inline bool Registry::hasComponent<MeshComponent>(Entity entity) const {
-  return meshes.count(entity) > 0;
-}
-template <>
-inline bool Registry::hasComponent<RenderMaterialComponent>(Entity entity) const {
-  return materials.count(entity) > 0;
-}
-template <>
-inline bool Registry::hasComponent<PhysicsMaterialComponent>(Entity entity) const {
-  return physicsMaterials.count(entity) > 0;
-}
-template <>
-inline bool Registry::hasComponent<RenderComponent>(Entity entity) const {
-  return renders.count(entity) > 0;
-}
-template <>
-inline bool Registry::hasComponent<LightComponent>(Entity entity) const {
-  return lights.count(entity) > 0;
-}
-template <>
-inline bool Registry::hasComponent<SimulatedComponent>(Entity entity) const {
-  return simulated.count(entity) > 0;
-}
-template <>
-inline bool Registry::hasComponent<ColliderComponent>(Entity entity) const {
-  return colliders.count(entity) > 0;
-}
-
-template <>
-inline void Registry::addComponent<SpawnerComponent>(Entity entity,
-                                                     const SpawnerComponent& c) {
-  spawners[entity] = c;
-}
-template <>
-inline SpawnerComponent* Registry::getComponent<SpawnerComponent>(Entity entity) {
-  auto it = spawners.find(entity);
-  return it != spawners.end() ? &it->second : nullptr;
-}
-template <>
-inline const SpawnerComponent* Registry::getComponent<SpawnerComponent>(
-    Entity entity) const {
-  auto it = spawners.find(entity);
-  return it != spawners.end() ? &it->second : nullptr;
-}
-template <>
-inline bool Registry::hasComponent<SpawnerComponent>(Entity entity) const {
-  return spawners.count(entity) > 0;
-}
-
-template <>
-inline void Registry::addComponent<CameraComponent>(Entity entity, const CameraComponent& c) {
-  cameras[entity] = c;
-}
-template <>
-inline CameraComponent* Registry::getComponent<CameraComponent>(Entity entity) {
-  auto it = cameras.find(entity);
-  return it != cameras.end() ? &it->second : nullptr;
-}
-template <>
-inline const CameraComponent* Registry::getComponent<CameraComponent>(Entity entity) const {
-  auto it = cameras.find(entity);
-  return it != cameras.end() ? &it->second : nullptr;
-}
-template <>
-inline bool Registry::hasComponent<CameraComponent>(Entity entity) const {
-  return cameras.count(entity) > 0;
-}
-
-template <>
-inline void Registry::addComponent<AnimationComponent>(Entity entity, const AnimationComponent& c) {
-  animations[entity] = c;
-}
-template <>
-inline AnimationComponent* Registry::getComponent<AnimationComponent>(Entity entity) {
-  auto it = animations.find(entity);
-  return it != animations.end() ? &it->second : nullptr;
-}
-template <>
-inline const AnimationComponent* Registry::getComponent<AnimationComponent>(Entity entity) const {
-  auto it = animations.find(entity);
-  return it != animations.end() ? &it->second : nullptr;
-}
-template <>
-inline bool Registry::hasComponent<AnimationComponent>(Entity entity) const {
-  return animations.count(entity) > 0;
-}
+// ── hasComponent specialisations ────────────────────────────────────────────
+template <> inline bool Registry::hasComponent<NameComponent>(Entity e)            const { return names.has(e); }
+template <> inline bool Registry::hasComponent<TransformComponent>(Entity e)       const { return transforms.has(e); }
+template <> inline bool Registry::hasComponent<MeshComponent>(Entity e)            const { return meshes.has(e); }
+template <> inline bool Registry::hasComponent<RenderMaterialComponent>(Entity e)  const { return materials.has(e); }
+template <> inline bool Registry::hasComponent<PhysicsMaterialComponent>(Entity e) const { return physicsMaterials.has(e); }
+template <> inline bool Registry::hasComponent<RenderComponent>(Entity e)          const { return renders.has(e); }
+template <> inline bool Registry::hasComponent<LightComponent>(Entity e)           const { return lights.has(e); }
+template <> inline bool Registry::hasComponent<SimulatedComponent>(Entity e)       const { return simulated.has(e); }
+template <> inline bool Registry::hasComponent<ColliderComponent>(Entity e)        const { return colliders.has(e); }
+template <> inline bool Registry::hasComponent<SpawnerComponent>(Entity e)         const { return spawners.has(e); }
+template <> inline bool Registry::hasComponent<CameraComponent>(Entity e)          const { return cameras.has(e); }
+template <> inline bool Registry::hasComponent<AnimationComponent>(Entity e)       const { return animations.has(e); }

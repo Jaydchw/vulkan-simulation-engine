@@ -1,5 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include "vma/vk_mem_alloc.h"
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -60,13 +61,13 @@ class PostProcessing final {
   std::vector<VkDescriptorSet> descriptorSets;
   RenderDevice* renderDevice;
   VkDevice device;
-  VkImage offscreenImage = VK_NULL_HANDLE;
-  VkDeviceMemory offscreenImageMemory = VK_NULL_HANDLE;
-  VkImageView offscreenImageView = VK_NULL_HANDLE;
-  VkSampler offscreenSampler = VK_NULL_HANDLE;
-  VkImage depthImage = VK_NULL_HANDLE;
-  VkDeviceMemory depthImageMemory = VK_NULL_HANDLE;
-  VkImageView depthImageView = VK_NULL_HANDLE;
+  VkImage       offscreenImage      = VK_NULL_HANDLE;
+  VmaAllocation offscreenAlloc      = VK_NULL_HANDLE;
+  VkImageView   offscreenImageView  = VK_NULL_HANDLE;
+  VkSampler     offscreenSampler    = VK_NULL_HANDLE;
+  VkImage       depthImage          = VK_NULL_HANDLE;
+  VmaAllocation depthAlloc          = VK_NULL_HANDLE;
+  VkImageView   depthImageView      = VK_NULL_HANDLE;
   VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
   VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
   VkPipeline pipeline = VK_NULL_HANDLE;

@@ -1,5 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include "vma/vk_mem_alloc.h"
 
 #include <cstdint>
 #include <glm/glm.hpp>
@@ -16,7 +17,7 @@ constexpr uint32_t MAX_SHADOW_CASTERS = 4;
 struct ShadowMapData {
   glm::mat4 lightSpaceMatrix;
   VkImage image;
-  VkDeviceMemory memory;
+  VmaAllocation allocation;
   VkImageView imageView;
   VkSampler sampler;
   uint32_t lightIndex;
@@ -24,7 +25,7 @@ struct ShadowMapData {
   ShadowMapData()
       : lightSpaceMatrix(1.0f),
         image(VK_NULL_HANDLE),
-        memory(VK_NULL_HANDLE),
+        allocation(VK_NULL_HANDLE),
         imageView(VK_NULL_HANDLE),
         sampler(VK_NULL_HANDLE),
         lightIndex(0) {}

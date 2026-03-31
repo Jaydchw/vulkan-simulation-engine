@@ -9,7 +9,7 @@ void AnimationSystem::setRegistry(Registry* reg) {
 
 void AnimationSystem::reset() {
   if (!registry) return;
-  for (auto& [entity, anim] : registry->allAnimationsMut()) {
+  for (auto&& [entity, anim] : registry->allAnimationsMut()) {
     anim.currentTime = 0.0f;
     anim.forward     = true;
     anim.active      = true;
@@ -25,7 +25,7 @@ void AnimationSystem::reset() {
 void AnimationSystem::update(float dt) {
   if (!registry) return;
 
-  for (auto& [entity, anim] : registry->allAnimationsMut()) {
+  for (auto&& [entity, anim] : registry->allAnimationsMut()) {
     if (!anim.active || anim.waypoints.size() < 2) continue;
 
     auto* tc = registry->getComponent<TransformComponent>(entity);

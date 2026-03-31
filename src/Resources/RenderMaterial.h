@@ -1,5 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include "vma/vk_mem_alloc.h"
 
 #include <glm/glm.hpp>
 #include <string>
@@ -78,11 +79,11 @@ class RenderMaterial final {
     propertiesBuffer = buffer;
   }
 
-  inline VkDeviceMemory getPropertiesBufferMemory() const {
-    return propertiesBufferMemory;
+  inline VmaAllocation getPropertiesBufferAllocation() const {
+    return propertiesBufferAllocation;
   }
-  inline void setPropertiesBufferMemory(VkDeviceMemory memory) {
-    propertiesBufferMemory = memory;
+  inline void setPropertiesBufferAllocation(VmaAllocation alloc) {
+    propertiesBufferAllocation = alloc;
   }
 
   inline bool getIsTransparent() const { return isTransparent; }
@@ -102,7 +103,7 @@ class RenderMaterial final {
   RenderMaterialProperties properties;
 
   VkBuffer propertiesBuffer = VK_NULL_HANDLE;
-  VkDeviceMemory propertiesBufferMemory = VK_NULL_HANDLE;
+  VmaAllocation propertiesBufferAllocation = VK_NULL_HANDLE;
   VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 
   TextureID albedoMap = INVALID_TEXTURE_ID;

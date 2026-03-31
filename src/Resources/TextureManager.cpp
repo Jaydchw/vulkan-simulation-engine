@@ -7,11 +7,13 @@
 #include "../stb_image.h"
 
 TextureManager::TextureManager(VkDevice dev, VkPhysicalDevice physDev,
-                               VkCommandPool cmdPool, VkQueue gfxQueue)
+                               VkCommandPool cmdPool, VkQueue gfxQueue,
+                               VmaAllocator alloc)
     : device(dev),
       physicalDevice(physDev),
       commandPool(cmdPool),
       graphicsQueue(gfxQueue),
+      allocator(alloc),
       defaultWhiteTexture(0),
       defaultNormalTexture(0),
       defaultBlackTexture(0) {
@@ -111,11 +113,8 @@ void TextureManager::cleanup() {
     if (texture.imageView != VK_NULL_HANDLE) {
       vkDestroyImageView(device, texture.imageView, nullptr);
     }
-    if (texture.image != VK_NULL_HANDLE) {
-      vkDestroyImage(device, texture.image, nullptr);
-    }
-    if (texture.memory != VK_NULL_HANDLE) {
-      vkFreeMemory(device, texture.memory, nullptr);
+    if (texture.image != VK_NULL_HANDLE && texture.allocation != VK_NULL_HANDLE) {
+      vmaDestroyImage(allocator, texture.image, texture.allocation);
     }
   }
   textures.clear();
@@ -123,29 +122,28 @@ void TextureManager::cleanup() {
   Debug::log(Debug::Category::TEXTURE, "TextureManager: Cleanup complete");
 }
 
-void TextureManager::createStagingBuffer(
-    VkDeviceSize size, VkBuffer& stagingBuffer,
-    VkDeviceMemory& stagingBufferMemory) const {
+VkBuffer TextureManager::createStagingBuffer(VkDeviceSize size,
+                                              VmaAllocation& stagingAlloc,
+                                              void** mappedData) const {
   VkBufferCreateInfo bufferInfo{};
-  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = size;
-  bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  bufferInfo.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bufferInfo.size        = size;
+  bufferInfo.usage       = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-  vkCreateBuffer(device, &bufferInfo, nullptr, &stagingBuffer);
+  VmaAllocationCreateInfo allocInfo{};
+  allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-  VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(device, stagingBuffer, &memRequirements);
+  VmaAllocationInfo info{};
+  VkBuffer stagingBuffer;
+  if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo,
+                      &stagingBuffer, &stagingAlloc, &info) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create staging buffer!");
 
-  VkMemoryAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex = findMemoryType(
-      memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-  vkAllocateMemory(device, &allocInfo, nullptr, &stagingBufferMemory);
-  vkBindBufferMemory(device, stagingBuffer, stagingBufferMemory, 0);
+  if (mappedData) *mappedData = info.pMappedData;
+  return stagingBuffer;
 }
 
 TextureID TextureManager::createTexture(const TextureCreateInfo& createInfo) {
@@ -178,15 +176,10 @@ TextureID TextureManager::createTexture(const TextureCreateInfo& createInfo) {
 
   Debug::log(Debug::Category::TEXTURE, "  - Mip levels: ", mipLevels);
 
-  VkBuffer stagingBuffer;
-  VkDeviceMemory stagingBufferMemory;
-
-  createStagingBuffer(imageSize, stagingBuffer, stagingBufferMemory);
-
-  void* data;
-  vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+  VmaAllocation stagingAlloc;
+  void* data = nullptr;
+  VkBuffer stagingBuffer = createStagingBuffer(imageSize, stagingAlloc, &data);
   memcpy(data, pixels, static_cast<size_t>(imageSize));
-  vkUnmapMemory(device, stagingBufferMemory);
 
   stbi_image_free(pixels);
 
@@ -199,7 +192,7 @@ TextureID TextureManager::createTexture(const TextureCreateInfo& createInfo) {
               VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureData.image,
-              textureData.memory);
+              textureData.allocation);
 
   transitionImageLayout(textureData.image, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
@@ -214,8 +207,7 @@ TextureID TextureManager::createTexture(const TextureCreateInfo& createInfo) {
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, mipLevels);
   }
 
-  vkDestroyBuffer(device, stagingBuffer, nullptr);
-  vkFreeMemory(device, stagingBufferMemory, nullptr);
+  vmaDestroyBuffer(allocator, stagingBuffer, stagingAlloc);
 
   VkImageViewCreateInfo viewInfo{};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -259,15 +251,10 @@ TextureID TextureManager::createDefaultTexture(const unsigned char* pixelData,
   const VkDeviceSize imageSize =
       static_cast<VkDeviceSize>(width) * static_cast<VkDeviceSize>(height) * 4;
 
-  VkBuffer stagingBuffer;
-  VkDeviceMemory stagingBufferMemory;
-
-  createStagingBuffer(imageSize, stagingBuffer, stagingBufferMemory);
-
-  void* data;
-  vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+  VmaAllocation stagingAlloc;
+  void* data = nullptr;
+  VkBuffer stagingBuffer = createStagingBuffer(imageSize, stagingAlloc, &data);
   memcpy(data, pixelData, static_cast<size_t>(imageSize));
-  vkUnmapMemory(device, stagingBufferMemory);
 
   const VkFormat format = (type == TextureType::sRGB)
                               ? VK_FORMAT_R8G8B8A8_SRGB
@@ -277,7 +264,7 @@ TextureID TextureManager::createDefaultTexture(const unsigned char* pixelData,
   createImage(width, height, 1, format, VK_IMAGE_TILING_OPTIMAL,
               VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureData.image,
-              textureData.memory);
+              textureData.allocation);
 
   transitionImageLayout(textureData.image, VK_IMAGE_LAYOUT_UNDEFINED,
                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
@@ -285,8 +272,7 @@ TextureID TextureManager::createDefaultTexture(const unsigned char* pixelData,
   transitionImageLayout(textureData.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
 
-  vkDestroyBuffer(device, stagingBuffer, nullptr);
-  vkFreeMemory(device, stagingBufferMemory, nullptr);
+  vmaDestroyBuffer(allocator, stagingBuffer, stagingAlloc);
 
   VkImageViewCreateInfo viewInfo{};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -322,7 +308,7 @@ void TextureManager::createImage(uint32_t width, uint32_t height,
                                  VkImageTiling tiling, VkImageUsageFlags usage,
                                  VkMemoryPropertyFlags properties,
                                  VkImage& image,
-                                 VkDeviceMemory& imageMemory) const {
+                                 VmaAllocation& allocation) const {
   VkImageCreateInfo imageInfo{};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -338,25 +324,12 @@ void TextureManager::createImage(uint32_t width, uint32_t height,
   imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-  if (vkCreateImage(device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
-    throw std::runtime_error("Failed to create image!");
-  }
+  VmaAllocationCreateInfo allocInfo{};
+  allocInfo.requiredFlags = properties;
 
-  VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(device, image, &memRequirements);
-
-  VkMemoryAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
-  allocInfo.memoryTypeIndex =
-      findMemoryType(memRequirements.memoryTypeBits, properties);
-
-  if (vkAllocateMemory(device, &allocInfo, nullptr, &imageMemory) !=
-      VK_SUCCESS) {
-    throw std::runtime_error("Failed to allocate image memory!");
-  }
-
-  vkBindImageMemory(device, image, imageMemory, 0);
+  if (vmaCreateImage(allocator, &imageInfo, &allocInfo,
+                     &image, &allocation, nullptr) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create image via VMA!");
 }
 
 uint32_t TextureManager::findMemoryType(

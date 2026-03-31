@@ -83,7 +83,7 @@ class LightManager final {
   RenderDevice* renderDevice;
   void* lightBufferMapped;
   VkBuffer lightBuffer;
-  VkDeviceMemory lightBufferMemory;
+  VmaAllocation lightBufferAllocation;
   int lightCount = 0;
 
   void createLightBuffer();

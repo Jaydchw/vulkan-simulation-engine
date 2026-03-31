@@ -4,11 +4,12 @@
 #include <vector>
 
 #include "Texture.h"
+#include "vma/vk_mem_alloc.h"
 
 class TextureManager final {
  public:
   TextureManager(VkDevice dev, VkPhysicalDevice physDev, VkCommandPool cmdPool,
-                 VkQueue gfxQueue);
+                 VkQueue gfxQueue, VmaAllocator allocator);
   ~TextureManager() noexcept;
 
   TextureManager(const TextureManager&) = delete;
@@ -35,7 +36,7 @@ class TextureManager final {
   struct TextureData {
     VkImage image = VK_NULL_HANDLE;
     VkImageView imageView = VK_NULL_HANDLE;
-    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
     VkSampler sampler = VK_NULL_HANDLE;
     VkFormat format = VK_FORMAT_UNDEFINED;
     uint32_t width = 0;
@@ -56,6 +57,7 @@ class TextureManager final {
   VkPhysicalDevice physicalDevice;
   VkCommandPool commandPool;
   VkQueue graphicsQueue;
+  VmaAllocator allocator;
 
   TextureID defaultWhiteTexture;
   TextureID defaultNormalTexture;
@@ -68,7 +70,7 @@ class TextureManager final {
   void createImage(uint32_t width, uint32_t height, uint32_t mipLevels,
                    VkFormat format, VkImageTiling tiling,
                    VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
-                   VkImage& image, VkDeviceMemory& imageMemory) const;
+                   VkImage& image, VmaAllocation& allocation) const;
 
   void transitionImageLayout(VkImage image, VkImageLayout oldLayout,
                              VkImageLayout newLayout, uint32_t mipLevels) const;
@@ -88,6 +90,7 @@ class TextureManager final {
   VkCommandBuffer beginSingleTimeCommands() const;
   void endSingleTimeCommands(VkCommandBuffer commandBuffer) const;
 
-  void createStagingBuffer(VkDeviceSize size, VkBuffer& stagingBuffer,
-                           VkDeviceMemory& stagingBufferMemory) const;
+  // Creates a host-visible staging buffer via VMA and returns the mapped pointer.
+  VkBuffer createStagingBuffer(VkDeviceSize size, VmaAllocation& stagingAlloc,
+                               void** mappedData) const;
 };

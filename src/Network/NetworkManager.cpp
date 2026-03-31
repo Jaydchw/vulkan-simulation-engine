@@ -8,6 +8,7 @@
 #include <cstring>
 #include <iostream>
 #include <random>
+#include <unordered_set>
 
 #include "../ECS/Components.h"
 #include "../ECS/Registry.h"
@@ -831,9 +832,27 @@ void NetworkManager::applyRemoteProperties() {
 void NetworkManager::sendOwnedObjectStates() {
   if (!registry) return;
 
+  // Early-out: skip all work when no peers are connected (solo mode).
+  {
+    std::lock_guard<std::mutex> lk(peersMutex);
+    bool anyConnected = false;
+    for (const auto& p : peers)
+      if (p.connected && p.socket != INVALID_SOCKET) { anyConnected = true; break; }
+    if (!anyConnected) return;
+  }
+
+  // Snapshot remotely-owned entities once under a single lock instead of
+  // calling isLocallyOwned() per entity (n mutex lock/unlock cycles per frame).
+  std::unordered_set<Entity> remoteOwned;
+  {
+    std::lock_guard<std::mutex> lk(ownershipMutex);
+    for (const auto& [e, owner] : ownershipMap)
+      if (owner != localPeerID) remoteOwned.insert(e);
+  }
+
   std::vector<ObjectFastStateEntry> entries;
   for (const auto& [e, phys] : registry->allSimulated()) {
-    if (!isLocallyOwned(e)) continue;
+    if (remoteOwned.count(e)) continue;
     const auto* transform = registry->getComponent<TransformComponent>(e);
     if (!transform) continue;
 

@@ -238,11 +238,12 @@ void PostProcessing::render(VkCommandBuffer commandBuffer,
 }
 
 void PostProcessing::createOffscreenResources() {
-  RenderUtils::createImageWithMemory(
-      device, renderDevice->getPhysicalDevice(), width, height, swapchainFormat,
-      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, offscreenImage,
-      offscreenImageMemory);
+  renderDevice->createImage(width, height, 1, swapchainFormat,
+                            VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                                VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                            offscreenImage, offscreenAlloc);
   VkImageViewCreateInfo viewInfo{};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   viewInfo.image = offscreenImage;
@@ -261,10 +262,11 @@ void PostProcessing::createOffscreenResources() {
 }
 
 void PostProcessing::createDepthResources() {
-  RenderUtils::createImageWithMemory(
-      device, renderDevice->getPhysicalDevice(), width, height, depthFormat,
-      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory);
+  renderDevice->createImage(width, height, 1, depthFormat,
+                            VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                            depthImage, depthAlloc);
   depthImageView = RenderUtils::createImageView(device, depthImage, depthFormat,
                                                 VK_IMAGE_ASPECT_DEPTH_BIT);
 }
@@ -403,32 +405,26 @@ void PostProcessing::updateDescriptorSets() {
 }
 
 void PostProcessing::cleanupOffscreenResources() {
-  if (offscreenImageView) {
+  if (offscreenImageView != VK_NULL_HANDLE) {
     vkDestroyImageView(device, offscreenImageView, nullptr);
     offscreenImageView = VK_NULL_HANDLE;
   }
   if (offscreenImage) {
-    vkDestroyImage(device, offscreenImage, nullptr);
+    renderDevice->destroyImage(offscreenImage, offscreenAlloc);
     offscreenImage = VK_NULL_HANDLE;
-  }
-  if (offscreenImageMemory) {
-    vkFreeMemory(device, offscreenImageMemory, nullptr);
-    offscreenImageMemory = VK_NULL_HANDLE;
+    offscreenAlloc = VK_NULL_HANDLE;
   }
 }
 
 void PostProcessing::cleanupDepthResources() {
-  if (depthImageView) {
+  if (depthImageView != VK_NULL_HANDLE) {
     vkDestroyImageView(device, depthImageView, nullptr);
     depthImageView = VK_NULL_HANDLE;
   }
   if (depthImage) {
-    vkDestroyImage(device, depthImage, nullptr);
+    renderDevice->destroyImage(depthImage, depthAlloc);
     depthImage = VK_NULL_HANDLE;
-  }
-  if (depthImageMemory) {
-    vkFreeMemory(device, depthImageMemory, nullptr);
-    depthImageMemory = VK_NULL_HANDLE;
+    depthAlloc = VK_NULL_HANDLE;
   }
 }
 

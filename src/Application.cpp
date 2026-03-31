@@ -390,10 +390,11 @@ void Application::initVulkan() {
   interface->init();
   interface->resize(swapChainExtent, swapChainImageViews);
 
-  renderDevice = std::make_unique<RenderDevice>(device, physicalDevice,
+  renderDevice = std::make_unique<RenderDevice>(instance, device, physicalDevice,
                                                 commandPool, graphicsQueue);
   textureManager = std::make_unique<TextureManager>(device, physicalDevice,
-                                                    commandPool, graphicsQueue);
+                                                    commandPool, graphicsQueue,
+                                                    renderDevice->getAllocator());
   materialManager = std::make_unique<RenderMaterialManager>(renderDevice.get(),
                                                       textureManager.get());
   meshManager = std::make_unique<MeshManager>(renderDevice.get());
@@ -974,8 +975,7 @@ void Application::cleanup() {
   if (mainPipeline) mainPipeline->cleanup();
   for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     if (i < static_cast<int>(instanceSSBOBuffers.size())) {
-      vkDestroyBuffer(device, instanceSSBOBuffers[i], nullptr);
-      vkFreeMemory(device, instanceSSBOMemory[i], nullptr);
+      renderDevice->destroyBuffer(instanceSSBOBuffers[i], instanceSSBOAlloc[i]);
     }
   }
   if (instanceDescriptorPool != VK_NULL_HANDLE)
@@ -984,14 +984,10 @@ void Application::cleanup() {
     vkDestroyDescriptorSetLayout(device, instanceDescriptorSetLayout, nullptr);
   vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
   vkDestroyDescriptorSetLayout(device, materialDescriptorSetLayout, nullptr);
-  vkDestroyBuffer(device, indexBuffer, nullptr);
-  vkFreeMemory(device, indexBufferMemory, nullptr);
-  vkDestroyBuffer(device, vertexBuffer, nullptr);
-  vkFreeMemory(device, vertexBufferMemory, nullptr);
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    vkDestroyBuffer(device, uniformBuffers[i], nullptr);
-    vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
-  }
+  renderDevice->destroyBuffer(indexBuffer, indexBufferAlloc);
+  renderDevice->destroyBuffer(vertexBuffer, vertexBufferAlloc);
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    renderDevice->destroyBuffer(uniformBuffers[i], uniformBuffersAlloc[i]);
   vkDestroyDescriptorPool(device, descriptorPool, nullptr);
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
@@ -1009,15 +1005,14 @@ void Application::cleanup() {
 void Application::createUniformBuffers() {
   const VkDeviceSize bufferSize = sizeof(UniformBufferObject);
   uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-  uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+  uniformBuffersAlloc.resize(MAX_FRAMES_IN_FLIGHT);
   uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     renderDevice->createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                               uniformBuffers[i], uniformBuffersMemory[i]);
-    vkMapMemory(device, uniformBuffersMemory[i], 0, bufferSize, 0,
-                &uniformBuffersMapped[i]);
+                               uniformBuffers[i], uniformBuffersAlloc[i],
+                               &uniformBuffersMapped[i]);
   }
 }
 
@@ -1025,7 +1020,7 @@ void Application::createInstanceSSBOs() {
   const VkDeviceSize bufferSize = sizeof(InstanceData) * MAX_INSTANCES;
 
   instanceSSBOBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-  instanceSSBOMemory.resize(MAX_FRAMES_IN_FLIGHT);
+  instanceSSBOAlloc.resize(MAX_FRAMES_IN_FLIGHT);
   instanceSSBOMapped.resize(MAX_FRAMES_IN_FLIGHT);
 
   for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -1034,9 +1029,8 @@ void Application::createInstanceSSBOs() {
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        instanceSSBOBuffers[i], instanceSSBOMemory[i]);
-    vkMapMemory(device, instanceSSBOMemory[i], 0, bufferSize, 0,
-                &instanceSSBOMapped[i]);
+        instanceSSBOBuffers[i], instanceSSBOAlloc[i],
+        &instanceSSBOMapped[i]);
   }
 
   // Dedicated small pool for the instance SSBO descriptor sets
@@ -1059,6 +1053,37 @@ void Application::createInstanceSSBOs() {
       device, instanceDescriptorPool, instanceDescriptorSetLayout,
       MAX_FRAMES_IN_FLIGHT, instanceSSBOBuffers, bufferSize,
       instanceDescriptorSets);
+}
+
+void Application::buildRenderProxies() {
+  renderProxies.clear();
+  if (!registry) return;
+  const auto& entities = registry->getEntities();
+  renderProxies.reserve(entities.size());
+  for (Entity entity : entities) {
+    const auto* renderComp    = registry->getComponent<RenderComponent>(entity);
+    const auto* meshComp      = registry->getComponent<MeshComponent>(entity);
+    const auto* matComp       = registry->getComponent<RenderMaterialComponent>(entity);
+    const auto* transformComp = registry->getComponent<TransformComponent>(entity);
+    const auto* lightComp     = registry->getComponent<LightComponent>(entity);
+
+    RenderProxy proxy;
+    proxy.entity = entity;
+    if (transformComp) {
+      proxy.modelMatrix = transformComp->getModelMatrix();
+      proxy.position    = transformComp->position;
+      proxy.maxAbsScale = std::max({std::abs(transformComp->scale.x),
+                                    std::abs(transformComp->scale.y),
+                                    std::abs(transformComp->scale.z)});
+    }
+    proxy.meshID       = meshComp    ? meshComp->meshID                    : INVALID_MESH_ID;
+    proxy.matID        = matComp     ? matComp->renderMaterialID           : INVALID_RENDER_MATERIAL_ID;
+    proxy.visible      = renderComp  ? renderComp->visible                 : false;
+    proxy.layerMask    = renderComp  ? renderComp->layerMask               : 0xFFFFFFFF;
+    proxy.isPointLight = lightComp   && lightComp->type != LightType::Sun;
+
+    renderProxies.push_back(proxy);
+  }
 }
 
 void Application::drawFrame() {
@@ -1085,19 +1110,23 @@ void Application::drawFrame() {
     throw std::runtime_error("Failed to acquire swap chain image!");
   vkResetFences(device, 1, &inFlightFences[currentFrame]);
   {
-    // Hold simMutex while reading registry data into the command buffer so the
-    // simulation thread cannot write new physics state at the same time.
+    // Hold simMutex only long enough to:
+    //   1. update the UBO (camera + light matrices, ~microseconds)
+    //   2. snapshot all entity render state into renderProxies (linear copy)
+    // recordCommandBuffer then runs entirely outside the lock so the
+    // simulation thread is free to advance physics during GPU submission.
     std::lock_guard<std::mutex> lock(simMutex);
 
     const auto tUbo0 = doPerfTiming ? FrameClock::now() : FrameClock::time_point{};
     updateUniformBuffer(currentFrame);
+    buildRenderProxies();
     if (doPerfTiming) perfUniformBufferMs = msec(tUbo0, FrameClock::now());
-
-    vkResetCommandBuffer(commandBuffers[currentFrame], 0);
-    const auto tCmd0 = doPerfTiming ? FrameClock::now() : FrameClock::time_point{};
-    recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
-    if (doPerfTiming) perfCommandBufferMs = msec(tCmd0, FrameClock::now());
   }
+
+  vkResetCommandBuffer(commandBuffers[currentFrame], 0);
+  const auto tCmd0 = doPerfTiming ? FrameClock::now() : FrameClock::time_point{};
+  recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
+  if (doPerfTiming) perfCommandBufferMs = msec(tCmd0, FrameClock::now());
   VkSubmitInfo submitInfo{};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   VkSemaphore waitSemaphores[] = {imageAvailableSemaphores[currentFrame]};
@@ -1158,12 +1187,9 @@ void Application::cleanupSwapChain() {
     depthImageView = VK_NULL_HANDLE;
   }
   if (depthImage != VK_NULL_HANDLE) {
-    vkDestroyImage(device, depthImage, nullptr);
-    depthImage = VK_NULL_HANDLE;
-  }
-  if (depthImageMemory != VK_NULL_HANDLE) {
-    vkFreeMemory(device, depthImageMemory, nullptr);
-    depthImageMemory = VK_NULL_HANDLE;
+    renderDevice->destroyImage(depthImage, depthImageAlloc);
+    depthImage      = VK_NULL_HANDLE;
+    depthImageAlloc = VK_NULL_HANDLE;
   }
   for (const auto imageView : swapChainImageViews)
     vkDestroyImageView(device, imageView, nullptr);
@@ -1219,10 +1245,11 @@ void Application::toggleShadingMode() {
 }
 
 void Application::createDepthResources() {
-  RenderUtils::createImageWithMemory(
-      device, physicalDevice, swapChainExtent.width, swapChainExtent.height,
-      depthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory);
+  renderDevice->createImage(swapChainExtent.width, swapChainExtent.height, 1,
+                            depthFormat, VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                            depthImage, depthImageAlloc);
   depthImageView = RenderUtils::createImageView(device, depthImage, depthFormat,
                                                 VK_IMAGE_ASPECT_DEPTH_BIT);
 }
@@ -1830,26 +1857,16 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     // render geometry that can actually cast a shadow into this shadow map.
     const Frustum lightFrustum = extractFrustum(shadowMap.lightSpaceMatrix);
 
-    for (const auto& entity : registry->getEntities()) {
-      const auto* renderComp = registry->getComponent<RenderComponent>(entity);
-      const auto* meshComp = registry->getComponent<MeshComponent>(entity);
-      const auto* transformComp = registry->getComponent<TransformComponent>(entity);
-      if (!renderComp || !meshComp || !transformComp) continue;
-      if (!renderComp->visible || meshComp->meshID == INVALID_MESH_ID)
-        continue;
-      const Mesh* const mesh = meshManager->getMesh(meshComp->meshID);
+    for (const auto& proxy : renderProxies) {
+      if (!proxy.visible || proxy.meshID == INVALID_MESH_ID) continue;
+      const Mesh* const mesh = meshManager->getMesh(proxy.meshID);
       if (!mesh || mesh->getVertexBuffer() == VK_NULL_HANDLE) continue;
 
-      // Light-space frustum cull
-      const float maxScale =
-          std::max({std::abs(transformComp->scale.x),
-                    std::abs(transformComp->scale.y),
-                    std::abs(transformComp->scale.z)});
-      if (!sphereInFrustum(lightFrustum, transformComp->position,
-                           mesh->getBoundingRadius() * maxScale))
+      if (!sphereInFrustum(lightFrustum, proxy.position,
+                           mesh->getBoundingRadius() * proxy.maxAbsScale))
         continue;
 
-      shadowPush.model = transformComp->getModelMatrix();
+      shadowPush.model = proxy.modelMatrix;
       vkCmdPushConstants(commandBuffer, shadowPipelineLayout,
                          VK_SHADER_STAGE_VERTEX_BIT, 0,
                          sizeof(ShadowPushConstants), &shadowPush);
@@ -1914,7 +1931,6 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
   };
 
   const Frustum cameraFrustum = extractFrustum(currentViewProj);
-  const auto entities = registry->getEntities();
   const Entity selEntity =
       interface ? interface->getSelectedEntity() : INVALID_ENTITY;
   const Entity hovEntity =
@@ -1923,42 +1939,28 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
   std::unordered_map<BatchKey, std::vector<InstanceData>, BatchKeyHash> batchMap;
   batchMap.reserve(64);
 
-  for (Entity entity : entities) {
-    const auto* renderComp = registry->getComponent<RenderComponent>(entity);
-    const auto* meshComp = registry->getComponent<MeshComponent>(entity);
-    const auto* materialComp =
-        registry->getComponent<RenderMaterialComponent>(entity);
-    const auto* transformComp =
-        registry->getComponent<TransformComponent>(entity);
-    if (!renderComp || !meshComp || !materialComp || !transformComp) continue;
-    if (!renderComp->visible || meshComp->meshID == INVALID_MESH_ID ||
-        materialComp->renderMaterialID == INVALID_RENDER_MATERIAL_ID)
+  for (const auto& proxy : renderProxies) {
+    if (!proxy.visible || proxy.meshID == INVALID_MESH_ID ||
+        proxy.matID == INVALID_RENDER_MATERIAL_ID)
       continue;
-    const Mesh* mesh = meshManager->getMesh(meshComp->meshID);
-    const RenderMaterial* material =
-        materialManager->getMaterial(materialComp->renderMaterialID);
+    const Mesh* mesh = meshManager->getMesh(proxy.meshID);
+    const RenderMaterial* material = materialManager->getMaterial(proxy.matID);
     if (!mesh || mesh->getVertexBuffer() == VK_NULL_HANDLE || !material ||
         material->getDescriptorSet() == VK_NULL_HANDLE)
       continue;
 
-    // Camera-space frustum cull
-    const float maxScale =
-        std::max({std::abs(transformComp->scale.x),
-                  std::abs(transformComp->scale.y),
-                  std::abs(transformComp->scale.z)});
-    if (!sphereInFrustum(cameraFrustum, transformComp->position,
-                         mesh->getBoundingRadius() * maxScale))
+    if (!sphereInFrustum(cameraFrustum, proxy.position,
+                         mesh->getBoundingRadius() * proxy.maxAbsScale))
       continue;
 
     InstanceData inst{};
-    inst.model = transformComp->getModelMatrix();
-    inst.layerMask = renderComp->layerMask;
+    inst.model       = proxy.modelMatrix;
+    inst.layerMask   = proxy.layerMask;
     inst.cameraLayer = 0xFFFFFFFF;
-    inst.highlightIntensity = (entity == selEntity)   ? 0.25f
-                              : (entity == hovEntity) ? 0.12f
-                                                      : 0.0f;
-    batchMap[{materialComp->renderMaterialID, meshComp->meshID}].push_back(
-        inst);
+    inst.highlightIntensity = (proxy.entity == selEntity)   ? 0.25f
+                              : (proxy.entity == hovEntity) ? 0.12f
+                                                            : 0.0f;
+    batchMap[{proxy.matID, proxy.meshID}].push_back(inst);
   }
 
   // Append gizmo instances (point-light sphere overlays)
@@ -1969,31 +1971,34 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     if (gizmoMesh && gizmoMesh->getVertexBuffer() != VK_NULL_HANDLE &&
         gizmoMat && gizmoMat->getDescriptorSet() != VK_NULL_HANDLE) {
       const bool showAll = interface->getShowLightGizmos();
-      auto addGizmo = [&](Entity e, float highlight) {
-        const auto* tc = registry->getComponent<TransformComponent>(e);
-        if (!tc) return;
+      // addGizmo uses proxy.position (captured in buildRenderProxies)
+      // so no registry access is needed here.
+      auto addGizmo = [&](const RenderProxy& proxy, float highlight) {
         InstanceData inst{};
-        inst.model = glm::translate(glm::mat4(1.0f), tc->position);
+        inst.model = glm::translate(glm::mat4(1.0f), proxy.position);
         inst.layerMask = 0xFFFFFFFF;
         inst.cameraLayer = 0xFFFFFFFF;
         inst.highlightIntensity = highlight;
         batchMap[{gizmoRenderMaterialID, gizmoMeshID}].push_back(inst);
       };
       if (showAll) {
-        for (Entity e : entities) {
-          if (!registry->hasComponent<LightComponent>(e)) continue;
-          const auto* lc = registry->getComponent<LightComponent>(e);
-          if (!lc || lc->type == LightType::Sun) continue;
-          addGizmo(e, (e == selEntity) ? 0.4f : (e == hovEntity) ? 0.25f
-                                                                  : 0.15f);
+        for (const auto& proxy : renderProxies) {
+          if (!proxy.isPointLight) continue;
+          addGizmo(proxy, (proxy.entity == selEntity)   ? 0.4f
+                          : (proxy.entity == hovEntity) ? 0.25f
+                                                        : 0.15f);
         }
       } else {
         Entity gizmoEntity = selEntity;
         if (gizmoEntity == INVALID_ENTITY) gizmoEntity = hovEntity;
-        if (gizmoEntity != INVALID_ENTITY &&
-            registry->hasComponent<LightComponent>(gizmoEntity)) {
-          const auto* lc = registry->getComponent<LightComponent>(gizmoEntity);
-          if (lc && lc->type != LightType::Sun) addGizmo(gizmoEntity, 0.4f);
+        if (gizmoEntity != INVALID_ENTITY) {
+          // Find the proxy for the selected/hovered entity
+          auto it = std::find_if(renderProxies.begin(), renderProxies.end(),
+                                 [gizmoEntity](const RenderProxy& p) {
+                                   return p.entity == gizmoEntity;
+                                 });
+          if (it != renderProxies.end() && it->isPointLight)
+            addGizmo(*it, 0.4f);
         }
       }
     }
@@ -2008,7 +2013,7 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
   };
   std::vector<InstanceData> allInstances;
   std::vector<DrawBatch> drawBatches;
-  allInstances.reserve(std::min<size_t>(entities.size() + 16, MAX_INSTANCES));
+  allInstances.reserve(std::min<size_t>(renderProxies.size() + 16, MAX_INSTANCES));
   drawBatches.reserve(batchMap.size());
 
   for (auto& [key, insts] : batchMap) {

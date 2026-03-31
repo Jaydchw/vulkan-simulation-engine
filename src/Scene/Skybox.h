@@ -1,5 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include "vma/vk_mem_alloc.h"
 
 #include <array>
 #include <fstream>
@@ -23,13 +24,13 @@ class Skybox final {
         commandPool(pCommandPool),
         graphicsQueue(pGraphicsQueue),
         cubemapImage(VK_NULL_HANDLE),
-        cubemapImageMemory(VK_NULL_HANDLE),
+        cubemapAllocation(VK_NULL_HANDLE),
         cubemapImageView(VK_NULL_HANDLE),
         cubemapSampler(VK_NULL_HANDLE),
         vertexBuffer(VK_NULL_HANDLE),
-        vertexBufferMemory(VK_NULL_HANDLE),
+        vertexBufferAlloc(VK_NULL_HANDLE),
         indexBuffer(VK_NULL_HANDLE),
-        indexBufferMemory(VK_NULL_HANDLE),
+        indexBufferAlloc(VK_NULL_HANDLE),
         descriptorSetLayout(VK_NULL_HANDLE),
         descriptorPool(VK_NULL_HANDLE),
         descriptorSet(VK_NULL_HANDLE),
@@ -99,24 +100,12 @@ class Skybox final {
     if (cubemapImageView != VK_NULL_HANDLE) {
       vkDestroyImageView(device, cubemapImageView, nullptr);
     }
-    if (cubemapImage != VK_NULL_HANDLE) {
-      vkDestroyImage(device, cubemapImage, nullptr);
-    }
-    if (cubemapImageMemory != VK_NULL_HANDLE) {
-      vkFreeMemory(device, cubemapImageMemory, nullptr);
-    }
-    if (vertexBuffer != VK_NULL_HANDLE) {
-      vkDestroyBuffer(device, vertexBuffer, nullptr);
-    }
-    if (vertexBufferMemory != VK_NULL_HANDLE) {
-      vkFreeMemory(device, vertexBufferMemory, nullptr);
-    }
-    if (indexBuffer != VK_NULL_HANDLE) {
-      vkDestroyBuffer(device, indexBuffer, nullptr);
-    }
-    if (indexBufferMemory != VK_NULL_HANDLE) {
-      vkFreeMemory(device, indexBufferMemory, nullptr);
-    }
+    if (cubemapImage != VK_NULL_HANDLE && cubemapAllocation != VK_NULL_HANDLE)
+      renderDevice->destroyImage(cubemapImage, cubemapAllocation);
+    if (vertexBuffer != VK_NULL_HANDLE && vertexBufferAlloc != VK_NULL_HANDLE)
+      renderDevice->destroyBuffer(vertexBuffer, vertexBufferAlloc);
+    if (indexBuffer != VK_NULL_HANDLE && indexBufferAlloc != VK_NULL_HANDLE)
+      renderDevice->destroyBuffer(indexBuffer, indexBufferAlloc);
 
     Debug::log(Debug::Category::SKYBOX, "Skybox: Cleanup complete");
   }
@@ -132,15 +121,15 @@ class Skybox final {
   VkCommandPool commandPool;
   VkQueue graphicsQueue;
 
-  VkImage cubemapImage;
-  VkDeviceMemory cubemapImageMemory;
-  VkImageView cubemapImageView;
-  VkSampler cubemapSampler;
+  VkImage        cubemapImage      = VK_NULL_HANDLE;
+  VmaAllocation  cubemapAllocation = VK_NULL_HANDLE;
+  VkImageView    cubemapImageView  = VK_NULL_HANDLE;
+  VkSampler      cubemapSampler    = VK_NULL_HANDLE;
 
-  VkBuffer vertexBuffer;
-  VkDeviceMemory vertexBufferMemory;
-  VkBuffer indexBuffer;
-  VkDeviceMemory indexBufferMemory;
+  VkBuffer       vertexBuffer      = VK_NULL_HANDLE;
+  VmaAllocation  vertexBufferAlloc = VK_NULL_HANDLE;
+  VkBuffer       indexBuffer       = VK_NULL_HANDLE;
+  VmaAllocation  indexBufferAlloc  = VK_NULL_HANDLE;
 
   VkDescriptorSetLayout descriptorSetLayout;
   VkDescriptorPool descriptorPool;
@@ -154,8 +143,6 @@ class Skybox final {
 
   void loadCubemap(const std::string& folderPath);
   void createSkyboxGeometry();
-  uint32_t findMemoryType(uint32_t typeFilter,
-                          VkMemoryPropertyFlags properties) const;
 
   void createCubemapImageView() {
     VkImageViewCreateInfo viewInfo{};
