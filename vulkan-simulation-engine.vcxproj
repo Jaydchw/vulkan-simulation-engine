@@ -335,6 +335,7 @@
     <CustomBuild Include="SHADERS\pixel.frag">
       <FileType>Document</FileType>
     </CustomBuild>
+    <None Include=".github\copilot-instructions.md" />
     <None Include="Worlds\balltest.world" />
     <None Include="Worlds\minimal.world" />
     <None Include="Worlds\neon.world" />

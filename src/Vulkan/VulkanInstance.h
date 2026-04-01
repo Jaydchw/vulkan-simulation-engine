@@ -3,9 +3,10 @@
 #include <vulkan/vulkan.h>
 
 #include <cstring>
-#include <iostream>
 #include <stdexcept>
 #include <vector>
+
+#include "../Util/Debug.h"
 
 namespace Vulkan {
 
@@ -23,7 +24,9 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
               VkDebugUtilsMessageTypeFlagsEXT messageType,
               const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
               const void* pUserData) {
-  std::cerr << "Validation layer: " << pCallbackData->pMessage << std::endl;
+#ifdef _DEBUG
+  Debug::log(Debug::Category::VULKAN, "Validation layer: ", pCallbackData->pMessage);
+#endif
   return VK_FALSE;
 }
 

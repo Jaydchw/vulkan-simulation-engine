@@ -9,6 +9,7 @@
 
 #include "../Rendering/MainPipeline.h"
 #include "../Rendering/PostProcessing.h"
+#include "Debug.h"
 #include "WorldParser.h"
 
 Interface::Interface(GLFWwindow* win, VkInstance inst, VkPhysicalDevice physDev,
@@ -325,6 +326,10 @@ NetworkManager* networkManager) {
     }
     if (menuItem("Performance")) {
       renderPerformanceMenu(perfMetrics);
+      ImGui::EndMenu();
+    }
+    if (Debug::isRuntimeEnabled() && menuItem("Debug")) {
+      renderDebugMenu();
       ImGui::EndMenu();
     }
 
@@ -1620,6 +1625,25 @@ void Interface::renderSettingsMenu(SimulationState& simState) {
     simState.reloadRequested = true;
   }
 
+  bool prevAffinity = simState.threadAffinityEnabled;
+  ImGui::Checkbox("Enable Thread Affinity", &simState.threadAffinityEnabled);
+  if (simState.threadAffinityEnabled != prevAffinity) {
+    Debug::log(Debug::Category::THREADING,
+               "Thread affinity toggle changed enabled=", simState.threadAffinityEnabled);
+    simState.restartRequested = true;
+  }
+
+  sectionHeader("Diagnostics");
+  bool runtimeLoggingEnabled = Debug::isRuntimeEnabled();
+  if (ImGui::Checkbox("Enable Debug Logging", &runtimeLoggingEnabled)) {
+    Debug::setRuntimeEnabled(runtimeLoggingEnabled);
+  }
+  if (runtimeLoggingEnabled) {
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.75f, 0.45f, 1.0f));
+    ImGui::Text("Debug menu available in menu bar.");
+    ImGui::PopStyleColor();
+  }
+
   sectionHeader("Keyboard Shortcuts");
 
   const float keyColW = 120.0f * s;
@@ -2565,6 +2589,113 @@ void Interface::renderPerformanceMenu(const PerformanceMetrics& m) {
     ImGui::SameLine(0, 6.0f * s);
     ImGui::TextColored(kWarn, "+%.0f ms", m.latencyMs);
   }
+}
+
+void Interface::renderDebugMenu() {
+  const float s = currentScale;
+  const float menuW = 340.0f * s;
+  ImGui::Dummy(ImVec2(menuW, 0));
+
+  static const char* verbosityItems[] = {"Low", "Medium", "High", "Trace"};
+  int v = static_cast<int>(Debug::getVerbosity());
+  ImGui::SeparatorText("Verbosity");
+  ImGui::SetNextItemWidth(220.0f * s);
+  if (ImGui::Combo("Level##dbg_verbosity", &v, verbosityItems,
+                   IM_ARRAYSIZE(verbosityItems))) {
+    Debug::setVerbosity(static_cast<Debug::Verbosity>(v));
+  }
+
+  ImGui::SeparatorText("Presets");
+  if (ImGui::Button("Enable All##dbg")) Debug::setAllEnabled(true);
+  ImGui::SameLine();
+  if (ImGui::Button("Disable All##dbg")) Debug::setAllEnabled(false);
+  ImGui::SameLine();
+  if (ImGui::Button("Core##dbg")) {
+    Debug::setAllEnabled(false);
+    Debug::setEnabled(Debug::Category::MAIN, true);
+    Debug::setEnabled(Debug::Category::APP_LIFECYCLE, true);
+    Debug::setEnabled(Debug::Category::VULKAN, true);
+    Debug::setEnabled(Debug::Category::RENDERING, true);
+    Debug::setEnabled(Debug::Category::NETWORK, true);
+    Debug::setEnabled(Debug::Category::PHYSICS, true);
+  }
+
+  auto catCheckbox = [&](Debug::Category cat) {
+    bool enabled = Debug::isEnabled(cat);
+    if (ImGui::Checkbox(Debug::categoryDisplayName(cat), &enabled)) {
+      Debug::setEnabled(cat, enabled);
+    }
+  };
+
+  auto groupHeader = [&](const char* label, ImVec4 col) {
+    ImGui::PushStyleColor(ImGuiCol_Text, col);
+    ImGui::SeparatorText(label);
+    ImGui::PopStyleColor();
+  };
+
+  groupHeader("Core", ImVec4(0.70f, 0.70f, 1.00f, 1.0f));
+  catCheckbox(Debug::Category::MAIN);
+  catCheckbox(Debug::Category::APP_LIFECYCLE);
+  catCheckbox(Debug::Category::CONFIG);
+  catCheckbox(Debug::Category::ECS);
+  catCheckbox(Debug::Category::THREADING);
+  catCheckbox(Debug::Category::PERFORMANCE);
+  catCheckbox(Debug::Category::FILE_IO);
+
+  groupHeader("Camera, Input, UI", ImVec4(0.70f, 0.70f, 1.00f, 1.0f));
+  catCheckbox(Debug::Category::CAMERA);
+  catCheckbox(Debug::Category::CAMERA_VERBOSE);
+  catCheckbox(Debug::Category::INPUT);
+  catCheckbox(Debug::Category::INPUT_VERBOSE);
+  catCheckbox(Debug::Category::UI);
+  catCheckbox(Debug::Category::UI_LAYOUT);
+
+  groupHeader("Rendering", ImVec4(0.40f, 0.85f, 1.00f, 1.0f));
+  catCheckbox(Debug::Category::RENDERING);
+  catCheckbox(Debug::Category::RENDERING_FRAME);
+  catCheckbox(Debug::Category::RENDERING_CULLING);
+  catCheckbox(Debug::Category::RENDERING_BATCH);
+  catCheckbox(Debug::Category::RENDERING_SYNC);
+  catCheckbox(Debug::Category::GIZMO);
+
+  groupHeader("Vulkan", ImVec4(0.40f, 0.85f, 1.00f, 1.0f));
+  catCheckbox(Debug::Category::VULKAN);
+  catCheckbox(Debug::Category::VULKAN_MEMORY);
+  catCheckbox(Debug::Category::VULKAN_SWAPCHAIN);
+  catCheckbox(Debug::Category::VULKAN_PIPELINE);
+  catCheckbox(Debug::Category::VULKAN_DESCRIPTORS);
+  catCheckbox(Debug::Category::VULKAN_COMMANDS);
+
+  groupHeader("Scene & Resources", ImVec4(0.50f, 1.00f, 0.70f, 1.0f));
+  catCheckbox(Debug::Category::SCENE);
+  catCheckbox(Debug::Category::SCENE_LOADER);
+  catCheckbox(Debug::Category::WORLD);
+  catCheckbox(Debug::Category::SKYBOX);
+  catCheckbox(Debug::Category::SHADOWS);
+  catCheckbox(Debug::Category::LIGHTS);
+  catCheckbox(Debug::Category::MATERIALS);
+  catCheckbox(Debug::Category::TEXTURE);
+  catCheckbox(Debug::Category::MESH);
+  catCheckbox(Debug::Category::OBJECTS);
+  catCheckbox(Debug::Category::POSTPROCESSING);
+  catCheckbox(Debug::Category::RESOURCE_IO);
+
+  groupHeader("Physics & Simulation", ImVec4(1.00f, 0.65f, 0.30f, 1.0f));
+  catCheckbox(Debug::Category::PHYSICS);
+  catCheckbox(Debug::Category::PHYSICS_SYNC);
+  catCheckbox(Debug::Category::PHYSICS_COLLISION);
+  catCheckbox(Debug::Category::ANIMATION);
+  catCheckbox(Debug::Category::SPAWNING);
+  catCheckbox(Debug::Category::TIMELINE);
+  catCheckbox(Debug::Category::PARTICLES);
+  catCheckbox(Debug::Category::PLANTMANAGER);
+
+  groupHeader("Network", ImVec4(1.00f, 0.45f, 0.75f, 1.0f));
+  catCheckbox(Debug::Category::NETWORK);
+  catCheckbox(Debug::Category::NETWORK_DISCOVERY);
+  catCheckbox(Debug::Category::NETWORK_PACKETS);
+  catCheckbox(Debug::Category::NETWORK_OWNERSHIP);
+  catCheckbox(Debug::Category::NETWORK_SYNC);
 }
 
 void Interface::draw(VkCommandBuffer commandBuffer, uint32_t imageIndex) {

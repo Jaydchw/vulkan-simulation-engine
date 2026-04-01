@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <windows.h>
 
 #include <glm/gtc/constants.hpp>
 
@@ -39,7 +40,61 @@ Application::~Application() {
   }
 }
 
+void Application::loadRuntimeSettings() {
+  simState.threadAffinityEnabled = true;
+  char modulePath[MAX_PATH] = {};
+  if (GetModuleFileNameA(nullptr, modulePath, MAX_PATH) == 0) return;
+  std::filesystem::path cfgPath = std::filesystem::path(modulePath).parent_path() / "thread_affinity.cfg";
+  std::ifstream in(cfgPath);
+  if (!in.is_open()) {
+    Debug::log(Debug::Category::THREADING, "Thread affinity settings file not found, using default enabled");
+    return;
+  }
+  int enabled = 1;
+  in >> enabled;
+  if (in) simState.threadAffinityEnabled = (enabled != 0);
+  Debug::log(Debug::Category::THREADING,
+             "Thread affinity loaded enabled=", simState.threadAffinityEnabled,
+             " path=", cfgPath.string());
+}
+
+void Application::saveRuntimeSettings() const {
+  char modulePath[MAX_PATH] = {};
+  if (GetModuleFileNameA(nullptr, modulePath, MAX_PATH) == 0) return;
+  std::filesystem::path cfgPath = std::filesystem::path(modulePath).parent_path() / "thread_affinity.cfg";
+  std::ofstream out(cfgPath, std::ios::trunc);
+  if (!out.is_open()) {
+    Debug::log(Debug::Category::THREADING,
+               "Failed to save thread affinity setting path=", cfgPath.string());
+    return;
+  }
+  out << (simState.threadAffinityEnabled ? 1 : 0);
+  Debug::log(Debug::Category::THREADING,
+             "Thread affinity saved enabled=", simState.threadAffinityEnabled,
+             " path=", cfgPath.string());
+}
+
+void Application::relaunchApplication() const {
+  char modulePath[MAX_PATH] = {};
+  if (GetModuleFileNameA(nullptr, modulePath, MAX_PATH) == 0) return;
+
+  STARTUPINFOA si{};
+  si.cb = sizeof(si);
+  PROCESS_INFORMATION pi{};
+  if (CreateProcessA(modulePath, nullptr, nullptr, nullptr, FALSE, 0, nullptr,
+                     nullptr, &si, &pi)) {
+    Debug::log(Debug::Category::MAIN, "Application relaunched path=", modulePath);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+  } else {
+    Debug::log(Debug::Category::MAIN,
+               "Application relaunch failed error=", GetLastError(),
+               " path=", modulePath);
+  }
+}
+
 void Application::init() {
+  loadRuntimeSettings();
   initWindow();
   initVulkan();
 }
@@ -92,7 +147,9 @@ void Application::loadWorld(const std::string& filepath) {
     ownerRenderMaterialIDs.fill(INVALID_RENDER_MATERIAL_ID);
     lastColorByOwner = false;
 
+    const bool threadAffinityEnabled = simState.threadAffinityEnabled;
     simState = SimulationState{};
+    simState.threadAffinityEnabled = threadAffinityEnabled;
     simState.timeSpeed = worldSettings.timeSpeed;
     simState.physicsAccumulator = 0.0f;
     if (worldSettings.simulationHz > 0)
@@ -148,7 +205,9 @@ void Application::loadFBScene(const std::string& filepath) {
     ownerRenderMaterialIDs.fill(INVALID_RENDER_MATERIAL_ID);
     lastColorByOwner = false;
 
+    const bool threadAffinityEnabled = simState.threadAffinityEnabled;
     simState = SimulationState{};
+    simState.threadAffinityEnabled = threadAffinityEnabled;
     simState.physicsAccumulator = 0.0f;
   }
 
@@ -162,19 +221,24 @@ void Application::loadFBScene(const std::string& filepath) {
 }
 
 void Application::run() {
-  // ── Process affinity: pin this (render/UI) thread to Core 1 ──────────────
-  ThreadAffinity::setCurrentThread(ThreadAffinity::VISUALISATION_MASK, "Visualisation");
-  ThreadAffinity::logAvailableCores();
+  if (simState.threadAffinityEnabled) {
+    ThreadAffinity::setCurrentThread(ThreadAffinity::VISUALISATION_MASK, "Visualisation");
+    ThreadAffinity::logAvailableCores();
+  }
 
-  // ── Launch the simulation thread (pinned to Core 4+ inside the func) ─────
   simRunning = true;
   simulationThread = std::thread(&Application::simulationThreadFunc, this);
 
   mainLoop();
 
-  // ── Tear down simulation thread ───────────────────────────────────────────
   simRunning = false;
   if (simulationThread.joinable()) simulationThread.join();
+
+  if (simState.restartRequested) {
+    saveRuntimeSettings();
+    relaunchApplication();
+    return;
+  }
 
   cleanup();
 }
@@ -193,7 +257,8 @@ void Application::run() {
 // partially-updated state.
 // ─────────────────────────────────────────────────────────────────────────────
 void Application::simulationThreadFunc() {
-  ThreadAffinity::setCurrentThread(ThreadAffinity::SIMULATION_MASK, "Simulation");
+  if (simState.threadAffinityEnabled)
+    ThreadAffinity::setCurrentThread(ThreadAffinity::SIMULATION_MASK, "Simulation");
 
   using Clock = std::chrono::steady_clock;
   auto lastTime = Clock::now();
@@ -202,12 +267,15 @@ void Application::simulationThreadFunc() {
     auto stepStart = Clock::now();
     float dt = std::chrono::duration<float>(stepStart - lastTime).count();
     lastTime = stepStart;
-    // Clamp to avoid a "spiral of death" after pauses or debug breaks
     dt = std::min(dt, 0.1f);
 
     bool didWork = false;
     {
-      std::lock_guard<std::mutex> lock(simMutex);
+      std::unique_lock<std::mutex> lock(simMutex, std::try_to_lock);
+      if (!lock.owns_lock()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        continue;
+      }
 
       // ── Skip: let the main loop handle baking, reverse-play, and baked scrub
       const bool liveMode = !simState.isBaking
@@ -218,6 +286,7 @@ void Application::simulationThreadFunc() {
       if (liveMode && (!simState.isPaused || simState.stepFrame)) {
         bool snapshotsOn = interface ? interface->getSnapshotsEnabled() : false;
         const bool doPerfTiming = interface && interface->isPerfProfilingEnabled();
+        bool advanced = false;
 
         if (snapshotsOn && !timelineSystem->hasInitialSnapshot())
           timelineSystem->saveInitialSnapshot();
@@ -260,7 +329,6 @@ void Application::simulationThreadFunc() {
         }
 
         if (simState.stepFrame) {
-          // Single-step advance (triggered by the ImGui "Step" button)
           simState.stepFrame = false;
 
           if (doPerfTiming) {
@@ -272,6 +340,7 @@ void Application::simulationThreadFunc() {
             physicsSystem->update(simState.stepSize);
           }
           simState.currentTime += simState.stepSize;
+          advanced = true;
 
           if (snapshotsOn) {
             const auto t0 = doPerfTiming ? Clock::now() : Clock::time_point{};
@@ -283,14 +352,18 @@ void Application::simulationThreadFunc() {
               simState.timeHistory.erase(simState.timeHistory.begin());
           }
         } else {
-          // Fixed-timestep accumulator — keeps physics deterministic regardless
-          // of how fast the render loop or this thread happen to run.
           double accumPhysMs = 0.0, accumSyncToMs = 0.0, accumPhysStepMs = 0.0;
           double accumSyncFromMs = 0.0, accumSnapMs = 0.0;
           int physStepCount = 0;
 
           simState.physicsAccumulator += dt * simState.timeSpeed;
-          while (simState.physicsAccumulator >= simState.stepSize) {
+          const float maxAccum = simState.stepSize * 4.0f;
+          if (simState.physicsAccumulator > maxAccum)
+            simState.physicsAccumulator = maxAccum;
+
+          constexpr int kMaxPhysicsStepsPerLoop = 2;
+          while (simState.physicsAccumulator >= simState.stepSize &&
+                 physStepCount < kMaxPhysicsStepsPerLoop) {
             if (doPerfTiming) {
               PhysicsStepTimings pt = physicsSystem->timedUpdate(simState.stepSize);
               accumSyncToMs   += pt.syncToMs;
@@ -322,36 +395,35 @@ void Application::simulationThreadFunc() {
             simPerf.physSyncFromMs.store(static_cast<float>(accumSyncFromMs));
             simPerf.snapshotMs.store(static_cast<float>(accumSnapMs));
           }
+          if (physStepCount > 0) advanced = true;
         }
 
         if (doPerfTiming)
           simPerf.totalMs.store(msec(tSimStart, Clock::now()));
 
-        // Network send: queue owned-object states for the network thread to
-        // transmit.  tickSend() is internally thread-safe (uses deferredMutex).
         if (networkManager) {
           networkSendAccumulator += dt;
           const float sendInterval = 1.0f / networkManager->networkSendHz;
           if (networkSendAccumulator >= sendInterval) {
             networkSendAccumulator -= sendInterval;
             networkManager->tickSend();
+            didWork = true;
           }
         }
 
-        didWork = true;
+        didWork = didWork || advanced;
       }
-    } // unlock simMutex
+    }
 
-    // If no physics work was done this iteration, back off so we don't burn a
-    // core spinning while paused or during baking.
     if (!didWork)
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     else
-      std::this_thread::yield(); // let the render thread in between steps
+      std::this_thread::yield();
   }
 }
 
 void Application::initWindow() {
+  Debug::log(Debug::Category::MAIN, "Application: Creating window (", WIDTH, "x", HEIGHT, ")");
   window = std::make_unique<Window>(WIDTH, HEIGHT, "Vulkan Simulation Engine");
   window->setUserPointer(this);
   window->setFramebufferSizeCallback(framebufferResizeCallback);
@@ -360,93 +432,158 @@ void Application::initWindow() {
   window->setMouseButtonCallback(mouseButtonCallback);
   window->setScrollCallback(scrollCallback);
   lastFrameTime = static_cast<float>(glfwGetTime());
+  Debug::log(Debug::Category::MAIN, "Application: Window created");
 }
 
 void Application::initVulkan() {
+  Debug::log(Debug::Category::VULKAN, "Vulkan: Creating instance");
   instance = Vulkan::createInstance();
   debugMessenger = Vulkan::setupDebugMessenger(instance);
+  Debug::log(Debug::Category::VULKAN, "Vulkan: Instance created, debug messenger set up");
+
   surface = window->createSurface(instance);
+  Debug::log(Debug::Category::VULKAN, "Vulkan: Surface created");
+
   physicalDevice = Vulkan::pickPhysicalDevice(instance, surface);
-  device = Vulkan::createLogicalDevice(physicalDevice, surface, graphicsQueue,
-                                       presentQueue);
+  Debug::log(Debug::Category::VULKAN, "Vulkan: Physical device selected");
+
+  device = Vulkan::createLogicalDevice(physicalDevice, surface, graphicsQueue, presentQueue);
+  Debug::log(Debug::Category::VULKAN, "Vulkan: Logical device created, queues acquired");
+
   swapChain = Vulkan::createSwapChain(device, physicalDevice, surface,
                                       window->getHandle(), swapChainImageFormat,
                                       swapChainExtent, swapChainImages);
-  Vulkan::createImageViews(device, swapChainImages, swapChainImageFormat,
-                           swapChainImageViews);
+  Debug::log(Debug::Category::VULKAN_SWAPCHAIN,
+      "Vulkan: Swapchain created  extent=(", swapChainExtent.width, "x", swapChainExtent.height,
+      ")  images=", swapChainImages.size(),
+      "  format=", static_cast<int>(swapChainImageFormat));
+
+  Vulkan::createImageViews(device, swapChainImages, swapChainImageFormat, swapChainImageViews);
+  Debug::log(Debug::Category::VULKAN_SWAPCHAIN,
+      "Vulkan: Image views created (", swapChainImageViews.size(), ")");
+
   depthFormat = Vulkan::findDepthFormat(physicalDevice);
+  Debug::log(Debug::Category::VULKAN, "Vulkan: Depth format selected: ", static_cast<int>(depthFormat));
+
   descriptorSetLayout = Vulkan::createDescriptorSetLayout(device);
-  materialDescriptorSetLayout =
-      Vulkan::createMaterialDescriptorSetLayout(device);
+  materialDescriptorSetLayout = Vulkan::createMaterialDescriptorSetLayout(device);
+  Debug::log(Debug::Category::VULKAN_DESCRIPTORS, "Vulkan: Descriptor set layouts created");
+
   commandPool = Vulkan::createCommandPool(device, physicalDevice, surface);
+  Debug::log(Debug::Category::VULKAN, "Vulkan: Command pool created");
 
   Vulkan::QueueFamilyIndices indices;
   Vulkan::findQueueFamilies(physicalDevice, surface, indices);
 
   interface = std::make_unique<Interface>(
       window->getHandle(), instance, physicalDevice, device, graphicsQueue,
-      commandPool,  // Passed CommandPool here
+      commandPool,
       indices.graphicsFamily.value(), swapChainImageFormat, depthFormat);
   interface->init();
   interface->resize(swapChainExtent, swapChainImageViews);
+  Debug::log(Debug::Category::RENDERING, "Rendering: ImGui interface initialized");
 
   renderDevice = std::make_unique<RenderDevice>(instance, device, physicalDevice,
                                                 commandPool, graphicsQueue);
+  Debug::log(Debug::Category::VULKAN_MEMORY, "Vulkan: RenderDevice (VMA allocator) created");
+
   textureManager = std::make_unique<TextureManager>(device, physicalDevice,
                                                     commandPool, graphicsQueue,
                                                     renderDevice->getAllocator());
-  materialManager = std::make_unique<RenderMaterialManager>(renderDevice.get(),
-                                                      textureManager.get());
+  Debug::log(Debug::Category::TEXTURE, "Texture: TextureManager created");
+
+  materialManager = std::make_unique<RenderMaterialManager>(renderDevice.get(), textureManager.get());
+  Debug::log(Debug::Category::MATERIALS, "Materials: RenderMaterialManager created");
+
   meshManager = std::make_unique<MeshManager>(renderDevice.get());
   gizmoMeshID = meshManager->createSphere(0.3f, 16);
+  Debug::log(Debug::Category::MESH, "Mesh: MeshManager created, gizmo sphere mesh=", gizmoMeshID);
+
   lightManager = std::make_unique<LightManager>(renderDevice.get());
+  Debug::log(Debug::Category::LIGHTS, "Lights: LightManager created");
+
   descriptorPool = Vulkan::createDescriptorPool(device, MAX_FRAMES_IN_FLIGHT);
+  Debug::log(Debug::Category::VULKAN_DESCRIPTORS,
+      "Vulkan: Descriptor pool created (frames=", MAX_FRAMES_IN_FLIGHT, ")");
+
   materialManager->init(materialDescriptorSetLayout);
   gizmoRenderMaterialID = materialManager->getDefaultMaterial();
+  Debug::log(Debug::Category::MATERIALS,
+      "Materials: Default material ID=", gizmoRenderMaterialID);
+
   lightManager->init();
-  instanceDescriptorSetLayout =
-      Vulkan::createInstanceDescriptorSetLayout(device);
-  mainPipeline =
-      std::make_unique<MainPipeline>(device, swapChainImageFormat, depthFormat);
+  Debug::log(Debug::Category::LIGHTS, "Lights: LightManager initialized");
+
+  instanceDescriptorSetLayout = Vulkan::createInstanceDescriptorSetLayout(device);
+  Debug::log(Debug::Category::VULKAN_DESCRIPTORS, "Vulkan: Instance descriptor set layout created");
+
+  mainPipeline = std::make_unique<MainPipeline>(device, swapChainImageFormat, depthFormat);
   mainPipeline->create(descriptorSetLayout, materialDescriptorSetLayout,
                        lightManager->getShadowDescriptorSetLayout(),
                        instanceDescriptorSetLayout);
+  Debug::log(Debug::Category::VULKAN_PIPELINE, "Vulkan: Main graphics pipeline created");
+
   createShadowPipeline();
-  postProcessing = std::make_unique<PostProcessing>(renderDevice.get(), device,
-                                                    swapChainImageFormat);
-  postProcessing->init(descriptorPool, swapChainExtent.width,
-                       swapChainExtent.height);
+  Debug::log(Debug::Category::VULKAN_PIPELINE, "Vulkan: Shadow pipeline created");
+  Debug::log(Debug::Category::SHADOWS, "Shadows: Shadow pipeline initialized");
+
+  postProcessing = std::make_unique<PostProcessing>(renderDevice.get(), device, swapChainImageFormat);
+  postProcessing->init(descriptorPool, swapChainExtent.width, swapChainExtent.height);
+  Debug::log(Debug::Category::POSTPROCESSING,
+      "PostProcessing: Pipeline initialized (", swapChainExtent.width, "x", swapChainExtent.height, ")");
+
   createDepthResources();
+  Debug::log(Debug::Category::VULKAN_MEMORY, "Vulkan: Depth resources created");
+
   createUniformBuffers();
+  Debug::log(Debug::Category::VULKAN_MEMORY,
+      "Vulkan: Uniform buffers created (", MAX_FRAMES_IN_FLIGHT, " frames in flight)");
+
   Vulkan::createDescriptorSets(device, descriptorPool, descriptorSetLayout,
                                uniformBuffers, lightManager->getLightBuffer(),
                                MAX_FRAMES_IN_FLIGHT, descriptorSets);
-  createInstanceSSBOs();
-  Vulkan::createCommandBuffers(device, commandPool, MAX_FRAMES_IN_FLIGHT,
-                               commandBuffers);
-  Vulkan::createSyncObjects(device, static_cast<int>(swapChainImages.size()),
-                            imageAvailableSemaphores, renderFinishedSemaphores,
-                            inFlightFences);
+  Debug::log(Debug::Category::VULKAN_DESCRIPTORS, "Vulkan: Descriptor sets allocated");
 
-  worldParser    = std::make_unique<WorldParser>(meshManager.get(),
-                                               materialManager.get(),
-                                               textureManager.get());
+  createInstanceSSBOs();
+  Debug::log(Debug::Category::VULKAN_MEMORY,
+      "Vulkan: Instance SSBOs created (maxInstances=", MAX_INSTANCES, ")");
+
+  Vulkan::createCommandBuffers(device, commandPool, MAX_FRAMES_IN_FLIGHT, commandBuffers);
+  Debug::log(Debug::Category::VULKAN, "Vulkan: Command buffers allocated (", MAX_FRAMES_IN_FLIGHT, ")");
+
+  Vulkan::createSyncObjects(device, static_cast<int>(swapChainImages.size()),
+                            imageAvailableSemaphores, renderFinishedSemaphores, inFlightFences);
+  Debug::log(Debug::Category::VULKAN, "Vulkan: Sync objects created (semaphores + fences)");
+
+  worldParser    = std::make_unique<WorldParser>(meshManager.get(), materialManager.get(), textureManager.get());
+  Debug::log(Debug::Category::SCENE_LOADER, "Scene: WorldParser created");
+
   physicsMaterialManager = std::make_unique<PhysicsMaterialManager>();
-  fbSceneLoader  = std::make_unique<FBSceneLoader>(meshManager.get(),
-                                                   materialManager.get(),
+  fbSceneLoader  = std::make_unique<FBSceneLoader>(meshManager.get(), materialManager.get(),
                                                    physicsMaterialManager.get());
+  Debug::log(Debug::Category::SCENE_LOADER, "Scene: FBSceneLoader created");
+
   animationSystem = std::make_unique<AnimationSystem>();
+  Debug::log(Debug::Category::ANIMATION, "Animation: AnimationSystem created");
+
   physicsSystem   = std::make_unique<PhysicsSystem>();
   physicsSystem->setPhysicsMaterialManager(physicsMaterialManager.get());
+  Debug::log(Debug::Category::PHYSICS, "Physics: PhysicsSystem created with material manager");
+
   spawnerSystem   = std::make_unique<SpawnerSystem>();
   spawnerSystem->setPhysicsMaterialManager(physicsMaterialManager.get());
-  timelineSystem  = std::make_unique<TimelineSystem>();
+  Debug::log(Debug::Category::SPAWNING, "Spawning: SpawnerSystem created with material manager");
 
-  // Networking
+  timelineSystem  = std::make_unique<TimelineSystem>();
+  Debug::log(Debug::Category::TIMELINE, "Timeline: TimelineSystem created");
+
   networkManager = std::make_unique<NetworkManager>();
-  networkManager->init(nullptr); // registry not available yet; set after world load
+  networkManager->init(nullptr);
+  Debug::log(Debug::Category::NETWORK, "Network: NetworkManager created and initialized");
+
   physicsSystem->setNetworkManager(networkManager.get());
   spawnerSystem->setNetworkManager(networkManager.get());
+  Debug::log(Debug::Category::NETWORK, "Network: NetworkManager linked to PhysicsSystem and SpawnerSystem");
 
   interface->setWorldDirectory("Scenes/Worlds");
   interface->setFBSceneDirectory("Scenes/FBs");
@@ -459,7 +596,10 @@ void Application::initVulkan() {
     }
     if (networkManager && !applyingRemoteSceneLoad) {
       networkManager->sendLoadScene(path);
-      networkManager->sendOwnedObjectProperties();
+      {
+        std::lock_guard<std::mutex> lock(simMutex);
+        networkManager->sendOwnedObjectProperties();
+      }
     }
   });
 }
@@ -470,10 +610,14 @@ while (!window->shouldClose()) {
   const float currentTime = static_cast<float>(glfwGetTime());
   const float deltaTime = currentTime - lastFrameTime;
 
-  // FPS cap: if maxFps > 0, spin-wait until the minimum frame interval has elapsed
   if (simState.maxFps > 0) {
     const float minFrameTime = 1.0f / static_cast<float>(simState.maxFps);
-    if (deltaTime < minFrameTime) continue;
+    if (deltaTime < minFrameTime) {
+      const float remaining = minFrameTime - deltaTime;
+      std::this_thread::sleep_for(
+          std::chrono::duration<double>(static_cast<double>(remaining)));
+      continue;
+    }
   }
 
   lastFrameTime = currentTime;
@@ -486,6 +630,7 @@ while (!window->shouldClose()) {
       else                         loadWorld(lastLoadedWorldPath);
       if (networkManager && !applyingRemoteSceneLoad) {
         networkManager->sendLoadScene(lastLoadedWorldPath);
+        std::lock_guard<std::mutex> lock(simMutex);
         networkManager->sendOwnedObjectProperties();
       }
     }
@@ -510,6 +655,7 @@ while (!window->shouldClose()) {
     simState.physicsAccumulator = 0.0f;
     if (networkManager && !lastLoadedWorldPath.empty() && !applyingRemoteSceneLoad) {
       networkManager->sendLoadScene(lastLoadedWorldPath);
+      std::lock_guard<std::mutex> lock(simMutex);
       networkManager->sendOwnedObjectProperties();
     }
   }
@@ -696,25 +842,40 @@ while (!window->shouldClose()) {
     // Create entities spawned by remote peers
     if (spawnerSystem) {
       SpawnEntityPacket spawnPkt{};
-      while (networkManager->pollPendingSpawnedEntity(spawnPkt))
+      while (networkManager->pollPendingSpawnedEntity(spawnPkt)) {
+        std::lock_guard<std::mutex> lock(simMutex);
         spawnerSystem->applyRemoteSpawn(spawnPkt);
+      }
     }
 
     if (networkManager->pollNewPeerConnected() && !lastLoadedWorldPath.empty()) {
-      networkManager->assignObjectOwnership();
+      {
+        std::lock_guard<std::mutex> lock(simMutex);
+        networkManager->assignObjectOwnership();
+      }
       networkManager->sendLoadScene(lastLoadedWorldPath);
-      networkManager->sendOwnedObjectProperties();
+      {
+        std::lock_guard<std::mutex> lock(simMutex);
+        networkManager->sendOwnedObjectProperties();
+      }
       // Auto-enable colour-by-owner the moment a peer appears; broadcast to all peers
       networkManager->colorByOwner = true;
       lastBroadcastColorByOwner    = false;  // triggers broadcast on next simstate send
-      applyOwnerColors(true);
+      {
+        std::lock_guard<std::mutex> lock(simMutex);
+        applyOwnerColors(true);
+      }
       lastColorByOwner = true;
     }
 
     // Re-assign ownership when a peer disconnects and refresh colours
     if (networkManager->pollPeerDropped()) {
-      networkManager->assignObjectOwnership();
+      {
+        std::lock_guard<std::mutex> lock(simMutex);
+        networkManager->assignObjectOwnership();
+      }
       if (networkManager->colorByOwner) {
+        std::lock_guard<std::mutex> lock(simMutex);
         applyOwnerColors(true);
       }
     }
@@ -725,6 +886,7 @@ while (!window->shouldClose()) {
       const bool highLoss = networkManager->simPacketLossPercent >= OWNERSHIP_LOSS_ISOLATION_PCT;
       if (highLoss != ownershipHighLossMode) {
         ownershipHighLossMode = highLoss;
+        std::lock_guard<std::mutex> lock(simMutex);
         networkManager->assignObjectOwnership();
       }
     }
@@ -910,7 +1072,12 @@ while (!window->shouldClose()) {
     if (simState.isBaking && simState.bakePerformanceMode) {
       auto uiStart = std::chrono::high_resolution_clock::now();
       interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
-                         postProcessing.get(), perfMetrics, networkManager.get());
+                        postProcessing.get(), perfMetrics, networkManager.get());
+      if (simState.restartRequested) {
+        saveRuntimeSettings();
+        glfwSetWindowShouldClose(window->getHandle(), true);
+        continue;
+      }
       input.endFrame();
       drawFrame();
       double uiMs = std::chrono::duration<double, std::milli>(
@@ -921,13 +1088,19 @@ while (!window->shouldClose()) {
       using PerfClock = std::chrono::steady_clock;
       const auto tRender0 = PerfClock::now();
       interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
-                         postProcessing.get(), perfMetrics, networkManager.get());
+                        postProcessing.get(), perfMetrics, networkManager.get());
       perfInterfaceRenderMs = static_cast<float>(
           std::chrono::duration<double, std::milli>(PerfClock::now() - tRender0).count());
+      if (simState.restartRequested) {
+        saveRuntimeSettings();
+        glfwSetWindowShouldClose(window->getHandle(), true);
+        continue;
+      }
 
       if (networkManager && registry) {
         bool want = networkManager->colorByOwner;
         if (want != lastColorByOwner) {
+          std::lock_guard<std::mutex> lock(simMutex);
           applyOwnerColors(want);
           lastColorByOwner = want;
         }
@@ -1110,13 +1283,7 @@ void Application::drawFrame() {
     throw std::runtime_error("Failed to acquire swap chain image!");
   vkResetFences(device, 1, &inFlightFences[currentFrame]);
   {
-    // Hold simMutex only long enough to:
-    //   1. update the UBO (camera + light matrices, ~microseconds)
-    //   2. snapshot all entity render state into renderProxies (linear copy)
-    // recordCommandBuffer then runs entirely outside the lock so the
-    // simulation thread is free to advance physics during GPU submission.
     std::lock_guard<std::mutex> lock(simMutex);
-
     const auto tUbo0 = doPerfTiming ? FrameClock::now() : FrameClock::time_point{};
     updateUniformBuffer(currentFrame);
     buildRenderProxies();
@@ -1137,7 +1304,7 @@ void Application::drawFrame() {
   submitInfo.pWaitDstStageMask = waitStages;
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
-  VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[imageIndex]};
+  VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = signalSemaphores;
   if (vkQueueSubmit(graphicsQueue, 1, &submitInfo,
@@ -1831,7 +1998,7 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     depthAttachment.clearValue.depthStencil = {1.0f, 0};
 
-    const int shadowMapSize = 16384;
+    const int shadowMapSize = static_cast<int>(SHADOW_MAP_SIZE);
     VkRenderingInfo renderingInfo{};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     renderingInfo.renderArea = {{0, 0},

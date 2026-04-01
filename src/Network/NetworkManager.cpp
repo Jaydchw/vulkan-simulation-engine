@@ -2,11 +2,11 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
+#include "../Util/Debug.h"
 #include "../Util/ThreadAffinity.h"
 
 #include <algorithm>
 #include <cstring>
-#include <iostream>
 #include <random>
 #include <unordered_set>
 
@@ -16,13 +16,14 @@
 NetworkManager::NetworkManager() {
   WSADATA wsaData{};
   if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-    std::cerr << "[Network] WSAStartup failed: " << WSAGetLastError() << "\n";
+    Debug::log(Debug::Category::NETWORK, "WSAStartup failed: ", WSAGetLastError());
 
   rng = std::mt19937(std::random_device{}());
   std::uniform_int_distribution<uint32_t> dist(1, UINT32_MAX);
   myInstanceId = dist(rng);
   localPeerID = 1;
   bwWindowStart = std::chrono::steady_clock::now();
+  Debug::log(Debug::Category::NETWORK, "NetworkManager constructed instanceId=", myInstanceId);
 }
 
 NetworkManager::~NetworkManager() {
@@ -32,6 +33,7 @@ NetworkManager::~NetworkManager() {
 
 void NetworkManager::init(Registry* reg) {
   registry = reg;
+  Debug::log(Debug::Category::NETWORK, "Network init requested");
 
   if (running) {
     std::lock_guard<std::mutex> lk(remoteStatesMutex);
@@ -61,12 +63,15 @@ void NetworkManager::init(Registry* reg) {
   networkThread = std::thread(&NetworkManager::networkThreadFunc, this);
   ThreadAffinity::setThread(networkThread, ThreadAffinity::NETWORKING_MASK, "Networking");
 
-  std::cout << "[Network] Started. IP=" << localIP << "  TCP=" << localTCPPort
-            << "  instanceId=" << myInstanceId
-            << "  PeerID=" << (int)localPeerID << "\n";
+  Debug::log(Debug::Category::NETWORK,
+             "Started. IP=", localIP,
+             " TCP=", localTCPPort,
+             " instanceId=", myInstanceId,
+             " peerID=", static_cast<int>(localPeerID));
 }
 
 void NetworkManager::shutdown() {
+  Debug::log(Debug::Category::NETWORK, "Shutdown requested");
   running = false;
 
   if (networkThread.joinable()) networkThread.join();
@@ -90,10 +95,12 @@ void NetworkManager::shutdown() {
     closesocket(tcpListenSocket);
     tcpListenSocket = INVALID_SOCKET;
   }
+  Debug::log(Debug::Category::NETWORK, "Shutdown complete");
 }
 
 void NetworkManager::setNetworkEnabled(bool enabled) {
   if (enabled == running.load()) return;
+  Debug::log(Debug::Category::NETWORK, "setNetworkEnabled=", enabled ? "true" : "false");
 
   if (!enabled) {
     shutdown();
@@ -188,12 +195,11 @@ void NetworkManager::assignObjectOwnership() {
         }
   }
 
-  std::cout << "[Network] Ownership assigned: " << dynamicEntities.size()
-            << " objects across " << (int)activePeerCount << " active peers"
-            << (simPacketLossPercent >= OWNERSHIP_LOSS_ISOLATION_PCT
-                    ? " [isolated: high loss]"
-                    : "")
-            << " (I am peer " << (int)localPeerID << ")\n";
+  Debug::log(Debug::Category::NETWORK_OWNERSHIP,
+             "Ownership assigned objects=", dynamicEntities.size(),
+             " activePeers=", static_cast<int>(activePeerCount),
+             simPacketLossPercent >= OWNERSHIP_LOSS_ISOLATION_PCT ? " isolated=true" : " isolated=false",
+             " localPeer=", static_cast<int>(localPeerID));
 }
 
 void NetworkManager::setEntityOwner(Entity e, uint8_t peerID) {
@@ -359,7 +365,7 @@ void NetworkManager::networkThreadFunc() {
 bool NetworkManager::initUDP() {
   udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (udpSocket == INVALID_SOCKET) {
-    std::cerr << "[Network] UDP socket failed\n";
+    Debug::log(Debug::Category::NETWORK_DISCOVERY, "UDP socket failed");
     return false;
   }
 
@@ -376,7 +382,7 @@ bool NetworkManager::initUDP() {
 
   if (bind(udpSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) ==
       SOCKET_ERROR) {
-    std::cerr << "[Network] UDP bind failed: " << WSAGetLastError() << "\n";
+    Debug::log(Debug::Category::NETWORK_DISCOVERY, "UDP bind failed: ", WSAGetLastError());
     closesocket(udpSocket);
     udpSocket = INVALID_SOCKET;
     return false;
@@ -422,8 +428,10 @@ void NetworkManager::receiveUDPHellos() {
     std::lock_guard<std::mutex> lk(peersMutex);
     if (isKnownInstance(pkt.instanceId)) return;
 
-    std::cout << "[Network] Discovered peer inst=" << pkt.instanceId
-              << " ip=" << senderIP << " tcp=" << pkt.tcpPort << "\n";
+    Debug::log(Debug::Category::NETWORK_DISCOVERY,
+               "Discovered peer instance=", pkt.instanceId,
+               " ip=", senderIP,
+               " tcp=", pkt.tcpPort);
 
     PeerInfo newPeer{};
     newPeer.instanceId = pkt.instanceId;
@@ -464,11 +472,11 @@ bool NetworkManager::initTCPServer() {
 
     tcpListenSocket = s;
     localTCPPort = port;
-    std::cout << "[Network] TCP server on port " << port << "\n";
+    Debug::log(Debug::Category::NETWORK, "TCP server listening on port ", port);
     return true;
   }
-  std::cerr << "[Network] Could not bind any TCP port in range "
-            << NETWORK_TCP_PORT << "-" << NETWORK_TCP_MAX_PORT << "\n";
+  Debug::log(Debug::Category::NETWORK,
+             "Could not bind TCP in range ", NETWORK_TCP_PORT, "-", NETWORK_TCP_MAX_PORT);
   return false;
 }
 
@@ -490,7 +498,7 @@ void NetworkManager::acceptTCPConnections() {
   u_long nb = 1;
   ioctlsocket(clientSock, FIONBIO, &nb);
 
-  std::cout << "[Network] Incoming TCP from " << clientIP << "\n";
+  Debug::log(Debug::Category::NETWORK_DISCOVERY, "Incoming TCP from ", clientIP);
 
   // Don't match by IP — multiple instances share the same IP on one machine.
   // Identity is resolved when we receive their HANDSHAKE packet.
@@ -514,8 +522,10 @@ void NetworkManager::connectToPeer(const std::string& ip, uint16_t port) {
 
   if (connect(s, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) ==
       SOCKET_ERROR) {
-    std::cerr << "[Network] TCP connect to " << ip << ":" << port
-              << " failed: " << WSAGetLastError() << "\n";
+    Debug::log(Debug::Category::NETWORK_DISCOVERY,
+               "TCP connect failed ip=", ip,
+               " port=", port,
+               " err=", WSAGetLastError());
     closesocket(s);
     return;
   }
@@ -534,7 +544,8 @@ void NetworkManager::connectToPeer(const std::string& ip, uint16_t port) {
       p.socket = s;
       p.connected = true;
       newPeerConnectedFlag = true;
-      std::cout << "[Network] TCP connected to " << ip << ":" << port << "\n";
+      Debug::log(Debug::Category::NETWORK_DISCOVERY,
+                 "TCP connected ip=", ip, " port=", port);
       return;
     }
   }
@@ -551,7 +562,7 @@ void NetworkManager::receiveFromPeer(PeerInfo& peer) {
     peer.connected = false;
     peer.recvBuf.clear();
     peerDroppedFlag = true;
-    std::cout << "[Network] Peer " << peer.ip << " disconnected\n";
+    Debug::log(Debug::Category::NETWORK, "Peer disconnected ip=", peer.ip);
     return;
   }
   if (r > 0) {
@@ -570,8 +581,9 @@ void NetworkManager::receiveFromPeer(PeerInfo& peer) {
       peer.socket = INVALID_SOCKET;
       peer.connected = false;
       peer.recvBuf.clear();
-      std::cout << "[Network] Peer " << peer.ip
-                << " protocol error, disconnecting\n";
+      Debug::log(Debug::Category::NETWORK_PACKETS,
+                 "Protocol error, disconnecting peer ip=", peer.ip,
+                 " payloadSize=", hdr.payloadSize);
       return;
     }
 
@@ -649,8 +661,8 @@ void NetworkManager::handleHandshake(PeerInfo& peer,
       peer.socket = INVALID_SOCKET;
       peer.connected = false;
       peer.recvBuf.clear();
-      std::cout << "[Network] Dropped duplicate connection from inst="
-                << hs.instanceId << "\n";
+      Debug::log(Debug::Category::NETWORK_DISCOVERY,
+                 "Dropped duplicate connection instance=", hs.instanceId);
       return;
     }
   }
@@ -679,8 +691,9 @@ void NetworkManager::handleHandshake(PeerInfo& peer,
   }
 
   newPeerConnectedFlag = true;
-  std::cout << "[Network] Handshake: inst=" << hs.instanceId
-            << " -> PeerID=" << (int)peer.id << "\n";
+  Debug::log(Debug::Category::NETWORK_SYNC,
+             "Handshake instance=", hs.instanceId,
+             " peerID=", static_cast<int>(peer.id));
 }
 
 void NetworkManager::handleObjectStatesBatch(
@@ -695,6 +708,9 @@ void NetworkManager::handleObjectStatesBatch(
   if (payload.size() < expectedSize) return;
 
   std::lock_guard<std::mutex> lk(remoteStatesMutex);
+  Debug::logTrace(Debug::Category::NETWORK_PACKETS,
+                  "State batch count=", batchHdr.count,
+                  " sender=", static_cast<int>(batchHdr.senderPeerId));
   for (uint32_t i = 0; i < batchHdr.count; ++i) {
     ObjectFastStateEntry entry{};
     std::memcpy(&entry, payload.data() + offset, sizeof(entry));
@@ -722,6 +738,9 @@ void NetworkManager::handleObjectPropertiesBatch(
   if (payload.size() < expectedSize) return;
 
   std::lock_guard<std::mutex> lk(remoteStatesMutex);
+  Debug::logVerbose(Debug::Category::NETWORK_PACKETS,
+                    "Property batch count=", batchHdr.count,
+                    " sender=", static_cast<int>(batchHdr.senderPeerId));
   for (uint32_t i = 0; i < batchHdr.count; ++i) {
     ObjectPropertyEntry entry{};
     std::memcpy(&entry, payload.data() + offset, sizeof(entry));
@@ -747,6 +766,7 @@ void NetworkManager::handleLoadScene(const std::vector<uint8_t>& payload) {
   if (payload.empty()) return;
   std::string path(reinterpret_cast<const char*>(payload.data()),
                    payload.size());
+  Debug::log(Debug::Category::NETWORK_SYNC, "Received remote scene load: ", path);
   std::lock_guard<std::mutex> lk(commandMutex);
   pendingSceneLoads.push_back(std::move(path));
 }
@@ -764,6 +784,13 @@ void NetworkManager::handleSimState(const std::vector<uint8_t>& payload) {
       (p.reversePlay == 0xFF) ? -1 : static_cast<int8_t>(p.reversePlay);
   state.colorByOwner =
       (p.colorByOwner == 0xFF) ? -1 : static_cast<int8_t>(p.colorByOwner);
+  Debug::logVerbose(Debug::Category::NETWORK_SYNC,
+                    "Received sim state paused=", state.isPaused ? 1 : 0,
+                    " speed=", state.timeSpeed,
+                    " history=", state.historyIndex,
+                    " step=", state.stepForward ? 1 : 0,
+                    " reverse=", static_cast<int>(state.reversePlay),
+                    " colorByOwner=", static_cast<int>(state.colorByOwner));
   std::lock_guard<std::mutex> lk(commandMutex);
   pendingSimStates.push_back(state);
 }
@@ -775,6 +802,10 @@ void NetworkManager::applyRemoteStates() {
   {
     std::lock_guard<std::mutex> lk(remoteStatesMutex);
     snapshot.swap(pendingRemoteStates);
+  }
+  if (!snapshot.empty()) {
+    Debug::logTrace(Debug::Category::NETWORK_SYNC,
+                    "Applying remote states count=", snapshot.size());
   }
 
   for (const auto& state : snapshot) {
@@ -805,6 +836,8 @@ void NetworkManager::applyRemoteProperties() {
     snapshot.swap(pendingRemoteProperties);
   }
   if (!registry) return;
+  Debug::logVerbose(Debug::Category::NETWORK_SYNC,
+                    "Applying remote properties count=", snapshot.size());
 
   for (const auto& props : snapshot) {
     Entity e = static_cast<Entity>(props.entityId);
@@ -871,6 +904,8 @@ void NetworkManager::sendOwnedObjectStates() {
     entries.push_back(entry);
   }
   if (entries.empty()) return;
+  Debug::logTrace(Debug::Category::NETWORK_PACKETS,
+                  "Sending owned state entries=", entries.size());
 
   ObjectBatchHeader batchHdr{};
   batchHdr.senderPeerId = localPeerID;
@@ -903,6 +938,7 @@ void NetworkManager::sendOwnedObjectStates() {
   std::uniform_real_distribution<float> lossDist(0.0f, 100.0f);
 
   std::lock_guard<std::mutex> lk(peersMutex);
+  int sentPeers = 0;
   for (auto& peer : peers) {
     if (!peer.connected || peer.socket == INVALID_SOCKET) continue;
 
@@ -920,7 +956,11 @@ void NetworkManager::sendOwnedObjectStates() {
 
     peer.bytesSent += buf.size();
     queueSimulatedSend(peer.socket, buf);
+    ++sentPeers;
   }
+  Debug::logTrace(Debug::Category::NETWORK_PACKETS,
+                  "State packet queued bytes=", buf.size(),
+                  " peers=", sentPeers);
 }
 
 void NetworkManager::recomputePeerIDs() {
@@ -939,6 +979,9 @@ void NetworkManager::recomputePeerIDs() {
       }
     }
   }
+  Debug::logVerbose(Debug::Category::NETWORK_OWNERSHIP,
+                    "Peer IDs recomputed localPeer=", static_cast<int>(localPeerID),
+                    " knownInstances=", allKnownInstances.size());
 }
 
 bool NetworkManager::isKnownInstance(uint32_t instId) const {
@@ -959,12 +1002,20 @@ void NetworkManager::broadcastTCP(PacketType type, const void* payload,
     std::memcpy(buf.data() + sizeof(hdr), payload, payloadSize);
 
   std::lock_guard<std::mutex> lk(peersMutex);
+  int sentPeers = 0;
   for (auto& peer : peers) {
     if (!peer.connected || peer.socket == INVALID_SOCKET) continue;
     int sent = send(peer.socket, reinterpret_cast<const char*>(buf.data()),
                     static_cast<int>(buf.size()), 0);
-    if (sent > 0) peer.bytesSent += static_cast<uint64_t>(sent);
+    if (sent > 0) {
+      peer.bytesSent += static_cast<uint64_t>(sent);
+      ++sentPeers;
+    }
   }
+  Debug::logVerbose(Debug::Category::NETWORK_PACKETS,
+                    "broadcastTCP type=", static_cast<int>(type),
+                    " payload=", payloadSize,
+                    " peers=", sentPeers);
 }
 
 void NetworkManager::sendOwnedObjectProperties() {
@@ -995,6 +1046,8 @@ void NetworkManager::sendOwnedObjectProperties() {
     entries.push_back(entry);
   }
   if (entries.empty()) return;
+  Debug::logVerbose(Debug::Category::NETWORK_PACKETS,
+                    "Sending owned object properties count=", entries.size());
 
   ObjectBatchHeader batchHdr{};
   batchHdr.senderPeerId = localPeerID;
@@ -1132,6 +1185,8 @@ void NetworkManager::handleSpawnEntity(const std::vector<uint8_t>& payload) {
 
   std::lock_guard<std::mutex> lk(spawnedEntitiesMutex);
   pendingSpawnedEntities.push_back(pkt);
+  Debug::logVerbose(Debug::Category::NETWORK_SYNC,
+                    "Queued remote spawn entityId=", pkt.entityId);
 }
 
 bool NetworkManager::pollPendingSpawnedEntity(SpawnEntityPacket& out) {

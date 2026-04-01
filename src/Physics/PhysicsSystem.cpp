@@ -31,19 +31,18 @@ struct CellKeyHash {
 
 PhysicsSystem::PhysicsSystem() {
   Debug::log(Debug::Category::PHYSICS, "PhysicsSystem: Created");
+  Debug::logVerbose(Debug::Category::PHYSICS, "PhysicsSystem: World instance initialized");
 }
 
 void PhysicsSystem::setRegistry(Registry* reg) {
-  // Clear stale raw pointers into the old registry before it is destroyed.
-  // syncToLibrary() also calls world.clear() at its start, but the old registry
-  // may already be deallocated by then, leaving dangling pointers in the world.
   world.clear();
   registry = reg;
+  Debug::log(Debug::Category::PHYSICS, "PhysicsSystem: Registry set, world cleared");
 }
 
 void PhysicsSystem::update(float deltaTime) {
   if (!registry || deltaTime <= 0.0f) return;
-
+  Debug::logTrace(Debug::Category::PHYSICS, "PhysicsSystem: update dt=", deltaTime);
   syncToLibrary();
   world.step(deltaTime);
   syncFromLibrary();
@@ -71,12 +70,24 @@ PhysicsStepTimings PhysicsSystem::timedUpdate(float deltaTime) {
   t.physStepMs  = ms(t1, t2);
   t.syncFromMs  = ms(t2, t3);
   t.collisionStats = world.getLastCollisionStats();
+
+  Debug::logVerbose(Debug::Category::PHYSICS,
+      "PhysicsSystem: timedUpdate syncTo=", t.syncToMs,
+      "ms step=", t.physStepMs,
+      "ms syncFrom=", t.syncFromMs, "ms");
+  Debug::logTrace(Debug::Category::PHYSICS,
+      "PhysicsSystem: timedUpdate total=", t.syncToMs + t.physStepMs + t.syncFromMs,
+      "ms  collisionPairs=", t.collisionStats.size());
+
   return t;
 }
 
 void PhysicsSystem::resolveCrossPeerCollisions() {
   if (!registry || !networkManager) return;
   if (networkManager->getConnectedPeerCount() == 0) return;
+  Debug::logTrace(Debug::Category::PHYSICS_COLLISION,
+      "PhysicsSystem: resolveCrossPeerCollisions start, peers=",
+      networkManager->getConnectedPeerCount());
 
   auto boundingRadius = [](const ColliderComponent& c, const glm::vec3& scale) -> float {
     switch (c.type) {
@@ -125,6 +136,9 @@ void PhysicsSystem::resolveCrossPeerCollisions() {
   }
 
   if (remoteBodies.empty()) return;
+  Debug::logTrace(Debug::Category::PHYSICS_COLLISION,
+      "PhysicsSystem: remoteBodies=", remoteBodies.size(),
+      " maxRemoteRadius=", maxRemoteRadius);
 
   const float cellSize = (std::max)(maxRemoteRadius * 2.0f, 1.0f);
   const float invCell  = 1.0f / cellSize;
@@ -204,6 +218,9 @@ void PhysicsSystem::syncToLibrary() {
   world.clear();
 
   auto entities = registry->getEntities();
+  Debug::logTrace(Debug::Category::PHYSICS_SYNC,
+      "PhysicsSystem::syncToLibrary: processing ", entities.size(), " entities");
+  int addedCount = 0;
   for (Entity e : entities) {
     auto* phys     = registry->getComponent<SimulatedComponent>(e);
     auto* collider = registry->getComponent<ColliderComponent>(e);
@@ -287,11 +304,17 @@ void PhysicsSystem::syncToLibrary() {
     }
 
     world.addObject(obj);
+    ++addedCount;
   }
+  Debug::logVerbose(Debug::Category::PHYSICS_SYNC,
+      "PhysicsSystem::syncToLibrary: added ", addedCount, " objects to world");
 }
 
 void PhysicsSystem::syncFromLibrary() {
   auto entities = registry->getEntities();
+  Debug::logTrace(Debug::Category::PHYSICS_SYNC,
+      "PhysicsSystem::syncFromLibrary: entities=", entities.size());
+  int writtenCount = 0;
   for (Entity e : entities) {
     auto* collider  = registry->getComponent<ColliderComponent>(e);
     auto* transform = registry->getComponent<TransformComponent>(e);
@@ -314,5 +337,14 @@ void PhysicsSystem::syncFromLibrary() {
       phys->velocity        = obj.getVelocity();
       phys->angularVelocity = obj.getAngularVelocity();
     }
+    ++writtenCount;
+    Debug::logTrace(Debug::Category::PHYSICS_SYNC,
+        "PhysicsSystem::syncFromLibrary: entity ", e,
+        " pos=(", transform->position.x, ",", transform->position.y, ",", transform->position.z, ")",
+        " vel=(", phys ? phys->velocity.x : 0.0f, ",",
+                  phys ? phys->velocity.y : 0.0f, ",",
+                  phys ? phys->velocity.z : 0.0f, ")");
   }
+  Debug::logVerbose(Debug::Category::PHYSICS_SYNC,
+      "PhysicsSystem::syncFromLibrary: wrote back ", writtenCount, " dynamic objects");
 }

@@ -11,12 +11,19 @@
 
 void SpawnerSystem::update(float deltaTime) {
   if (!registry) return;
+  Debug::logTrace(Debug::Category::SPAWNING,
+      "SpawnerSystem: update dt=", deltaTime);
 
   for (auto&& [spawnerEntity, spawner] : registry->allSpawnersMut()) {
     if (!spawner.enabled) continue;
     if (networkManager && !networkManager->isLocallyOwned(spawnerEntity)) continue;
 
     spawner.timer += deltaTime;
+    Debug::logTrace(Debug::Category::SPAWNING,
+        "SpawnerSystem: spawner ", spawnerEntity,
+        " timer=", spawner.timer,
+        " interval=", spawner.currentInterval,
+        " count=", spawner.spawnCount);
 
     // Item 4: SingleBurstSpawn — fire all objects at once when start_time elapses.
     if (spawner.burstMode) {
@@ -29,8 +36,8 @@ void SpawnerSystem::update(float deltaTime) {
           spawner.spawnCount++;
           assignSpawnedOwner(newEntity, spawner);
           if (networkManager) networkManager->broadcastSpawnEntity(newEntity);
-          Debug::log(Debug::Category::OBJECTS, "SpawnerSystem: Burst-spawned entity ", newEntity,
-                     " from spawner ", spawnerEntity);
+          Debug::log(Debug::Category::SPAWNING, "SpawnerSystem: Burst-spawned entity ", newEntity,
+                     " from spawner ", spawnerEntity, " (burst #", spawner.spawnCount, ")");
         }
         spawner.enabled = false;  // burst is done
       }
@@ -58,8 +65,10 @@ void SpawnerSystem::update(float deltaTime) {
       assignSpawnedOwner(newEntity, spawner);
       if (networkManager) networkManager->broadcastSpawnEntity(newEntity);
 
-      Debug::log(Debug::Category::OBJECTS, "SpawnerSystem: Spawned entity ", newEntity,
-                 " from spawner ", spawnerEntity);
+      Debug::log(Debug::Category::SPAWNING, "SpawnerSystem: Spawned entity ", newEntity,
+                 " from spawner ", spawnerEntity,
+                 " total=", spawner.spawnCount,
+                 " nextInterval=", spawner.currentInterval, "s");
     }
   }
 }
@@ -105,7 +114,9 @@ void SpawnerSystem::applyRemoteSpawn(const SpawnEntityPacket& pkt) {
     networkManager->assignObjectOwnership();
   }
 
-  Debug::log(Debug::Category::OBJECTS, "SpawnerSystem: Replicated remote entity ", entity);
+  Debug::log(Debug::Category::SPAWNING, "SpawnerSystem: Replicated remote entity ", entity,
+             " name='", std::string(pkt.name), "'",
+             " pos=(", pkt.posX, ",", pkt.posY, ",", pkt.posZ, ")");
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -183,6 +194,12 @@ Entity SpawnerSystem::doSpawn(Entity spawnerEntity, SpawnerComponent& spawner,
   std::string entityName = tmpl.namePrefix + "_" + std::to_string(++spawnSeq);
 
   Entity entity = registry->createEntity();
+  Debug::logVerbose(Debug::Category::SPAWNING,
+      "SpawnerSystem::doSpawn: entity=", entity,
+      " name='", entityName, "'",
+      " pos=(", pos.x, ",", pos.y, ",", pos.z, ")",
+      " speed=", speed,
+      " vel=(", phys.velocity.x, ",", phys.velocity.y, ",", phys.velocity.z, ")");
   registry->addComponent<NameComponent>(entity, {entityName});
   registry->addComponent<TransformComponent>(entity, transform);
   registry->addComponent<SimulatedComponent>(entity, phys);
@@ -240,6 +257,9 @@ void SpawnerSystem::assignSpawnedOwner(Entity entity, SpawnerComponent& spawner)
   }
 
   networkManager->setEntityOwner(entity, peerID);
+  Debug::logVerbose(Debug::Category::SPAWNING,
+      "SpawnerSystem: entity ", entity, " assigned to peer ", peerID,
+      " ownerMode=", static_cast<int>(spawner.ownerMode));
 }
 
 glm::vec3 SpawnerSystem::randomConeDir(const glm::vec3& axis, float halfAngle) {

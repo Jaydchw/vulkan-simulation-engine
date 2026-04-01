@@ -12,7 +12,14 @@
 #include "Util/Debug.h"
 #include "Util/WorldParser.h"
 
-void printControls() {
+int main() {
+#ifdef _DEBUG
+  _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+  Debug::setEnabled(Debug::Category::MAIN, true);
+  Debug::setEnabled(Debug::Category::VULKAN, true);
+  Debug::setEnabled(Debug::Category::RENDERING, true);
+  Debug::setEnabled(Debug::Category::SCENE_LOADER, true);
+  Debug::setEnabled(Debug::Category::CONFIG, true);
   std::cout << R"(
 CONTROLS
   ESC           Exit
@@ -35,18 +42,7 @@ CONTROLS
   Ctrl+Arrows   Pan Camera
   1-9           Switch Camera
 )" << std::endl;
-}
-
-int main() {
-#ifdef _DEBUG
-  _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
-  ConfigParser config;
-  config.load("config.ini");
-  Debug::setEnabled(Debug::Category::MAIN, true);
-  Debug::setEnabled(Debug::Category::VULKAN, true);
-  Debug::setEnabled(Debug::Category::RENDERING, true);
-  if (Debug::isEnabled(Debug::Category::MAIN)) printControls();
   try {
     Application app;
     Debug::log(Debug::Category::MAIN,
@@ -67,7 +63,9 @@ int main() {
     Debug::log(Debug::Category::MAIN, "Starting main loop...");
     app.run();
   } catch (const std::exception& e) {
+#ifdef _DEBUG
     std::cerr << e.what() << std::endl;
+#endif
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

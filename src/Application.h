@@ -277,6 +277,9 @@ class Application final {
 
   void initWindow();
   void initVulkan();
+  void loadRuntimeSettings();
+  void saveRuntimeSettings() const;
+  void relaunchApplication() const;
   void mainLoop();
   void simulationThreadFunc();
   void cleanup();

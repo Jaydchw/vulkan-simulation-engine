@@ -3,12 +3,16 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "Util/Debug.h"
+
 void AnimationSystem::setRegistry(Registry* reg) {
   registry = reg;
+  Debug::log(Debug::Category::ANIMATION, "AnimationSystem: Registry set");
 }
 
 void AnimationSystem::reset() {
   if (!registry) return;
+  int resetCount = 0;
   for (auto&& [entity, anim] : registry->allAnimationsMut()) {
     anim.currentTime = 0.0f;
     anim.forward     = true;
@@ -19,19 +23,27 @@ void AnimationSystem::reset() {
       tc->position = anim.waypoints.front().position;
       tc->rotation = anim.waypoints.front().rotation;
     }
+    ++resetCount;
   }
+  Debug::log(Debug::Category::ANIMATION, "AnimationSystem: Reset ", resetCount, " animations to initial state");
 }
 
 void AnimationSystem::update(float dt) {
   if (!registry) return;
 
+  int activeCount = 0;
   for (auto&& [entity, anim] : registry->allAnimationsMut()) {
     if (!anim.active || anim.waypoints.size() < 2) continue;
 
     auto* tc = registry->getComponent<TransformComponent>(entity);
     if (!tc) continue;
 
+    ++activeCount;
     const float lastWpTime = anim.waypoints.back().time;
+    Debug::logTrace(Debug::Category::ANIMATION,
+        "AnimationSystem: entity ", entity,
+        " t=", anim.currentTime, " forward=", anim.forward,
+        " waypoints=", anim.waypoints.size());
 
     if (anim.forward) {
       anim.currentTime += dt;
@@ -44,6 +56,8 @@ void AnimationSystem::update(float dt) {
         if (anim.currentTime >= lastWpTime) {
           anim.currentTime = lastWpTime;
           anim.active = false;
+          Debug::logVerbose(Debug::Category::ANIMATION,
+              "AnimationSystem: entity ", entity, " STOP reached end at t=", anim.currentTime);
         }
         break;
 
@@ -51,6 +65,8 @@ void AnimationSystem::update(float dt) {
         if (anim.totalDuration > 0.0f && anim.currentTime >= anim.totalDuration) {
           anim.currentTime -= anim.totalDuration;
           if (anim.currentTime < 0.0f) anim.currentTime = 0.0f;
+          Debug::logVerbose(Debug::Category::ANIMATION,
+              "AnimationSystem: entity ", entity, " LOOP wrapped at duration=", anim.totalDuration);
         }
         break;
 
@@ -58,9 +74,13 @@ void AnimationSystem::update(float dt) {
         if (anim.forward && anim.currentTime >= lastWpTime) {
           anim.currentTime = lastWpTime;
           anim.forward = false;
+          Debug::logVerbose(Debug::Category::ANIMATION,
+              "AnimationSystem: entity ", entity, " REVERSE direction -> backward");
         } else if (!anim.forward && anim.currentTime <= 0.0f) {
           anim.currentTime = 0.0f;
           anim.forward = true;
+          Debug::logVerbose(Debug::Category::ANIMATION,
+              "AnimationSystem: entity ", entity, " REVERSE direction -> forward");
         }
         break;
     }
@@ -109,5 +129,11 @@ void AnimationSystem::update(float dt) {
 
     tc->position = glm::mix(wps[segA].position, wps[segB].position, localT);
     tc->rotation = glm::slerp(wps[segA].rotation, wps[segB].rotation, localT);
+    Debug::logTrace(Debug::Category::ANIMATION,
+        "AnimationSystem: entity ", entity,
+        " seg[", segA, "->", segB, "] localT=", localT,
+        " pos=(", tc->position.x, ",", tc->position.y, ",", tc->position.z, ")");
   }
+  Debug::logTrace(Debug::Category::ANIMATION,
+      "AnimationSystem: update done, active=", activeCount, " dt=", dt);
 }

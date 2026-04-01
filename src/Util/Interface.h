@@ -83,6 +83,8 @@ struct SimulationState {
   float scrubAccumulator = 0.0f;
   float physicsAccumulator = 0.0f;
   int maxFps = 0;
+  bool threadAffinityEnabled = true;
+  bool restartRequested = false;
 };
 
 struct SceneSettings {
@@ -238,6 +240,7 @@ class Interface {
   void renderNetworkMenu(NetworkManager* networkManager, SimulationState& simState);
   void renderCamerasMenu(Registry& registry);
   void renderPerformanceMenu(const PerformanceMetrics& metrics);
+  void renderDebugMenu();
 
   int activeCameraIdx = 0;
   bool cameraSwitchPending = false;

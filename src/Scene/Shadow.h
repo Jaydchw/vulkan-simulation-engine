@@ -11,7 +11,7 @@
 #include "../Util/Debug.h"
 #include "ECS/Components.h"
 
-constexpr uint32_t SHADOW_MAP_SIZE = 16384;
+constexpr uint32_t SHADOW_MAP_SIZE = 4096;
 constexpr uint32_t MAX_SHADOW_CASTERS = 4;
 
 struct ShadowMapData {
