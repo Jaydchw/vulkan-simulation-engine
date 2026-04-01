@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<GtaTestDurations xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Executable>D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\x64\Release\jphyslib-test.exe</Executable>
+  <TestDurations>
+    <TestDuration Test="Collider.CreateSphere" Duration="1" />
+    <TestDuration Test="Collider.CreateAABB" Duration="1" />
+    <TestDuration Test="Collider.CreateInfinitePlane" Duration="1" />
+    <TestDuration Test="Collider.CreateFinitePlane" Duration="1" />
+    <TestDuration Test="Collider.PlaneNormalIsNormalized" Duration="1" />
+    <TestDuration Test="Collider.DefaultIsSphere" Duration="1" />
+    <TestDuration Test="PhysicsObject.DefaultValues" Duration="1" />
+    <TestDuration Test="PhysicsObject.ConstructWithPositionAndCollider" Duration="1" />
+    <TestDuration Test="PhysicsObject.SettersWork" Duration="1" />
+    <TestDuration Test="PhysicsWorld.GravityDefault" Duration="1" />
+    <TestDuration Test="PhysicsWorld.AddAndRemoveObjects" Duration="1" />
+    <TestDuration Test="PhysicsWorld.GravityApplied" Duration="1" />
+    <TestDuration Test="PhysicsWorld.StaticObjectsDoNotMove" Duration="1" />
+    <TestDuration Test="PhysicsWorld.NoGravityWhenDisabled" Duration="1" />
+    <TestDuration Test="PhysicsWorld.ZeroDeltaTimeNoOp" Duration="1" />
+    <TestDuration Test="PhysicsWorld.NegativeDeltaTimeNoOp" Duration="1" />
+    <TestDuration Test="PhysicsWorld.VelocityMovesObject" Duration="1" />
+    <TestDuration Test="PhysicsWorld.AccelerationApplied" Duration="1" />
+    <TestDuration Test="PhysicsWorld.DampingReducesVelocity" Duration="1" />
+    <TestDuration Test="SpherePlane.DetectsCollision" Duration="1" />
+    <TestDuration Test="SpherePlane.NoCollisionWhenFarAway" Duration="1" />
+    <TestDuration Test="SpherePlane.ExactlyTouchingIsNotCollision" Duration="1" />
+    <TestDuration Test="SpherePlane.PenetrationDepthIsCorrect" Duration="1" />
+    <TestDuration Test="SpherePlane.FinitePlaneRejectsOutsideSphere" Duration="1" />
+    <TestDuration Test="SpherePlane.FinitePlaneDetectsInsideSphere" Duration="1" />
+    <TestDuration Test="SpherePlane.AngledPlane" Duration="1" />
+    <TestDuration Test="SphereSphere.DetectsOverlap" Duration="1" />
+    <TestDuration Test="SphereSphere.NoOverlapWhenFarApart" Duration="1" />
+    <TestDuration Test="SphereSphere.ExactlyTouchingIsNotCollision" Duration="1" />
+    <TestDuration Test="SphereSphere.CoincidentSpheresNoCollision" Duration="1" />
+    <TestDuration Test="SphereSphere.NormalPointsFromBToA" Duration="1" />
+    <TestDuration Test="SphereSphere.DifferentRadii" Duration="1" />
+    <TestDuration Test="SphereSphere.DiagonalOverlap" Duration="1" />
+    <TestDuration Test="SphereAABB.DetectsOverlap" Duration="1" />
+    <TestDuration Test="SphereAABB.NoOverlapWhenFarAway" Duration="1" />
+    <TestDuration Test="SphereAABB.SphereAboveBox" Duration="1" />
+    <TestDuration Test="SphereAABB.CornerCollision" Duration="1" />
+    <TestDuration Test="SphereAABB.ScaledBox" Duration="1" />
+    <TestDuration Test="SphereAABB.InsideSphereNoCollision" Duration="1" />
+    <TestDuration Test="Resolution.SphereBounceOffPlane" Duration="1" />
+    <TestDuration Test="Resolution.SphereSphereEqualMassBounce" Duration="1" />
+    <TestDuration Test="Resolution.SphereBouncesOffAABB" Duration="1" />
+    <TestDuration Test="Resolution.PartialRestitutionLosesEnergy" Duration="1" />
+    <TestDuration Test="Resolution.ZeroRestitutionStopsObject" Duration="1" />
+    <TestDuration Test="Resolution.HeavyObjectPushesLightObject" Duration="1" />
+    <TestDuration Test="Intersection.TwoSpheresOverlapping" Duration="1" />
+    <TestDuration Test="Intersection.SphereInsideLargerSphere" Duration="1" />
+    <TestDuration Test="Intersection.SphereBelowPlane" Duration="1" />
+    <TestDuration Test="Intersection.SphereEdgeOfAABB" Duration="1" />
+    <TestDuration Test="Intersection.MultipleSpheresSamePosition" Duration="1" />
+    <TestDuration Test="Simulation.BallDropOntoPlane" Duration="1" />
+    <TestDuration Test="Simulation.TwoSpheresHeadOn" Duration="1" />
+    <TestDuration Test="Torque.PerpendicularForceProducesTorque" Duration="1" />
+    <TestDuration Test="Torque.ParallelForceProducesNoTorque" Duration="1" />
+    <TestDuration Test="Torque.MagnitudeScalesWithDistance" Duration="1" />
+    <TestDuration Test="Torque.AccumulatesAngularVelocity" Duration="1" />
+    <TestDuration Test="Torque.ClearedAfterStep" Duration="1" />
+    <TestDuration Test="SphereInertia.FormulaIsCorrect" Duration="1" />
+    <TestDuration Test="SphereInertia.HeavierSphereSlowerAngularAccel" Duration="1" />
+    <TestDuration Test="SphereInertia.AngularVelocityMatchesTauOverI" Duration="1" />
+    <TestDuration Test="CylinderInertia.BodySpaceValuesCorrect" Duration="1" />
+    <TestDuration Test="CylinderInertia.IdentityOrientationWorldMatchesBody" Duration="1" />
+    <TestDuration Test="CylinderInertia.AlongAxisFasterThanPerp" Duration="1" />
+    <TestDuration Test="CylinderInertia.NinetyDegRotationChangesResponse" Duration="1" />
+  </TestDurations>
+</GtaTestDurations>

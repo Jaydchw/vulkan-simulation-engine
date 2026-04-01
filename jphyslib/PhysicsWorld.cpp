@@ -4,11 +4,92 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <future>
+#include <limits>
+#include <thread>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 #include <glm/gtc/quaternion.hpp>
 
 namespace jphys {
+
+static float getMaxScaleComponent(const PhysicsObject& obj) {
+  const glm::vec3 s = glm::abs(obj.getScale());
+  return std::max(s.x, std::max(s.y, s.z));
+}
+
+static float getBroadphaseRadius(const PhysicsObject& obj) {
+  const Collider& c = obj.getCollider();
+  const float scaleMax = getMaxScaleComponent(obj);
+
+  switch (c.getType()) {
+    case ColliderType::Sphere:
+      return c.getRadius() * scaleMax;
+    case ColliderType::AABB:
+      return glm::length(c.getHalfExtents() * glm::abs(obj.getScale()));
+    case ColliderType::Plane:
+      if (!c.isFinite()) return std::numeric_limits<float>::infinity();
+      return glm::length(c.getHalfExtents() * glm::abs(obj.getScale()));
+    case ColliderType::Cylinder: {
+      const float r = c.getRadius() * scaleMax;
+      const float h = 0.5f * c.getHeight() * scaleMax;
+      return std::sqrt(r * r + h * h);
+    }
+    case ColliderType::Capsule:
+      return (0.5f * c.getHeight() + c.getRadius()) * scaleMax;
+    case ColliderType::Cone: {
+      const float r = c.getRadius() * scaleMax;
+      const float h = 0.5f * c.getHeight() * scaleMax;
+      return std::sqrt(r * r + h * h);
+    }
+  }
+
+  return std::numeric_limits<float>::infinity();
+}
+
+static bool broadphaseMayCollide(const PhysicsObject& a,
+                                 const PhysicsObject& b) {
+  const float ra = getBroadphaseRadius(a);
+  const float rb = getBroadphaseRadius(b);
+  if (!std::isfinite(ra) || !std::isfinite(rb)) return true;
+
+  const glm::vec3 d = a.getPosition() - b.getPosition();
+  const float r = ra + rb;
+  return glm::dot(d, d) <= r * r;
+}
+
+struct GridKey {
+  int x;
+  int y;
+  int z;
+
+  bool operator==(const GridKey& o) const {
+    return x == o.x && y == o.y && z == o.z;
+  }
+};
+
+struct GridKeyHash {
+  size_t operator()(const GridKey& k) const {
+    const size_t hx = std::hash<int>{}(k.x);
+    const size_t hy = std::hash<int>{}(k.y);
+    const size_t hz = std::hash<int>{}(k.z);
+    return hx ^ (hy * 0x9e3779b1u) ^ (hz * 0x85ebca6bu);
+  }
+};
+
+static uint64_t makePairKey(uint32_t a, uint32_t b) {
+  const uint32_t lo = std::min(a, b);
+  const uint32_t hi = std::max(a, b);
+  return (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+}
+
+static void decodePairKey(uint64_t k, uint32_t& a, uint32_t& b) {
+  a = static_cast<uint32_t>(k >> 32);
+  b = static_cast<uint32_t>(k & 0xffffffffu);
+}
 
 PhysicsWorld::PhysicsWorld() {}
 
@@ -93,18 +174,122 @@ void PhysicsWorld::resolveCollisions() {
   lastCollisionStats.clear();
   pairIndex.clear();
 
-  for (size_t i = 0; i < objects.size(); ++i) {
-    PhysicsObject* objA = objects[i];
-    if (!objA || objA->isStatic()) continue;
+  std::vector<PhysicsObject*> activeObjects;
+  activeObjects.reserve(objects.size());
+  for (PhysicsObject* obj : objects) {
+    if (obj) activeObjects.push_back(obj);
+  }
+  if (activeObjects.size() < 2) return;
+
+  constexpr float gridCellSize = 8.0f;
+  const float invCellSize = 1.0f / gridCellSize;
+
+  std::unordered_map<GridKey, std::vector<uint32_t>, GridKeyHash> grid;
+  grid.reserve(activeObjects.size() * 2);
+
+  std::vector<uint32_t> globalObjects;
+  globalObjects.reserve(activeObjects.size());
+
+  for (uint32_t i = 0; i < static_cast<uint32_t>(activeObjects.size()); ++i) {
+    const PhysicsObject& obj = *activeObjects[i];
+    const float r = getBroadphaseRadius(obj);
+    if (!std::isfinite(r)) {
+      globalObjects.push_back(i);
+      continue;
+    }
+
+    const glm::vec3 p = obj.getPosition();
+    const glm::vec3 bmin = p - glm::vec3(r);
+    const glm::vec3 bmax = p + glm::vec3(r);
+
+    const int minX = static_cast<int>(std::floor(bmin.x * invCellSize));
+    const int minY = static_cast<int>(std::floor(bmin.y * invCellSize));
+    const int minZ = static_cast<int>(std::floor(bmin.z * invCellSize));
+    const int maxX = static_cast<int>(std::floor(bmax.x * invCellSize));
+    const int maxY = static_cast<int>(std::floor(bmax.y * invCellSize));
+    const int maxZ = static_cast<int>(std::floor(bmax.z * invCellSize));
+
+    for (int x = minX; x <= maxX; ++x) {
+      for (int y = minY; y <= maxY; ++y) {
+        for (int z = minZ; z <= maxZ; ++z) {
+          grid[{x, y, z}].push_back(i);
+        }
+      }
+    }
+  }
+
+  std::vector<const std::vector<uint32_t>*> buckets;
+  buckets.reserve(grid.size());
+  for (auto& kv : grid) {
+    if (kv.second.size() > 1) buckets.push_back(&kv.second);
+  }
+
+  auto buildPairsForRange = [&](size_t begin, size_t end) {
+    std::unordered_set<uint64_t> local;
+    for (size_t bi = begin; bi < end; ++bi) {
+      const auto& bucket = *buckets[bi];
+      for (size_t i = 0; i < bucket.size(); ++i) {
+        PhysicsObject* a = activeObjects[bucket[i]];
+        for (size_t j = i + 1; j < bucket.size(); ++j) {
+          PhysicsObject* b = activeObjects[bucket[j]];
+          if (a->isStatic() && b->isStatic()) continue;
+          local.insert(makePairKey(bucket[i], bucket[j]));
+        }
+      }
+    }
+    return local;
+  };
+
+  std::unordered_set<uint64_t> candidatePairs;
+  if (!buckets.empty()) {
+    const unsigned int hw = std::thread::hardware_concurrency();
+    const unsigned int workerCount = std::max(1u, std::min<unsigned int>(
+        hw > 1 ? hw - 1 : 1, static_cast<unsigned int>(buckets.size())));
+
+    if (workerCount > 1 && buckets.size() >= 16) {
+      std::vector<std::future<std::unordered_set<uint64_t>>> jobs;
+      jobs.reserve(workerCount);
+      const size_t chunk = (buckets.size() + workerCount - 1) / workerCount;
+      for (unsigned int w = 0; w < workerCount; ++w) {
+        const size_t begin = static_cast<size_t>(w) * chunk;
+        if (begin >= buckets.size()) break;
+        const size_t end = std::min(begin + chunk, buckets.size());
+        jobs.push_back(std::async(std::launch::async, buildPairsForRange, begin, end));
+      }
+      for (auto& job : jobs) {
+        auto local = job.get();
+        candidatePairs.insert(local.begin(), local.end());
+      }
+    } else {
+      candidatePairs = buildPairsForRange(0, buckets.size());
+    }
+  }
+
+  for (uint32_t gi : globalObjects) {
+    for (uint32_t i = 0; i < static_cast<uint32_t>(activeObjects.size()); ++i) {
+      if (i == gi) continue;
+      PhysicsObject* a = activeObjects[gi];
+      PhysicsObject* b = activeObjects[i];
+      if (a->isStatic() && b->isStatic()) continue;
+      candidatePairs.insert(makePairKey(gi, i));
+    }
+  }
+
+  for (uint64_t pairKey : candidatePairs) {
+    uint32_t ia = 0;
+    uint32_t ib = 0;
+    decodePairKey(pairKey, ia, ib);
+
+    PhysicsObject* objA = activeObjects[ia];
+    PhysicsObject* objB = activeObjects[ib];
+
+    if (objA->isStatic() && !objB->isStatic())
+      std::swap(objA, objB);
+
+    if (!broadphaseMayCollide(*objA, *objB)) continue;
 
     const Collider& colA = objA->getCollider();
-
-    for (size_t j = 0; j < objects.size(); ++j) {
-      if (i == j) continue;
-      PhysicsObject* objB = objects[j];
-      if (!objB) continue;
-
-      const Collider& colB = objB->getCollider();
+    const Collider& colB = objB->getCollider();
 
       if (colA.getType() == ColliderType::Sphere &&
           colB.getType() == ColliderType::Plane) {
@@ -266,7 +451,6 @@ void PhysicsWorld::resolveCollisions() {
         recordCollision("Cone / Sphere", r.collided);
         if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
       }
-    }
   }
 }
 

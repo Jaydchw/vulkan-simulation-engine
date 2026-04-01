@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="64" failures="0" disabled="0" errors="0" timestamp="2026-04-01T02:09:04" time="0.029" name="AllTests">
+  <testsuite name="Collider" tests="6" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="CreateSphere" status="run" time="0" classname="Collider" />
+    <testcase name="CreateAABB" status="run" time="0" classname="Collider" />
+    <testcase name="CreateInfinitePlane" status="run" time="0" classname="Collider" />
+    <testcase name="CreateFinitePlane" status="run" time="0" classname="Collider" />
+    <testcase name="PlaneNormalIsNormalized" status="run" time="0" classname="Collider" />
+    <testcase name="DefaultIsSphere" status="run" time="0" classname="Collider" />
+  </testsuite>
+  <testsuite name="PhysicsObject" tests="3" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="DefaultValues" status="run" time="0" classname="PhysicsObject" />
+    <testcase name="ConstructWithPositionAndCollider" status="run" time="0" classname="PhysicsObject" />
+    <testcase name="SettersWork" status="run" time="0" classname="PhysicsObject" />
+  </testsuite>
+  <testsuite name="PhysicsWorld" tests="10" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="GravityDefault" status="run" time="0" classname="PhysicsWorld" />
+    <testcase name="AddAndRemoveObjects" status="run" time="0" classname="PhysicsWorld" />
+    <testcase name="GravityApplied" status="run" time="0" classname="PhysicsWorld" />
+    <testcase name="StaticObjectsDoNotMove" status="run" time="0" classname="PhysicsWorld" />
+    <testcase name="NoGravityWhenDisabled" status="run" time="0" classname="PhysicsWorld" />
+    <testcase name="ZeroDeltaTimeNoOp" status="run" time="0" classname="PhysicsWorld" />
+    <testcase name="NegativeDeltaTimeNoOp" status="run" time="0" classname="PhysicsWorld" />
+    <testcase name="VelocityMovesObject" status="run" time="0" classname="PhysicsWorld" />
+    <testcase name="AccelerationApplied" status="run" time="0" classname="PhysicsWorld" />
+    <testcase name="DampingReducesVelocity" status="run" time="0" classname="PhysicsWorld" />
+  </testsuite>
+  <testsuite name="SpherePlane" tests="7" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="DetectsCollision" status="run" time="0" classname="SpherePlane" />
+    <testcase name="NoCollisionWhenFarAway" status="run" time="0" classname="SpherePlane" />
+    <testcase name="ExactlyTouchingIsNotCollision" status="run" time="0" classname="SpherePlane" />
+    <testcase name="PenetrationDepthIsCorrect" status="run" time="0" classname="SpherePlane" />
+    <testcase name="FinitePlaneRejectsOutsideSphere" status="run" time="0" classname="SpherePlane" />
+    <testcase name="FinitePlaneDetectsInsideSphere" status="run" time="0" classname="SpherePlane" />
+    <testcase name="AngledPlane" status="run" time="0" classname="SpherePlane" />
+  </testsuite>
+  <testsuite name="SphereSphere" tests="7" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="DetectsOverlap" status="run" time="0" classname="SphereSphere" />
+    <testcase name="NoOverlapWhenFarApart" status="run" time="0" classname="SphereSphere" />
+    <testcase name="ExactlyTouchingIsNotCollision" status="run" time="0" classname="SphereSphere" />
+    <testcase name="CoincidentSpheresNoCollision" status="run" time="0" classname="SphereSphere" />
+    <testcase name="NormalPointsFromBToA" status="run" time="0" classname="SphereSphere" />
+    <testcase name="DifferentRadii" status="run" time="0" classname="SphereSphere" />
+    <testcase name="DiagonalOverlap" status="run" time="0" classname="SphereSphere" />
+  </testsuite>
+  <testsuite name="SphereAABB" tests="6" failures="0" disabled="0" errors="0" time="0.002">
+    <testcase name="DetectsOverlap" status="run" time="0" classname="SphereAABB" />
+    <testcase name="NoOverlapWhenFarAway" status="run" time="0" classname="SphereAABB" />
+    <testcase name="SphereAboveBox" status="run" time="0" classname="SphereAABB" />
+    <testcase name="CornerCollision" status="run" time="0" classname="SphereAABB" />
+    <testcase name="ScaledBox" status="run" time="0" classname="SphereAABB" />
+    <testcase name="InsideSphereNoCollision" status="run" time="0" classname="SphereAABB" />
+  </testsuite>
+  <testsuite name="Resolution" tests="6" failures="0" disabled="0" errors="0" time="0.011">
+    <testcase name="SphereBounceOffPlane" status="run" time="0" classname="Resolution" />
+    <testcase name="SphereSphereEqualMassBounce" status="run" time="0" classname="Resolution" />
+    <testcase name="SphereBouncesOffAABB" status="run" time="0" classname="Resolution" />
+    <testcase name="PartialRestitutionLosesEnergy" status="run" time="0" classname="Resolution" />
+    <testcase name="ZeroRestitutionStopsObject" status="run" time="0" classname="Resolution" />
+    <testcase name="HeavyObjectPushesLightObject" status="run" time="0" classname="Resolution" />
+  </testsuite>
+  <testsuite name="Intersection" tests="5" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="TwoSpheresOverlapping" status="run" time="0" classname="Intersection" />
+    <testcase name="SphereInsideLargerSphere" status="run" time="0" classname="Intersection" />
+    <testcase name="SphereBelowPlane" status="run" time="0" classname="Intersection" />
+    <testcase name="SphereEdgeOfAABB" status="run" time="0" classname="Intersection" />
+    <testcase name="MultipleSpheresSamePosition" status="run" time="0" classname="Intersection" />
+  </testsuite>
+  <testsuite name="Simulation" tests="2" failures="0" disabled="0" errors="0" time="0.002">
+    <testcase name="BallDropOntoPlane" status="run" time="0.001" classname="Simulation" />
+    <testcase name="TwoSpheresHeadOn" status="run" time="0.001" classname="Simulation" />
+  </testsuite>
+  <testsuite name="Torque" tests="5" failures="0" disabled="0" errors="0" time="0.011">
+    <testcase name="PerpendicularForceProducesTorque" status="run" time="0" classname="Torque" />
+    <testcase name="ParallelForceProducesNoTorque" status="run" time="0" classname="Torque" />
+    <testcase name="MagnitudeScalesWithDistance" status="run" time="0" classname="Torque" />
+    <testcase name="AccumulatesAngularVelocity" status="run" time="0" classname="Torque" />
+    <testcase name="ClearedAfterStep" status="run" time="0" classname="Torque" />
+  </testsuite>
+  <testsuite name="SphereInertia" tests="3" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="FormulaIsCorrect" status="run" time="0" classname="SphereInertia" />
+    <testcase name="HeavierSphereSlowerAngularAccel" status="run" time="0" classname="SphereInertia" />
+    <testcase name="AngularVelocityMatchesTauOverI" status="run" time="0" classname="SphereInertia" />
+  </testsuite>
+  <testsuite name="CylinderInertia" tests="4" failures="0" disabled="0" errors="0" time="0">
+    <testcase name="BodySpaceValuesCorrect" status="run" time="0" classname="CylinderInertia" />
+    <testcase name="IdentityOrientationWorldMatchesBody" status="run" time="0" classname="CylinderInertia" />
+    <testcase name="AlongAxisFasterThanPerp" status="run" time="0" classname="CylinderInertia" />
+    <testcase name="NinetyDegRotationChangesResponse" status="run" time="0" classname="CylinderInertia" />
+  </testsuite>
+</testsuites>
