@@ -72,6 +72,24 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
           settings.simulationHz = parseInt(val);
         else if (key == "MaxFps")
           settings.maxFps = parseInt(val);
+        else if (key == "KillboxEnabled")
+          settings.killboxEnabled = parseBool(val);
+        else if (key == "KillboxY")
+          settings.killboxY = parseFloat(val);
+        else if (key == "Wind")
+          settings.environment.wind = parseVec3(val);
+        else if (key == "WindDrag")
+          settings.environment.windDrag = parseFloat(val);
+        else if (key == "WindAffects") {
+          if (val == "AllObjects")
+            settings.environment.windAffects = WindAffectsMode::AllObjects;
+          else
+            settings.environment.windAffects = WindAffectsMode::ClothOnly;
+        } else if (key == "WindAffectsAllObjects") {
+          settings.environment.windAffects = parseBool(val)
+              ? WindAffectsMode::AllObjects
+              : WindAffectsMode::ClothOnly;
+        }
       }
       continue;
     }
@@ -677,6 +695,79 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
       registry.addComponent<CameraComponent>(camEntity, cam);
 
       Debug::log(Debug::Category::MAIN, "WorldParser: Created camera '", camName, "'");
+      continue;
+    }
+
+    if (line == "BeginCloth") {
+      std::string clothName = "Cloth";
+      glm::vec3 position(0.0f, 10.0f, 0.0f);
+      std::string materialRef;
+      ClothComponent cloth;
+
+      while (std::getline(file, line)) {
+        lineNum++;
+        line = trim(line);
+        if (line.empty() || line[0] == '#') continue;
+        if (line == "EndCloth") break;
+
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        std::string key = trim(line.substr(0, eq));
+        std::string val = trim(line.substr(eq + 1));
+
+        if      (key == "Name")          clothName = val;
+        else if (key == "Position")      position = parseVec3(val);
+        else if (key == "Material")      materialRef = val;
+        else if (key == "ResolutionX")   cloth.resolutionX = parseInt(val);
+        else if (key == "ResolutionZ")   cloth.resolutionZ = parseInt(val);
+        else if (key == "Width")         cloth.width = parseFloat(val);
+        else if (key == "ClothHeight")   cloth.clothHeight = parseFloat(val);
+        else if (key == "StructuralStiffness") cloth.structuralStiffness = parseFloat(val);
+        else if (key == "BendingStiffness")    cloth.bendingStiffness = parseFloat(val);
+        else if (key == "Stiffness") {
+          float s = parseFloat(val);
+          cloth.structuralStiffness = s;
+          cloth.bendingStiffness    = s * 0.15f;
+        }
+        else if (key == "Damping")         cloth.damping = parseFloat(val);
+        else if (key == "ParticleMass")    cloth.particleMass = parseFloat(val);
+        else if (key == "UseGravity")      cloth.useGravity = parseBool(val);
+        else if (key == "EulerAngles")     cloth.eulerAngles = parseVec3(val);
+        else if (key == "SolverIterations") cloth.solverIterations = parseInt(val);
+        else if (key == "PinSpacing")      cloth.pinSpacing = parseInt(val);
+        else if (key == "Tearability")     cloth.tearability = parseFloat(val);
+        else if (key == "TearThreshold")   cloth.tearability = parseFloat(val);
+        else if (key == "Hinge") {
+          if      (val == "None")          cloth.hinge = ClothHinge::None;
+          else if (val == "TopRow")        cloth.hinge = ClothHinge::TopRow;
+          else if (val == "BottomRow")     cloth.hinge = ClothHinge::BottomRow;
+          else if (val == "LeftCol")       cloth.hinge = ClothHinge::LeftCol;
+          else if (val == "RightCol")      cloth.hinge = ClothHinge::RightCol;
+          else if (val == "TopCorners")    cloth.hinge = ClothHinge::TopCorners;
+          else if (val == "BottomCorners") cloth.hinge = ClothHinge::BottomCorners;
+          else if (val == "AllCorners")    cloth.hinge = ClothHinge::AllCorners;
+        }
+        else if (key == "PinnedTopRow") {
+          cloth.hinge = parseBool(val) ? ClothHinge::TopRow : ClothHinge::None;
+        }
+        else if (key == "Wind")            cloth.wind = parseVec3(val);
+        else if (key == "OwnerPeer")       cloth.ownerPeerId = static_cast<uint8_t>(parseInt(val));
+      }
+
+      Entity clothEntity = registry.createEntity();
+      registry.addComponent<NameComponent>(clothEntity, {clothName});
+      TransformComponent t;
+      t.position = position;
+      registry.addComponent<TransformComponent>(clothEntity, t);
+      registry.addComponent<RenderComponent>(clothEntity, RenderComponent{});
+      registry.addComponent<ClothComponent>(clothEntity, cloth);
+
+      auto matIt = namedMaterials.find(materialRef);
+      if (matIt != namedMaterials.end())
+        registry.addComponent<RenderMaterialComponent>(clothEntity,
+                                                       {matIt->second});
+
+      Debug::log(Debug::Category::MAIN, "WorldParser: Created cloth '", clothName, "'");
       continue;
     }
   }

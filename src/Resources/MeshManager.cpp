@@ -606,6 +606,59 @@ MeshID MeshManager::registerMesh(Mesh* mesh) {
   return id;
 }
 
+MeshID MeshManager::createDynamicMesh(const std::vector<Vertex>& vertices,
+                                      const std::vector<uint16_t>& indices) {
+  Mesh* mesh = new Mesh();
+  mesh->setName("DynamicCloth");
+  mesh->setType(MeshType::Custom);
+  mesh->setVertices(vertices);
+  mesh->setIndices(indices);
+
+  const VkDeviceSize vertexBufferSize = sizeof(Vertex) * vertices.size();
+  void* mappedData = nullptr;
+  VkBuffer vBuf;
+  VmaAllocation vAlloc;
+  renderDevice->createBuffer(
+      vertexBufferSize,
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      vBuf, vAlloc, &mappedData);
+  memcpy(mappedData, vertices.data(), static_cast<size_t>(vertexBufferSize));
+  mesh->setVertexBuffer(vBuf);
+  mesh->setVertexBufferAllocation(vAlloc);
+  mesh->setMappedVertexData(mappedData);
+  mesh->setBoundingRadius(1e6f);
+
+  VkBuffer stagingBuffer;
+  VmaAllocation stagingAlloc;
+  void* stagingData;
+  const VkDeviceSize indexBufferSize = sizeof(uint16_t) * indices.size();
+  renderDevice->createBuffer(indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                             stagingBuffer, stagingAlloc, &stagingData);
+  memcpy(stagingData, indices.data(), static_cast<size_t>(indexBufferSize));
+  VkBuffer iBuf;
+  VmaAllocation iAlloc;
+  renderDevice->createBuffer(
+      indexBufferSize,
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, iBuf, iAlloc);
+  renderDevice->copyBuffer(stagingBuffer, iBuf, indexBufferSize);
+  renderDevice->destroyBuffer(stagingBuffer, stagingAlloc);
+  mesh->setIndexBuffer(iBuf);
+  mesh->setIndexBufferAllocation(iAlloc);
+
+  return registerMesh(mesh);
+}
+
+void MeshManager::updateDynamicMeshVertices(MeshID id, const std::vector<Vertex>& vertices) {
+  Mesh* mesh = getMesh(id);
+  if (!mesh || !mesh->getMappedVertexData()) return;
+  memcpy(mesh->getMappedVertexData(), vertices.data(),
+         sizeof(Vertex) * vertices.size());
+}
+
 void MeshManager::createBuffers(Mesh* mesh) const {
   std::vector<Vertex> vertices;
   mesh->getVertices(vertices);

@@ -1,0 +1,125 @@
+# Cloth Spawner Demo
+# A cloth hangs vertically and a spawner fires balls from the side.
+# Shows cloth deformation from spawned simulated objects.
+
+BeginSettings
+  ClearColor = 0.07, 0.08, 0.13, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = ClothMat
+  AlbedoColor = 0.3, 0.55, 0.9
+  Roughness = 0.75
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = BallMat
+  AlbedoColor = 0.95, 0.5, 0.15
+  Roughness = 0.3
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.25, 0.27, 0.30
+  Roughness = 0.95
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.5
+  Segments = 20
+EndMesh
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 60.0
+  Height = 60.0
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 30.0, 0.0, 30.0
+EndObject
+
+BeginSpawner
+  Name = Ball Cannon
+  Position = 0.0, 9.0, -16.0
+  SpawnInterval = 0.75
+  SpawnIntervalRandomness = 0.3
+  SpawnDirection = 0.0, 0.12, 1.0
+  DirectionRandomness = 0.15
+  SpawnSpeed = 14.0
+  SpeedRandomness = 0.2
+  SpawnOffset = 0.0, 0.0, 0.0
+  PositionRandomness = 1.5
+  MaxSpawns = -1
+  BeginTemplate
+    NamePrefix = Ball
+    Mesh = Ball
+    Material = BallMat
+    Mass = 0.4
+    Restitution = 0.5
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.5
+  EndTemplate
+EndSpawner
+
+BeginCloth
+  Name = Target Cloth
+  Position = 0.0, 14.0, 0.0
+  Material = ClothMat
+  ResolutionX = 20
+  ResolutionZ = 18
+  Width = 10.0
+  ClothHeight = 10.0
+  StructuralStiffness = 0.8
+  BendingStiffness = 0.08
+  Damping = 0.99
+  ParticleMass = 0.08
+  Tearability = 1.8
+  UseGravity = true
+  Hinge = TopRow
+  PinSpacing = 2
+  Wind = 0.0, 0.0, 0.0
+EndCloth
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.3, -1.0, 0.5
+  Color = 1.0, 0.96, 0.88
+  Intensity = 2.8
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill Left
+  Type = point
+  Position = -12.0, 12.0, 8.0
+  Color = 0.5, 0.65, 1.0
+  Intensity = 110.0
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = Fill Right
+  Type = point
+  Position = 8.0, 10.0, 8.0
+  Color = 1.0, 0.7, 0.4
+  Intensity = 70.0
+  CastsShadows = false
+EndLight

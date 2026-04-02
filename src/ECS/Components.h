@@ -129,6 +129,36 @@ struct AnimationComponent {
   bool  active      = true;
 };
 
+enum class ClothHinge {
+  None,
+  TopRow,
+  BottomRow,
+  LeftCol,
+  RightCol,
+  TopCorners,
+  BottomCorners,
+  AllCorners
+};
+
+struct ClothComponent {
+  int resolutionX = 12;
+  int resolutionZ = 12;
+  float width = 6.0f;
+  float clothHeight = 6.0f;
+  float structuralStiffness = 0.8f;
+  float bendingStiffness = 0.1f;
+  float damping = 0.99f;
+  float particleMass = 0.1f;
+  bool useGravity = true;
+  glm::vec3 eulerAngles = glm::vec3(0.0f);
+  ClothHinge hinge = ClothHinge::TopRow;
+  int pinSpacing = 1;
+  int solverIterations = 8;
+  glm::vec3 wind = glm::vec3(0.0f);
+  float tearability = 0.0f;
+  uint8_t ownerPeerId = 0;
+};
+
 struct SpawnerComponent {
   std::vector<SpawnTemplate> templates;
 

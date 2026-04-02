@@ -143,6 +143,7 @@
     <ClCompile Include="src\Application.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Animation\AnimationSystem.cpp" />
+    <ClCompile Include="src\Cloth\ClothSystem.cpp" />
     <ClCompile Include="src\Network\NetworkManager.cpp" />
     <ClCompile Include="src\Physics\PhysicsSystem.cpp" />
     <ClCompile Include="src\Spawning\SpawnerSystem.cpp" />
@@ -196,7 +197,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Application.h" />
+    <ClInclude Include="src\Cloth\ClothSystem.h" />
     <ClInclude Include="src\ECS\Components.h" />
+    <ClInclude Include="src\Environment\EnvironmentSettings.h" />
     <ClInclude Include="src\Network\NetworkManager.h" />
     <ClInclude Include="src\Network\NetworkPackets.h" />
     <ClInclude Include="src\ECS\Entity.h" />
@@ -336,6 +339,12 @@
       <FileType>Document</FileType>
     </CustomBuild>
     <None Include=".github\copilot-instructions.md" />
+    <None Include="Scenes\Worlds\cloth_large_sheets.world" />
+    <None Include="Scenes\Worlds\cloth_multi_spawner.world" />
+    <None Include="Scenes\Worlds\cloth_two_cloths_spawners.world" />
+    <None Include="Scenes\Worlds\demo_cloth_multi_spawner.world" />
+    <None Include="Scenes\Worlds\demo_cloth_two_cloths.world" />
+    <None Include="Scenes\Worlds\demo_cloth_two_cloths_spawners.world" />
     <None Include="Worlds\balltest.world" />
     <None Include="Worlds\minimal.world" />
     <None Include="Worlds\neon.world" />

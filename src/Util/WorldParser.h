@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "ECS/Registry.h"
+#include "Environment/EnvironmentSettings.h"
 #include "Resources/MaterialManager.h"
 #include "Resources/MeshManager.h"
 #include "Resources/ProceduralTexture.h"
@@ -13,6 +14,9 @@ struct WorldSettings {
   float timeSpeed = 1.0f;
   int simulationHz = 60;   // Physics steps per second (step size = 1/Hz)
   int maxFps = 0;          // Render frame rate cap (0 = unlimited)
+  EnvironmentSettings environment;
+  bool killboxEnabled = true;
+  float killboxY = -150.0f;
 };
 
 class WorldParser final {

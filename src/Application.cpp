@@ -16,6 +16,7 @@
 #include "Util/FrustumCuller.h"
 #include "Util/RenderUtils.h"
 #include "Util/ThreadAffinity.h"
+#include "Cloth/ClothSystem.h"
 #include "Physics/PhysicsSystem.h"
 #include "Spawning/SpawnerSystem.h"
 #include "Timeline/TimelineSystem.h"
@@ -108,6 +109,7 @@ void Application::setRegistry(Registry& reg) {
   spawnerSystem->setRegistry(registry);
   timelineSystem->setRegistry(registry);
   timelineSystem->saveInitialSnapshot();
+  if (clothSystem) clothSystem->setRegistry(registry, meshManager.get());
 }
 
 void Application::loadWorld(const std::string& filepath) {
@@ -128,6 +130,7 @@ void Application::loadWorld(const std::string& filepath) {
     worldParser->load(filepath, *registry, worldSettings);
 
     sceneSettings.clearColor = worldSettings.clearColor;
+    environmentSettings = worldSettings.environment;
 
     lightManager->setRegistry(registry);
     lightManager->syncLights();
@@ -137,6 +140,7 @@ void Application::loadWorld(const std::string& filepath) {
     spawnerSystem->setRegistry(registry);
     timelineSystem->setRegistry(registry);
     timelineSystem->saveInitialSnapshot();
+    if (clothSystem) clothSystem->setRegistry(registry, meshManager.get());
 
     if (networkManager) {
       networkManager->init(registry);
@@ -155,6 +159,10 @@ void Application::loadWorld(const std::string& filepath) {
     if (worldSettings.simulationHz > 0)
       simState.stepSize = 1.0f / static_cast<float>(worldSettings.simulationHz);
     simState.maxFps = worldSettings.maxFps;
+
+    physicsSystem->setEnvironmentSettings(&environmentSettings);
+    physicsSystem->setKillbox(worldSettings.killboxEnabled, worldSettings.killboxY);
+    if (clothSystem) clothSystem->setEnvironmentSettings(&environmentSettings);
   }
 
   lastLoadedWorldPath = filepath;
@@ -191,6 +199,7 @@ void Application::loadFBScene(const std::string& filepath) {
     spawnerSystem->setRegistry(registry);
     timelineSystem->setRegistry(registry);
     timelineSystem->saveInitialSnapshot();
+    if (clothSystem) clothSystem->setRegistry(registry, meshManager.get());
 
     if (networkManager) {
       networkManager->init(registry);
@@ -209,6 +218,11 @@ void Application::loadFBScene(const std::string& filepath) {
     simState = SimulationState{};
     simState.threadAffinityEnabled = threadAffinityEnabled;
     simState.physicsAccumulator = 0.0f;
+
+    environmentSettings = EnvironmentSettings{};
+    physicsSystem->setEnvironmentSettings(&environmentSettings);
+    physicsSystem->setKillbox(true, -150.0f);
+    if (clothSystem) clothSystem->setEnvironmentSettings(&environmentSettings);
   }
 
   lastLoadedWorldPath = filepath;
@@ -339,6 +353,7 @@ void Application::simulationThreadFunc() {
           } else {
             physicsSystem->update(simState.stepSize);
           }
+          if (clothSystem) clothSystem->update(simState.stepSize);
           simState.currentTime += simState.stepSize;
           advanced = true;
 
@@ -373,6 +388,7 @@ void Application::simulationThreadFunc() {
             } else {
               physicsSystem->update(simState.stepSize);
             }
+            if (clothSystem) clothSystem->update(simState.stepSize);
             simState.physicsAccumulator -= simState.stepSize;
             simState.currentTime        += simState.stepSize;
 
@@ -584,6 +600,12 @@ void Application::initVulkan() {
   physicsSystem->setNetworkManager(networkManager.get());
   spawnerSystem->setNetworkManager(networkManager.get());
   Debug::log(Debug::Category::NETWORK, "Network: NetworkManager linked to PhysicsSystem and SpawnerSystem");
+
+  clothSystem = std::make_unique<ClothSystem>();
+  clothSystem->setNetworkManager(networkManager.get());
+  clothSystem->setPhysicsSystem(physicsSystem.get());
+  clothSystem->setEnvironmentSettings(&environmentSettings);
+  physicsSystem->setEnvironmentSettings(&environmentSettings);
 
   interface->setWorldDirectory("Scenes/Worlds");
   interface->setFBSceneDirectory("Scenes/FBs");
@@ -1071,7 +1093,7 @@ while (!window->shouldClose()) {
 
     if (simState.isBaking && simState.bakePerformanceMode) {
       auto uiStart = std::chrono::high_resolution_clock::now();
-      interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
+      interface->render(simState, sceneSettings, environmentSettings, *registry, mainPipeline.get(),
                         postProcessing.get(), perfMetrics, networkManager.get());
       if (simState.restartRequested) {
         saveRuntimeSettings();
@@ -1087,7 +1109,7 @@ while (!window->shouldClose()) {
     } else {
       using PerfClock = std::chrono::steady_clock;
       const auto tRender0 = PerfClock::now();
-      interface->render(simState, sceneSettings, *registry, mainPipeline.get(),
+      interface->render(simState, sceneSettings, environmentSettings, *registry, mainPipeline.get(),
                         postProcessing.get(), perfMetrics, networkManager.get());
       perfInterfaceRenderMs = static_cast<float>(
           std::chrono::duration<double, std::milli>(PerfClock::now() - tRender0).count());

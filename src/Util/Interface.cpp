@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -238,6 +239,7 @@ void Interface::createImGuiRenderPass() {
 }
 
 void Interface::render(SimulationState& simState, SceneSettings& sceneSettings,
+EnvironmentSettings& environmentSettings,
 Registry& registry, MainPipeline* mainPipeline,
 PostProcessing* postProcessing,
 const PerformanceMetrics& perfMetrics,
@@ -306,6 +308,10 @@ NetworkManager* networkManager) {
     }
     if (menuItem("Scene")) {
       renderSceneMenu(sceneSettings, mainPipeline, simState);
+      ImGui::EndMenu();
+    }
+    if (menuItem("Environment")) {
+      renderEnvironmentMenu(environmentSettings, registry);
       ImGui::EndMenu();
     }
     if (menuItem("Post Processing")) {
@@ -1425,6 +1431,54 @@ void Interface::renderSceneMenu(SceneSettings& sceneSettings,
                    simState.maxFps == 0 ? "Unlimited" : "%d");
 }
 
+void Interface::renderEnvironmentMenu(EnvironmentSettings& environmentSettings,
+                                      Registry& registry) {
+  const float s = currentScale;
+  const float sliderW = 220.0f * s;
+
+  sectionHeader("Wind");
+  fieldLabel("Wind Vector");
+  ImGui::SetNextItemWidth(sliderW);
+  ImGui::DragFloat3("##env_wind", &environmentSettings.wind.x, 0.05f, -50.0f, 50.0f, "%.2f");
+
+  fieldLabel("Wind Drag");
+  ImGui::SetNextItemWidth(sliderW);
+  ImGui::SliderFloat("##env_wind_drag", &environmentSettings.windDrag, 0.0f, 2.0f, "%.2f");
+
+  fieldLabel("Wind Targets");
+  int mode = (environmentSettings.windAffects == WindAffectsMode::AllObjects) ? 1 : 0;
+  const char* modeItems[] = {"Cloths Only", "All Physics Objects"};
+  ImGui::SetNextItemWidth(sliderW);
+  if (ImGui::Combo("##env_wind_mode", &mode, modeItems, IM_ARRAYSIZE(modeItems))) {
+    environmentSettings.windAffects = (mode == 1)
+        ? WindAffectsMode::AllObjects
+        : WindAffectsMode::ClothOnly;
+  }
+
+  ImGui::Spacing();
+  sectionHeader("Presets");
+  if (ImGui::Button("Calm", ImVec2(70.0f * s, 24.0f * s))) {
+    environmentSettings.wind = glm::vec3(0.0f);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Breeze", ImVec2(70.0f * s, 24.0f * s))) {
+    environmentSettings.wind = glm::vec3(2.0f, 0.0f, 0.8f);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Gust", ImVec2(70.0f * s, 24.0f * s))) {
+    environmentSettings.wind = glm::vec3(6.0f, 0.8f, 2.5f);
+  }
+
+  ImGui::Spacing();
+  sectionHeader("Coverage");
+  fieldLabel("Cloths");
+  ImGui::SameLine();
+  ImGui::Text("%d", static_cast<int>(registry.allCloths().size()));
+  fieldLabel("Simulated Bodies");
+  ImGui::SameLine();
+  ImGui::Text("%d", static_cast<int>(registry.allSimulated().size()));
+}
+
 void Interface::renderPostProcessingMenu(PostProcessing* postProcessing) {
   PostProcessingConfig config = postProcessing->getConfig();
   bool changed = false;
@@ -1793,20 +1847,27 @@ void Interface::renderWorldsMenu() {
 
   struct Category {
     const char* label;
-    const char* prefix;
     ImVec4      color;
   };
   static const Category kCats[] = {
-    { "Physics",  nullptr,    ImVec4(0.55f, 0.75f, 0.55f, 1.0f) },
-    { "Animated", "anim_",    ImVec4(0.55f, 0.65f, 0.90f, 1.0f) },
-    { "Spawners", "spawner_", ImVec4(0.85f, 0.65f, 0.35f, 1.0f) },
-    { "Network",  "net",      ImVec4(0.75f, 0.45f, 0.75f, 1.0f) },
-    { "Stress",   "stress",   ImVec4(0.80f, 0.35f, 0.35f, 1.0f) },
+    { "Core",      ImVec4(0.55f, 0.75f, 0.55f, 1.0f) },
+    { "Cloth",     ImVec4(0.45f, 0.80f, 0.95f, 1.0f) },
+    { "Spawners",  ImVec4(0.90f, 0.68f, 0.35f, 1.0f) },
+    { "Animation", ImVec4(0.65f, 0.68f, 0.95f, 1.0f) },
+    { "Stress",    ImVec4(0.85f, 0.40f, 0.40f, 1.0f) },
+    { "Showcase",  ImVec4(0.80f, 0.75f, 0.50f, 1.0f) },
   };
 
   auto getCat = [&](const std::string& stem) -> int {
-    for (int i = 1; i < 5; ++i)
-      if (stem.find(kCats[i].prefix) == 0) return i;
+    std::string lower = stem;
+    for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (lower.find("cloth") != std::string::npos) return 1;
+    if (lower.find("spawner") != std::string::npos) return 2;
+    if (lower.find("anim") == 0 || lower.find("animated") != std::string::npos) return 3;
+    if (lower.find("stress") != std::string::npos || lower.find("big") != std::string::npos) return 4;
+    if (lower.find("showcase") != std::string::npos ||
+        lower.find("gallery") != std::string::npos ||
+        lower.find("mix") != std::string::npos) return 5;
     return 0;
   };
 
@@ -1875,39 +1936,48 @@ void Interface::renderWorldsMenu() {
       ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV |
       ImGuiTableFlags_NoHostExtendX;
 
+  static int categoryColumns = 2;
+  ImGui::SetNextItemWidth(160.0f * s);
+  ImGui::SliderInt("Category Columns", &categoryColumns, 1, 3);
+  ImGui::Spacing();
+
   if (worldFiles.empty()) {
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.42f, 0.50f, 1.0f));
     ImGui::Text("No .world files found in '%s'", worldDirectory.c_str());
     ImGui::PopStyleColor();
   } else {
-    for (int ci = 0; ci < 5; ++ci) {
-      // Collect paths that belong to this category and pass the filter
-      std::vector<const std::string*> catPaths;
-      for (const auto& path : worldFiles) {
-        std::string stem = std::filesystem::path(path).stem().string();
-        if (getCat(stem) != ci) continue;
-        if (!matchesFilter(stem)) continue;
-        catPaths.push_back(&path);
-      }
-      if (catPaths.empty()) continue;
+    std::array<std::vector<const std::string*>, 6> grouped;
+    for (const auto& path : worldFiles) {
+      std::string stem = std::filesystem::path(path).stem().string();
+      if (!matchesFilter(stem)) continue;
+      int ci = getCat(stem);
+      grouped[static_cast<size_t>(ci)].push_back(&path);
+    }
 
-      // Category label row
-      ImGui::PushStyleColor(ImGuiCol_Text, kCats[ci].color);
-      ImGui::Text("%s  (%d)", kCats[ci].label, static_cast<int>(catPaths.size()));
-      ImGui::PopStyleColor();
-
-      // Table: Name | Obj | Lit
-      ImGui::PushID(ci);
-      if (ImGui::BeginTable("##wt", 3, kTableFlags)) {
-        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Obj",  ImGuiTableColumnFlags_WidthFixed, 30.0f * s);
-        ImGui::TableSetupColumn("Lit",  ImGuiTableColumnFlags_WidthFixed, 26.0f * s);
-        for (const auto* pathPtr : catPaths)
-          renderTableRow(*pathPtr);
-        ImGui::EndTable();
+    if (ImGui::BeginTable("##world_cat_cols", categoryColumns,
+                          ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoHostExtendX)) {
+      int renderedCats = 0;
+      for (int ci = 0; ci < 6; ++ci) {
+        if (grouped[ci].empty()) continue;
+        ImGui::TableNextColumn();
+        ImGui::PushID(ci);
+        ImGui::PushStyleColor(ImGuiCol_Text, kCats[ci].color);
+        ImGui::Text("%s  (%d)", kCats[ci].label, static_cast<int>(grouped[ci].size()));
+        ImGui::PopStyleColor();
+        if (ImGui::BeginTable("##wt", 3, kTableFlags)) {
+          ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("Obj",  ImGuiTableColumnFlags_WidthFixed, 30.0f * s);
+          ImGui::TableSetupColumn("Lit",  ImGuiTableColumnFlags_WidthFixed, 26.0f * s);
+          for (const auto* pathPtr : grouped[ci])
+            renderTableRow(*pathPtr);
+          ImGui::EndTable();
+        }
+        ImGui::PopID();
+        renderedCats++;
       }
-      ImGui::PopID();
-      ImGui::Spacing();
+      for (int i = renderedCats; i < categoryColumns; ++i)
+        ImGui::TableNextColumn();
+      ImGui::EndTable();
     }
   }
 

@@ -51,6 +51,9 @@ class Mesh final {
   VmaAllocation getVertexBufferAllocation() const { return vertexBufferAllocation; }
   void setVertexBufferAllocation(VmaAllocation alloc) { vertexBufferAllocation = alloc; }
 
+  void* getMappedVertexData() const { return mappedVertexData; }
+  void setMappedVertexData(void* ptr) { mappedVertexData = ptr; }
+
   VkBuffer getIndexBuffer() const { return indexBuffer; }
   void setIndexBuffer(VkBuffer buffer) { indexBuffer = buffer; }
 
@@ -74,6 +77,7 @@ class Mesh final {
 
   VkBuffer vertexBuffer = VK_NULL_HANDLE;
   VmaAllocation vertexBufferAllocation = VK_NULL_HANDLE;
+  void* mappedVertexData = nullptr;
   VkBuffer indexBuffer = VK_NULL_HANDLE;
   VmaAllocation indexBufferAllocation = VK_NULL_HANDLE;
 
@@ -100,6 +104,9 @@ class MeshManager final {
   MeshID createCapsule(float radius = 0.5f, float height = 2.0f,
                        uint32_t segments = 32);
   MeshID loadFromOBJ(const std::string& filepath);
+  MeshID createDynamicMesh(const std::vector<Vertex>& vertices,
+                           const std::vector<uint16_t>& indices);
+  void updateDynamicMeshVertices(MeshID id, const std::vector<Vertex>& vertices);
   Mesh* getMesh(MeshID id);
   const Mesh* getMesh(MeshID id) const;
   MeshID getDefaultCube() const { return defaultCubeID; }

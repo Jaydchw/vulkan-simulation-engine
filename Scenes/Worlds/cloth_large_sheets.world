@@ -1,0 +1,133 @@
+BeginSettings
+  ClearColor = 0.09, 0.11, 0.16, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+  KillboxEnabled = true
+  KillboxY = -180.0
+  Wind = 1.8, 0.0, 0.4
+  WindDrag = 0.24
+  WindAffects = ClothOnly
+EndSettings
+
+BeginMaterial
+  Name = ClothBlue
+  AlbedoColor = 0.28, 0.55, 0.92
+  Roughness = 0.82
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = ClothGold
+  AlbedoColor = 0.9, 0.75, 0.25
+  Roughness = 0.8
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = BallMat
+  AlbedoColor = 0.9, 0.4, 0.2
+  Roughness = 0.35
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.22, 0.24, 0.28
+  Roughness = 0.95
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 160.0
+  Height = 160.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.65
+  Segments = 20
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 80.0, 0.0, 80.0
+EndObject
+
+BeginCloth
+  Name = Giant Sheet Left
+  Position = -16.0, 28.0, 0.0
+  Material = ClothBlue
+  ResolutionX = 48
+  ResolutionZ = 32
+  Width = 28.0
+  ClothHeight = 18.0
+  StructuralStiffness = 0.8
+  BendingStiffness = 0.07
+  Damping = 0.988
+  ParticleMass = 0.05
+  UseGravity = true
+  Hinge = TopRow
+  PinSpacing = 2
+  Tearability = 1.9
+  Wind = 2.0, 0.0, 0.5
+EndCloth
+
+BeginCloth
+  Name = Giant Sheet Right
+  Position = 16.0, 27.0, 0.0
+  Material = ClothGold
+  ResolutionX = 44
+  ResolutionZ = 30
+  Width = 24.0
+  ClothHeight = 17.0
+  StructuralStiffness = 0.78
+  BendingStiffness = 0.065
+  Damping = 0.987
+  ParticleMass = 0.055
+  UseGravity = true
+  Hinge = TopRow
+  PinSpacing = 2
+  Tearability = 1.85
+  Wind = 1.8, 0.0, -0.45
+EndCloth
+
+BeginSpawner
+  Name = Long Range Cannon
+  Position = 0.0, 16.0, -60.0
+  SpawnInterval = 0.95
+  SpawnIntervalRandomness = 0.12
+  SpawnDirection = 0.0, 0.04, 1.0
+  DirectionRandomness = 0.05
+  SpawnSpeed = 58.0
+  SpeedRandomness = 0.12
+  PositionRandomness = 1.0
+  MaxSpawns = -1
+  BeginTemplate
+    NamePrefix = RangeBall
+    Mesh = Ball
+    Material = BallMat
+    Mass = 0.42
+    Restitution = 0.4
+    Damping = 0.995
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.65
+  EndTemplate
+EndSpawner
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.3, -1.0, 0.45
+  Color = 1.0, 0.97, 0.9
+  Intensity = 2.9
+  CastsShadows = true
+EndLight

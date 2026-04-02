@@ -33,6 +33,7 @@ class Registry final {
     spawners.erase(entity);
     cameras.erase(entity);
     animations.erase(entity);
+    cloths.erase(entity);
   }
 
   // Creates an entity with a specific ID (used when replicating remote spawns).
@@ -75,6 +76,8 @@ class Registry final {
   const ComponentStore<CameraComponent>&           allCameras()           const { return cameras; }
   const ComponentStore<AnimationComponent>&        allAnimations()        const { return animations; }
   ComponentStore<AnimationComponent>&              allAnimationsMut()           { return animations; }
+  const ComponentStore<ClothComponent>&            allCloths()            const { return cloths; }
+  ComponentStore<ClothComponent>&                  allClothsMut()               { return cloths; }
 
   jphys::PhysicsObject& getPhysicsObject(Entity entity) {
     return physicsObjects[entity];
@@ -102,6 +105,7 @@ class Registry final {
   ComponentStore<SpawnerComponent>         spawners;
   ComponentStore<CameraComponent>          cameras;
   ComponentStore<AnimationComponent>       animations;
+  ComponentStore<ClothComponent>           cloths;
 
   // PhysicsObject is owned by the physics library and uses a map directly.
   std::unordered_map<Entity, jphys::PhysicsObject> physicsObjects;
@@ -120,6 +124,7 @@ template <> inline void Registry::addComponent<ColliderComponent>(Entity e, cons
 template <> inline void Registry::addComponent<SpawnerComponent>(Entity e, const SpawnerComponent& c)      { spawners.insert(e, c); }
 template <> inline void Registry::addComponent<CameraComponent>(Entity e, const CameraComponent& c)        { cameras.insert(e, c); }
 template <> inline void Registry::addComponent<AnimationComponent>(Entity e, const AnimationComponent& c)  { animations.insert(e, c); }
+template <> inline void Registry::addComponent<ClothComponent>(Entity e, const ClothComponent& c)          { cloths.insert(e, c); }
 
 // ── getComponent specialisations ────────────────────────────────────────────
 template <> inline NameComponent*            Registry::getComponent<NameComponent>(Entity e)            { return names.get(e); }
@@ -134,6 +139,7 @@ template <> inline ColliderComponent*        Registry::getComponent<ColliderComp
 template <> inline SpawnerComponent*         Registry::getComponent<SpawnerComponent>(Entity e)         { return spawners.get(e); }
 template <> inline CameraComponent*          Registry::getComponent<CameraComponent>(Entity e)          { return cameras.get(e); }
 template <> inline AnimationComponent*       Registry::getComponent<AnimationComponent>(Entity e)       { return animations.get(e); }
+template <> inline ClothComponent*           Registry::getComponent<ClothComponent>(Entity e)           { return cloths.get(e); }
 
 // ── const getComponent specialisations ──────────────────────────────────────
 template <> inline const NameComponent*            Registry::getComponent<NameComponent>(Entity e)            const { return names.get(e); }
@@ -148,6 +154,7 @@ template <> inline const ColliderComponent*        Registry::getComponent<Collid
 template <> inline const SpawnerComponent*         Registry::getComponent<SpawnerComponent>(Entity e)         const { return spawners.get(e); }
 template <> inline const CameraComponent*          Registry::getComponent<CameraComponent>(Entity e)          const { return cameras.get(e); }
 template <> inline const AnimationComponent*       Registry::getComponent<AnimationComponent>(Entity e)       const { return animations.get(e); }
+template <> inline const ClothComponent*           Registry::getComponent<ClothComponent>(Entity e)           const { return cloths.get(e); }
 
 // ── hasComponent specialisations ────────────────────────────────────────────
 template <> inline bool Registry::hasComponent<NameComponent>(Entity e)            const { return names.has(e); }
@@ -162,3 +169,4 @@ template <> inline bool Registry::hasComponent<ColliderComponent>(Entity e)     
 template <> inline bool Registry::hasComponent<SpawnerComponent>(Entity e)         const { return spawners.has(e); }
 template <> inline bool Registry::hasComponent<CameraComponent>(Entity e)          const { return cameras.has(e); }
 template <> inline bool Registry::hasComponent<AnimationComponent>(Entity e)       const { return animations.has(e); }
+template <> inline bool Registry::hasComponent<ClothComponent>(Entity e)           const { return cloths.has(e); }

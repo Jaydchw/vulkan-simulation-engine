@@ -1,6 +1,7 @@
-﻿  Generating code
-  1423 of 13330 functions (10.7%) were compiled, the rest were copied from previous compilation.
-    1032 functions were new in current compilation
-    1570 functions had inline decision re-evaluated but remain unchanged
+﻿  Interface.cpp
+  Generating code
+  31 of 13666 functions ( 0.2%) were compiled, the rest were copied from previous compilation.
+    3 functions were new in current compilation
+    82 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
   vulkan-simulation-engine.vcxproj -> D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\x64\Release\vulkan-simulation-engine.exe

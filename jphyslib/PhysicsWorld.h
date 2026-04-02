@@ -1,7 +1,6 @@
 #pragma once
 #include <glm/glm.hpp>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "Collider.h"
@@ -80,12 +79,14 @@ private:
  std::vector<PhysicsObject*> objects;
 
  std::vector<CollisionPairStat> lastCollisionStats;
- std::unordered_map<std::string, size_t> pairIndex;
+ // Indexed by (typeA * 6 + typeB); -1 = no stat entry yet this frame.
+ // ColliderType enum: Sphere=0, AABB=1, Plane=2, Cylinder=3, Capsule=4, Cone=5.
+ int pairStatIndex[36];
 
  void integrate(float deltaTime);
  void resolveCollisions();
 
- void recordCollision(const char* pairName, bool resolved);
+ void recordCollision(int pairIdx, bool resolved);
 
  static void resolveImpulse(PhysicsObject& a, PhysicsObject& b,
                              const CollisionResult& result);

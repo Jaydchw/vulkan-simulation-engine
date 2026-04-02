@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <EnvironmentForces.h>
+
 #include "ECS/Components.h"
 #include "ECS/Registry.h"
 #include "Network/NetworkManager.h"
@@ -287,7 +289,13 @@ void PhysicsSystem::syncToLibrary() {
 
     if (phys) {
       obj->setVelocity(phys->velocity);
-      obj->setAcceleration(phys->acceleration);
+      glm::vec3 acceleration = phys->acceleration;
+      if (environmentSettings &&
+          environmentSettings->windAffects == WindAffectsMode::AllObjects) {
+        acceleration += jphys::computeWindAcceleration(
+            environmentSettings->wind, phys->velocity, environmentSettings->windDrag);
+      }
+      obj->setAcceleration(acceleration);
       obj->setMass(phys->mass);
       obj->setRestitution(phys->restitution);
       obj->setDamping(phys->damping);
@@ -312,6 +320,8 @@ void PhysicsSystem::syncToLibrary() {
 
 void PhysicsSystem::syncFromLibrary() {
   auto entities = registry->getEntities();
+  std::vector<Entity> toDestroy;
+  toDestroy.reserve(32);
   Debug::logTrace(Debug::Category::PHYSICS_SYNC,
       "PhysicsSystem::syncFromLibrary: entities=", entities.size());
   int writtenCount = 0;
@@ -337,6 +347,10 @@ void PhysicsSystem::syncFromLibrary() {
       phys->velocity        = obj.getVelocity();
       phys->angularVelocity = obj.getAngularVelocity();
     }
+
+    if (killboxEnabled && transform->position.y < killboxY)
+      toDestroy.push_back(e);
+
     ++writtenCount;
     Debug::logTrace(Debug::Category::PHYSICS_SYNC,
         "PhysicsSystem::syncFromLibrary: entity ", e,
@@ -347,4 +361,7 @@ void PhysicsSystem::syncFromLibrary() {
   }
   Debug::logVerbose(Debug::Category::PHYSICS_SYNC,
       "PhysicsSystem::syncFromLibrary: wrote back ", writtenCount, " dynamic objects");
+
+  for (Entity e : toDestroy)
+    registry->destroyEntity(e);
 }

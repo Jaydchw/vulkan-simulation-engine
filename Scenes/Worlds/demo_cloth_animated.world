@@ -1,0 +1,184 @@
+# Cloth Animated Obstacles Demo
+# A cloth hangs and two spheres sweep through it on animation paths.
+# Shows cloth interaction with simulated, animated, and static objects.
+
+BeginSettings
+  ClearColor = 0.05, 0.06, 0.10, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+BeginMaterial
+  Name = ClothMat
+  AlbedoColor = 0.7, 0.25, 0.7
+  Roughness = 0.75
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = AnimSphere1Mat
+  AlbedoColor = 0.9, 0.7, 0.15
+  Roughness = 0.2
+  Metallic = 0.7
+EndMaterial
+
+BeginMaterial
+  Name = AnimSphere2Mat
+  AlbedoColor = 0.15, 0.7, 0.9
+  Roughness = 0.2
+  Metallic = 0.7
+EndMaterial
+
+BeginMaterial
+  Name = SimBallMat
+  AlbedoColor = 0.9, 0.35, 0.2
+  Roughness = 0.35
+  Metallic = 0.15
+EndMaterial
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.22, 0.23, 0.26
+  Roughness = 0.95
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Sphere
+  Type = sphere
+  Radius = 1.8
+  Segments = 32
+EndMesh
+
+BeginMesh
+  Name = SmallSphere
+  Type = sphere
+  Radius = 1.2
+  Segments = 28
+EndMesh
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 50.0
+  Height = 50.0
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 25.0, 0.0, 25.0
+EndObject
+
+BeginObject
+  Name = Animated Sweeper A
+  Position = -5.0, 8.0, 0.0
+  Mesh = Sphere
+  Material = AnimSphere1Mat
+  Collider = sphere
+  ColliderRadius = 1.8
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 3.5
+    BeginWaypoint
+      Position = -5.0, 8.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 5.0, 8.0, 0.0
+      Time = 1.75
+    EndWaypoint
+    BeginWaypoint
+      Position = -5.0, 8.0, 0.0
+      Time = 3.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+BeginObject
+  Name = Animated Sweeper B
+  Position = 0.0, 5.5, 2.0
+  Mesh = SmallSphere
+  Material = AnimSphere2Mat
+  Collider = sphere
+  ColliderRadius = 1.2
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 2.8
+    BeginWaypoint
+      Position = 0.0, 5.5, 2.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 10.0, -2.0
+      Time = 1.4
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 5.5, 2.0
+      Time = 2.8
+    EndWaypoint
+  EndAnimation
+EndObject
+
+BeginObject
+  Name = Simulated Ball
+  Position = 1.5, 22.0, 0.5
+  Mesh = SmallSphere
+  Material = SimBallMat
+  Physics = true
+  Mass = 1.5
+  Restitution = 0.6
+  UseGravity = true
+  Collider = sphere
+  ColliderRadius = 1.2
+EndObject
+
+BeginCloth
+  Name = Animated Cloth
+  Position = 0.0, 17.0, 0.0
+  Material = ClothMat
+  ResolutionX = 22
+  ResolutionZ = 20
+  Width = 11.0
+  ClothHeight = 12.0
+  StructuralStiffness = 0.85
+  BendingStiffness = 0.07
+  Damping = 0.99
+  ParticleMass = 0.07
+  UseGravity = true
+  Hinge = TopRow
+  Wind = 0.3, 0.0, 0.0
+EndCloth
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.35, -1.0, 0.45
+  Color = 1.0, 0.97, 0.90
+  Intensity = 2.6
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill Left
+  Type = point
+  Position = -10.0, 14.0, 8.0
+  Color = 0.4, 0.5, 1.0
+  Intensity = 100.0
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = Fill Right
+  Type = point
+  Position = 10.0, 10.0, 8.0
+  Color = 1.0, 0.6, 0.4
+  Intensity = 70.0
+  CastsShadows = false
+EndLight

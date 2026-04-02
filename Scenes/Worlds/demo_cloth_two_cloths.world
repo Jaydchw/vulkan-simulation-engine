@@ -1,0 +1,95 @@
+BeginSettings
+  ClearColor = 0.07, 0.09, 0.14, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+  KillboxEnabled = true
+  KillboxY = -80.0
+  Wind = 1.5, 0.0, 0.4
+  WindDrag = 0.25
+  WindAffects = ClothOnly
+EndSettings
+
+BeginMaterial
+  Name = ClothBlue
+  AlbedoColor = 0.25, 0.52, 0.9
+  Roughness = 0.8
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = ClothRed
+  AlbedoColor = 0.9, 0.3, 0.28
+  Roughness = 0.78
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.24, 0.26, 0.3
+  Roughness = 0.95
+  Metallic = 0.0
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 80.0
+  Height = 80.0
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 40.0, 0.0, 40.0
+EndObject
+
+BeginCloth
+  Name = Left Flag
+  Position = -6.0, 16.0, 0.0
+  Material = ClothBlue
+  ResolutionX = 22
+  ResolutionZ = 16
+  Width = 10.0
+  ClothHeight = 8.0
+  StructuralStiffness = 0.82
+  BendingStiffness = 0.08
+  Damping = 0.988
+  ParticleMass = 0.06
+  UseGravity = true
+  Hinge = LeftCol
+  PinSpacing = 1
+  Tearability = 2.0
+  Wind = 3.0, 0.0, 0.6
+EndCloth
+
+BeginCloth
+  Name = Right Flag
+  Position = 6.0, 15.5, 1.5
+  Material = ClothRed
+  ResolutionX = 20
+  ResolutionZ = 14
+  Width = 9.0
+  ClothHeight = 7.5
+  StructuralStiffness = 0.78
+  BendingStiffness = 0.07
+  Damping = 0.986
+  ParticleMass = 0.07
+  UseGravity = true
+  Hinge = RightCol
+  PinSpacing = 1
+  Tearability = 1.95
+  Wind = 2.5, 0.2, -0.4
+EndCloth
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.25, -1.0, 0.35
+  Color = 1.0, 0.97, 0.9
+  Intensity = 2.7
+  CastsShadows = true
+EndLight

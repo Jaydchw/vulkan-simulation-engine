@@ -16,7 +16,9 @@
 #include <vector>
 
 #include "Animation/AnimationSystem.h"
+#include "Cloth/ClothSystem.h"
 #include "ECS/Registry.h"
+#include "Environment/EnvironmentSettings.h"
 #include "Network/NetworkManager.h"
 #include "Physics/PhysicsMaterialManager.h"
 #include "Physics/PhysicsSystem.h"
@@ -165,6 +167,7 @@ class Application final {
   std::unique_ptr<AnimationSystem> animationSystem;
   std::unique_ptr<PhysicsSystem> physicsSystem;
   std::unique_ptr<SpawnerSystem> spawnerSystem;
+  std::unique_ptr<ClothSystem> clothSystem;
   std::unique_ptr<TimelineSystem> timelineSystem;
   std::unique_ptr<NetworkManager> networkManager;
 
@@ -227,6 +230,7 @@ class Application final {
 
   SimulationState simState;
   SceneSettings sceneSettings;
+  EnvironmentSettings environmentSettings;
   std::string lastLoadedWorldPath;
 
   bool applyingRemoteSceneLoad = false;

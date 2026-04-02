@@ -4,6 +4,7 @@
 
 #include <PhysicsWorld.h>
 #include "Physics/PhysicsMaterialManager.h"
+#include "Environment/EnvironmentSettings.h"
 
 class Registry;
 class NetworkManager;
@@ -25,20 +26,26 @@ class PhysicsSystem final {
   void setNetworkManager(NetworkManager* nm) { networkManager = nm; }
   // Optional: provide a PhysicsMaterialManager for per-pair interaction lookups.
   void setPhysicsMaterialManager(PhysicsMaterialManager* pmm) { physMatManager = pmm; }
+  void setEnvironmentSettings(const EnvironmentSettings* settings) { environmentSettings = settings; }
 
   void update(float deltaTime);
   PhysicsStepTimings timedUpdate(float deltaTime);
+  void setKillbox(bool enabled, float y) { killboxEnabled = enabled; killboxY = y; }
 
   void setGravity(const glm::vec3& g) { world.setGravity(g); }
   glm::vec3 getGravity() const { return world.getGravity(); }
 
   int getObjectCount() const { return static_cast<int>(world.getObjects().size()); }
+  const jphys::PhysicsWorld& getWorld() const { return world; }
 
  private:
   Registry*               registry       = nullptr;
   NetworkManager*         networkManager = nullptr;
   PhysicsMaterialManager* physMatManager = nullptr;
+  const EnvironmentSettings* environmentSettings = nullptr;
   jphys::PhysicsWorld world;
+  bool killboxEnabled = true;
+  float killboxY = -150.0f;
 
   void syncToLibrary();
   void syncFromLibrary();

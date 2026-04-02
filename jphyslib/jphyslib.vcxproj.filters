@@ -30,6 +30,12 @@
     <ClInclude Include="PhysicsWorld.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ClothSim.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EnvironmentForces.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="jphyslib.cpp">
@@ -39,6 +45,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PhysicsWorld.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ClothSim.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

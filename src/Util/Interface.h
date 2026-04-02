@@ -17,6 +17,7 @@
 
 #include "../ECS/Entity.h"
 #include "../ECS/Registry.h"
+#include "../Environment/EnvironmentSettings.h"
 #include "../Physics/PhysicsSystem.h"
 #include "../Network/NetworkManager.h"
 
@@ -145,6 +146,7 @@ class Interface {
   void cleanup();
 
   void render(SimulationState& simState, SceneSettings& sceneSettings,
+              EnvironmentSettings& environmentSettings,
               Registry& registry, MainPipeline* mainPipeline,
               PostProcessing* postProcessing,
               const PerformanceMetrics& perfMetrics,
@@ -235,6 +237,8 @@ class Interface {
   void renderSceneMenu(SceneSettings& sceneSettings,
                        MainPipeline* mainPipeline,
                        SimulationState& simState);
+  void renderEnvironmentMenu(EnvironmentSettings& environmentSettings,
+                             Registry& registry);
   void renderPostProcessingMenu(PostProcessing* postProcessing);
   void renderSettingsMenu(SimulationState& simState);
   void renderNetworkMenu(NetworkManager* networkManager, SimulationState& simState);

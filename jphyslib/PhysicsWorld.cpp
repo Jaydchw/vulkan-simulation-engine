@@ -10,7 +10,6 @@
 #include <thread>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -80,6 +79,47 @@ struct GridKeyHash {
   }
 };
 
+// Pair names indexed by (typeA * 6 + typeB).
+// ColliderType: Sphere=0, AABB=1, Plane=2, Cylinder=3, Capsule=4, Cone=5
+static const char* const kCollisionPairNames[36] = {
+  "Sphere / Sphere",     // 0
+  "Sphere / AABB",       // 1
+  "Sphere / Plane",      // 2
+  "Sphere / Cylinder",   // 3
+  "Sphere / Capsule",    // 4
+  "Sphere / Cone",       // 5
+  "AABB / Sphere",       // 6
+  "AABB / AABB",         // 7
+  "AABB / Plane",        // 8
+  "AABB / Cylinder",     // 9
+  "AABB / Capsule",      // 10
+  nullptr,               // 11
+  nullptr,               // 12 (Plane/Sphere — planes are always B after swap)
+  nullptr,               // 13
+  nullptr,               // 14
+  nullptr,               // 15
+  nullptr,               // 16
+  nullptr,               // 17
+  "Cylinder / Sphere",   // 18
+  "Cylinder / AABB",     // 19
+  "Cylinder / Plane",    // 20
+  "Cylinder / Cylinder", // 21
+  "Cylinder / Capsule",  // 22
+  nullptr,               // 23
+  "Capsule / Sphere",    // 24
+  "Capsule / AABB",      // 25
+  "Capsule / Plane",     // 26
+  "Capsule / Cylinder",  // 27
+  "Capsule / Capsule",   // 28
+  nullptr,               // 29
+  "Cone / Sphere",       // 30
+  nullptr,               // 31
+  "Cone / Plane",        // 32
+  nullptr,               // 33
+  nullptr,               // 34
+  nullptr,               // 35
+};
+
 static uint64_t makePairKey(uint32_t a, uint32_t b) {
   const uint32_t lo = std::min(a, b);
   const uint32_t hi = std::max(a, b);
@@ -123,7 +163,8 @@ void PhysicsWorld::integrate(float deltaTime) {
     }
 
     vel += obj->getAcceleration() * deltaTime;
-    vel *= std::pow(obj->getDamping(), deltaTime);
+    const float dampFactor = std::pow(obj->getDamping(), deltaTime);
+    vel *= dampFactor;
 
     obj->setVelocity(vel);
     obj->setPosition(obj->getPosition() + vel * deltaTime);
@@ -132,12 +173,13 @@ void PhysicsWorld::integrate(float deltaTime) {
       glm::mat3 Iinv = obj->getWorldInverseInertiaTensor();
       glm::vec3 alpha = Iinv * obj->getTorque();
       glm::vec3 omega = obj->getAngularVelocity() + alpha * deltaTime;
-      omega *= std::pow(obj->getDamping(), deltaTime);
+      omega *= dampFactor;
       obj->setAngularVelocity(omega);
 
-      float angle = glm::length(omega) * deltaTime;
+      const float omegaLen = glm::length(omega);
+      const float angle = omegaLen * deltaTime;
       if (angle > 0.0001f) {
-        glm::vec3 axis = omega / glm::length(omega);
+        glm::vec3 axis = omega / omegaLen;
         glm::quat dq = glm::angleAxis(angle, axis);
         obj->setOrientation(glm::normalize(dq * obj->getOrientation()));
       }
@@ -158,13 +200,14 @@ long long PhysicsWorld::getLastCollisionsResolved() const {
   return total;
 }
 
-void PhysicsWorld::recordCollision(const char* pairName, bool resolved) {
-  auto it = pairIndex.find(pairName);
-  if (it == pairIndex.end()) {
-    pairIndex[pairName] = lastCollisionStats.size();
-    lastCollisionStats.push_back({pairName, 1, resolved ? 1LL : 0LL});
+void PhysicsWorld::recordCollision(int pairIdx, bool resolved) {
+  const char* name = kCollisionPairNames[pairIdx];
+  if (!name) return;
+  if (pairStatIndex[pairIdx] < 0) {
+    pairStatIndex[pairIdx] = static_cast<int>(lastCollisionStats.size());
+    lastCollisionStats.push_back({name, 1, resolved ? 1LL : 0LL});
   } else {
-    auto& stat = lastCollisionStats[it->second];
+    auto& stat = lastCollisionStats[pairStatIndex[pairIdx]];
     ++stat.checks;
     if (resolved) ++stat.resolved;
   }
@@ -172,7 +215,7 @@ void PhysicsWorld::recordCollision(const char* pairName, bool resolved) {
 
 void PhysicsWorld::resolveCollisions() {
   lastCollisionStats.clear();
-  pairIndex.clear();
+  std::fill(pairStatIndex, pairStatIndex + 36, -1);
 
   std::vector<PhysicsObject*> activeObjects;
   activeObjects.reserve(objects.size());
@@ -224,8 +267,9 @@ void PhysicsWorld::resolveCollisions() {
     if (kv.second.size() > 1) buckets.push_back(&kv.second);
   }
 
+  // Returns candidate pairs (may contain duplicates; caller deduplicates).
   auto buildPairsForRange = [&](size_t begin, size_t end) {
-    std::unordered_set<uint64_t> local;
+    std::vector<uint64_t> local;
     for (size_t bi = begin; bi < end; ++bi) {
       const auto& bucket = *buckets[bi];
       for (size_t i = 0; i < bucket.size(); ++i) {
@@ -233,21 +277,21 @@ void PhysicsWorld::resolveCollisions() {
         for (size_t j = i + 1; j < bucket.size(); ++j) {
           PhysicsObject* b = activeObjects[bucket[j]];
           if (a->isStatic() && b->isStatic()) continue;
-          local.insert(makePairKey(bucket[i], bucket[j]));
+          local.push_back(makePairKey(bucket[i], bucket[j]));
         }
       }
     }
     return local;
   };
 
-  std::unordered_set<uint64_t> candidatePairs;
+  std::vector<uint64_t> candidatePairs;
   if (!buckets.empty()) {
     const unsigned int hw = std::thread::hardware_concurrency();
     const unsigned int workerCount = std::max(1u, std::min<unsigned int>(
         hw > 1 ? hw - 1 : 1, static_cast<unsigned int>(buckets.size())));
 
     if (workerCount > 1 && buckets.size() >= 16) {
-      std::vector<std::future<std::unordered_set<uint64_t>>> jobs;
+      std::vector<std::future<std::vector<uint64_t>>> jobs;
       jobs.reserve(workerCount);
       const size_t chunk = (buckets.size() + workerCount - 1) / workerCount;
       for (unsigned int w = 0; w < workerCount; ++w) {
@@ -258,7 +302,7 @@ void PhysicsWorld::resolveCollisions() {
       }
       for (auto& job : jobs) {
         auto local = job.get();
-        candidatePairs.insert(local.begin(), local.end());
+        candidatePairs.insert(candidatePairs.end(), local.begin(), local.end());
       }
     } else {
       candidatePairs = buildPairsForRange(0, buckets.size());
@@ -271,9 +315,15 @@ void PhysicsWorld::resolveCollisions() {
       PhysicsObject* a = activeObjects[gi];
       PhysicsObject* b = activeObjects[i];
       if (a->isStatic() && b->isStatic()) continue;
-      candidatePairs.insert(makePairKey(gi, i));
+      candidatePairs.push_back(makePairKey(gi, i));
     }
   }
+
+  // Deduplicate: sort + unique is more cache-friendly than unordered_set.
+  std::sort(candidatePairs.begin(), candidatePairs.end());
+  candidatePairs.erase(
+      std::unique(candidatePairs.begin(), candidatePairs.end()),
+      candidatePairs.end());
 
   for (uint64_t pairKey : candidatePairs) {
     uint32_t ia = 0;
@@ -288,169 +338,105 @@ void PhysicsWorld::resolveCollisions() {
 
     if (!broadphaseMayCollide(*objA, *objB)) continue;
 
-    const Collider& colA = objA->getCollider();
-    const Collider& colB = objB->getCollider();
+    const ColliderType typeA = objA->getCollider().getType();
+    const ColliderType typeB = objB->getCollider().getType();
+    const int pairIdx = static_cast<int>(typeA) * 6 + static_cast<int>(typeB);
 
-      if (colA.getType() == ColliderType::Sphere &&
-          colB.getType() == ColliderType::Plane) {
-        auto r = testSpherePlane(*objA, *objB);
-        recordCollision("Sphere / Plane", r.collided);
-        if (r.collided) resolveSpherePlane(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Sphere &&
-          colB.getType() == ColliderType::Sphere) {
-        auto r = testSphereSphere(*objA, *objB);
-        recordCollision("Sphere / Sphere", r.collided);
-        if (r.collided) resolveSphereSphere(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Sphere &&
-          colB.getType() == ColliderType::AABB) {
-        auto r = testSphereAABB(*objA, *objB);
-        recordCollision("Sphere / AABB", r.collided);
-        if (r.collided) resolveSphereAABB(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Sphere &&
-          colB.getType() == ColliderType::Cylinder) {
-        auto r = testSphereCylinder(*objA, *objB);
-        recordCollision("Sphere / Cylinder", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Cylinder &&
-          colB.getType() == ColliderType::Plane) {
-        auto r = testCylinderPlane(*objA, *objB);
-        recordCollision("Cylinder / Plane", r.collided);
-        if (r.collided) resolveCylinderPlane(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Cylinder &&
-          colB.getType() == ColliderType::Sphere) {
-        auto r = testSphereCylinder(*objB, *objA);
-        recordCollision("Sphere / Cylinder", r.collided);
-        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
-      }
-
-      if (colA.getType() == ColliderType::Cylinder &&
-          colB.getType() == ColliderType::Cylinder) {
-        auto r = testCylinderCylinder(*objA, *objB);
-        recordCollision("Cylinder / Cylinder", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::AABB &&
-          colB.getType() == ColliderType::Plane) {
-        auto r = testAABBPlane(*objA, *objB);
-        recordCollision("AABB / Plane", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::AABB &&
-          colB.getType() == ColliderType::AABB) {
-        auto r = testAABBAABB(*objA, *objB);
-        recordCollision("AABB / AABB", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::AABB &&
-          colB.getType() == ColliderType::Sphere) {
-        auto r = testSphereAABB(*objB, *objA);
-        recordCollision("Sphere / AABB", r.collided);
-        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
-      }
-
-      if (colA.getType() == ColliderType::AABB &&
-          colB.getType() == ColliderType::Cylinder) {
-        auto r = testAABBCylinder(*objA, *objB);
-        recordCollision("AABB / Cylinder", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Cylinder &&
-          colB.getType() == ColliderType::AABB) {
-        auto r = testAABBCylinder(*objB, *objA);
-        recordCollision("AABB / Cylinder", r.collided);
-        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
-      }
-
-      if (colA.getType() == ColliderType::Capsule &&
-          colB.getType() == ColliderType::Plane) {
-        auto r = testCapsulePlane(*objA, *objB);
-        recordCollision("Capsule / Plane", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Capsule &&
-          colB.getType() == ColliderType::Sphere) {
-        auto r = testCapsuleSphere(*objA, *objB);
-        recordCollision("Capsule / Sphere", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Sphere &&
-          colB.getType() == ColliderType::Capsule) {
-        auto r = testCapsuleSphere(*objB, *objA);
-        recordCollision("Capsule / Sphere", r.collided);
-        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
-      }
-
-      if (colA.getType() == ColliderType::Capsule &&
-          colB.getType() == ColliderType::AABB) {
-        auto r = testCapsuleAABB(*objA, *objB);
-        recordCollision("Capsule / AABB", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::AABB &&
-          colB.getType() == ColliderType::Capsule) {
-        auto r = testCapsuleAABB(*objB, *objA);
-        recordCollision("Capsule / AABB", r.collided);
-        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
-      }
-
-      if (colA.getType() == ColliderType::Capsule &&
-          colB.getType() == ColliderType::Cylinder) {
-        auto r = testCapsuleCylinder(*objA, *objB);
-        recordCollision("Capsule / Cylinder", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Cylinder &&
-          colB.getType() == ColliderType::Capsule) {
-        auto r = testCapsuleCylinder(*objB, *objA);
-        recordCollision("Capsule / Cylinder", r.collided);
-        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
-      }
-
-      if (colA.getType() == ColliderType::Capsule &&
-          colB.getType() == ColliderType::Capsule) {
-        auto r = testCapsuleCapsule(*objA, *objB);
-        recordCollision("Capsule / Capsule", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Cone &&
-          colB.getType() == ColliderType::Plane) {
-        auto r = testConePlane(*objA, *objB);
-        recordCollision("Cone / Plane", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Cone &&
-          colB.getType() == ColliderType::Sphere) {
-        auto r = testConeSphere(*objA, *objB);
-        recordCollision("Cone / Sphere", r.collided);
-        if (r.collided) resolveImpulse(*objA, *objB, r);
-      }
-
-      if (colA.getType() == ColliderType::Sphere &&
-          colB.getType() == ColliderType::Cone) {
-        auto r = testConeSphere(*objB, *objA);
-        recordCollision("Cone / Sphere", r.collided);
-        if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
-      }
+    // else-if chain: each pair has exactly one matching branch, so we exit
+    // immediately after the first match instead of evaluating all conditions.
+    if (typeA == ColliderType::Sphere && typeB == ColliderType::Plane) {
+      auto r = testSpherePlane(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveSpherePlane(*objA, *objB, r);
+    } else if (typeA == ColliderType::Sphere && typeB == ColliderType::Sphere) {
+      auto r = testSphereSphere(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveSphereSphere(*objA, *objB, r);
+    } else if (typeA == ColliderType::Sphere && typeB == ColliderType::AABB) {
+      auto r = testSphereAABB(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveSphereAABB(*objA, *objB, r);
+    } else if (typeA == ColliderType::Sphere && typeB == ColliderType::Cylinder) {
+      auto r = testSphereCylinder(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::Sphere && typeB == ColliderType::Capsule) {
+      auto r = testCapsuleSphere(*objB, *objA);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+    } else if (typeA == ColliderType::Sphere && typeB == ColliderType::Cone) {
+      auto r = testConeSphere(*objB, *objA);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+    } else if (typeA == ColliderType::AABB && typeB == ColliderType::Sphere) {
+      auto r = testSphereAABB(*objB, *objA);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+    } else if (typeA == ColliderType::AABB && typeB == ColliderType::AABB) {
+      auto r = testAABBAABB(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::AABB && typeB == ColliderType::Plane) {
+      auto r = testAABBPlane(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::AABB && typeB == ColliderType::Cylinder) {
+      auto r = testAABBCylinder(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::AABB && typeB == ColliderType::Capsule) {
+      auto r = testCapsuleAABB(*objB, *objA);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+    } else if (typeA == ColliderType::Cylinder && typeB == ColliderType::Sphere) {
+      auto r = testSphereCylinder(*objB, *objA);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+    } else if (typeA == ColliderType::Cylinder && typeB == ColliderType::AABB) {
+      auto r = testAABBCylinder(*objB, *objA);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+    } else if (typeA == ColliderType::Cylinder && typeB == ColliderType::Plane) {
+      auto r = testCylinderPlane(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveCylinderPlane(*objA, *objB, r);
+    } else if (typeA == ColliderType::Cylinder && typeB == ColliderType::Cylinder) {
+      auto r = testCylinderCylinder(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::Cylinder && typeB == ColliderType::Capsule) {
+      auto r = testCapsuleCylinder(*objB, *objA);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+    } else if (typeA == ColliderType::Capsule && typeB == ColliderType::Sphere) {
+      auto r = testCapsuleSphere(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::Capsule && typeB == ColliderType::AABB) {
+      auto r = testCapsuleAABB(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::Capsule && typeB == ColliderType::Plane) {
+      auto r = testCapsulePlane(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::Capsule && typeB == ColliderType::Cylinder) {
+      auto r = testCapsuleCylinder(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::Capsule && typeB == ColliderType::Capsule) {
+      auto r = testCapsuleCapsule(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::Cone && typeB == ColliderType::Plane) {
+      auto r = testConePlane(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    } else if (typeA == ColliderType::Cone && typeB == ColliderType::Sphere) {
+      auto r = testConeSphere(*objA, *objB);
+      recordCollision(pairIdx, r.collided);
+      if (r.collided) resolveImpulse(*objA, *objB, r);
+    }
   }
 }
 
