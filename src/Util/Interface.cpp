@@ -2260,6 +2260,11 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
       ImGui::SliderFloat("##bwcap", &nm->simBandwidthLimitKBps, 0.0f, 1000.0f, "Unlimited");
     else
       ImGui::SliderFloat("##bwcap", &nm->simBandwidthLimitKBps, 0.0f, 1000.0f, "%.0f KB/s");
+
+    fieldLabel("Interp Speed");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(160.0f * s);
+    ImGui::SliderFloat("##interpSpeed", &nm->interpLerpSpeed, 1.0f, 60.0f, "%.1f /s");
     ImGui::Spacing();
   }
 

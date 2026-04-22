@@ -6,6 +6,7 @@
 #include "../Util/ThreadAffinity.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <random>
 #include <unordered_set>
@@ -39,6 +40,7 @@ void NetworkManager::init(Registry* reg) {
     std::lock_guard<std::mutex> lk(remoteStatesMutex);
     pendingRemoteStates.clear();
     pendingRemoteProperties.clear();
+    remoteInterpStates.clear();
     return;
   }
 
@@ -115,6 +117,7 @@ void NetworkManager::setNetworkEnabled(bool enabled) {
       pendingRemoteStates.clear();
       pendingRemoteProperties.clear();
     }
+    remoteInterpStates.clear();
     {
       std::lock_guard<std::mutex> lk(ownershipMutex);
       ownershipMap.clear();
@@ -798,34 +801,57 @@ void NetworkManager::handleSimState(const std::vector<uint8_t>& payload) {
 void NetworkManager::applyRemoteStates() {
   if (!registry) return;
 
-  std::vector<RemoteObjectState> snapshot;
-  {
-    std::lock_guard<std::mutex> lk(remoteStatesMutex);
-    snapshot.swap(pendingRemoteStates);
-  }
-  if (!snapshot.empty()) {
-    Debug::logTrace(Debug::Category::NETWORK_SYNC,
-                    "Applying remote states count=", snapshot.size());
-  }
+  std::lock_guard<std::mutex> lk(remoteStatesMutex);
+  if (pendingRemoteStates.empty()) return;
 
-  for (const auto& state : snapshot) {
+  Debug::logTrace(Debug::Category::NETWORK_SYNC,
+                  "Applying remote states count=", pendingRemoteStates.size());
+  auto now = std::chrono::steady_clock::now();
+  for (const auto& state : pendingRemoteStates) {
     Entity e = static_cast<Entity>(state.entityId);
+    if (!registry->getComponent<SimulatedComponent>(e)) continue;
+    auto& interp       = remoteInterpStates[e];
+    interp.position    = state.position;
+    interp.orientation = state.orientation;
+    interp.velocity    = state.velocity;
+    interp.receivedAt  = now;
+    interp.valid       = true;
+  }
+  pendingRemoteStates.clear();
+}
 
+void NetworkManager::stepInterpolation(float dt) {
+  if (!registry) return;
+
+  dt = std::min(dt, 0.1f);
+
+  const auto  now   = std::chrono::steady_clock::now();
+  const float alpha = 1.0f - std::exp(-interpLerpSpeed * dt);
+
+  for (auto& [e, interp] : remoteInterpStates) {
+    if (!interp.valid) continue;
+
+    auto* phys      = registry->getComponent<SimulatedComponent>(e);
     auto* transform = registry->getComponent<TransformComponent>(e);
-    if (!transform) continue;
-    transform->position = state.position;
-    transform->rotation = state.orientation;
+    if (!phys || !transform) continue;
 
-    // Keep velocity current for cross-peer collision resolution
-    auto* phys = registry->getComponent<SimulatedComponent>(e);
-    if (phys) phys->velocity = state.velocity;
+    float timeSincePacket = std::chrono::duration<float>(now - interp.receivedAt).count();
+    glm::vec3 predicted   = interp.position + interp.velocity * timeSincePacket;
+
+    transform->position = glm::mix(transform->position, predicted, alpha);
+    transform->rotation = glm::slerp(transform->rotation, interp.orientation, alpha);
+    phys->velocity      = interp.velocity;
 
     auto* physObj = registry->getPhysicsObjectPtr(e);
     if (physObj) {
-      physObj->setPosition(state.position);
-      physObj->setOrientation(state.orientation);
+      physObj->setPosition(transform->position);
+      physObj->setOrientation(transform->rotation);
     }
   }
+}
+
+void NetworkManager::flushInterpolation() {
+  remoteInterpStates.clear();
 }
 
 void NetworkManager::applyRemoteProperties() {

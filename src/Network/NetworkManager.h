@@ -34,6 +34,15 @@ struct RemoteObjectState {
     glm::vec3 velocity = {0.0f, 0.0f, 0.0f};
 };
 
+// Per-entity dead-reckoning state for smooth remote interpolation.
+struct RemoteInterpolationState {
+    glm::vec3 position;
+    glm::quat orientation;
+    glm::vec3 velocity;
+    std::chrono::steady_clock::time_point receivedAt;
+    bool valid = false;
+};
+
 // Slow-channel data applied once per connect/scene-load.
 // Mirrors ObjectPropertyEntry but uses engine types.
 // colliderType uses the same values as the ColliderType enum (uint8_t).
@@ -108,6 +117,9 @@ public:
                       int32_t historyIndex = -1, bool stepForward = false,
                       int8_t reversePlay = -1, int8_t colorByOwner = -1);
 
+    void stepInterpolation(float dt);
+    void flushInterpolation();
+
     bool pollPendingSceneLoad(std::string& outPath);
     bool pollPendingSimState(PendingSimState& outState);
     bool pollNewPeerConnected();
@@ -139,6 +151,9 @@ public:
     float simPacketLossPercent  = 0.0f;   // 0-100: per-peer drop chance per send
     float simExtraLatencyMs     = 0.0f;   // 0-500: artificial delay before send
     float simBandwidthLimitKBps = 0.0f;   // 0 = unlimited, else max KB/s outbound
+
+    float interpLerpSpeed = 15.0f;
+
 
 private:
     Registry* registry = nullptr;
@@ -172,6 +187,8 @@ private:
     mutable std::mutex                   remoteStatesMutex;
     std::vector<RemoteObjectState>       pendingRemoteStates;
     std::vector<RemoteObjectProperties>  pendingRemoteProperties;
+
+    std::unordered_map<Entity, RemoteInterpolationState> remoteInterpStates;
 
     mutable std::mutex           commandMutex;
     std::vector<std::string>     pendingSceneLoads;

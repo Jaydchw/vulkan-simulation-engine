@@ -675,10 +675,13 @@ while (!window->shouldClose()) {
     simState.baked = false;
     simState.scrubAccumulator = 0.0f;
     simState.physicsAccumulator = 0.0f;
-    if (networkManager && !lastLoadedWorldPath.empty() && !applyingRemoteSceneLoad) {
-      networkManager->sendLoadScene(lastLoadedWorldPath);
-      std::lock_guard<std::mutex> lock(simMutex);
-      networkManager->sendOwnedObjectProperties();
+    if (networkManager) {
+      networkManager->flushInterpolation();
+      if (!lastLoadedWorldPath.empty() && !applyingRemoteSceneLoad) {
+        networkManager->sendLoadScene(lastLoadedWorldPath);
+        std::lock_guard<std::mutex> lock(simMutex);
+        networkManager->sendOwnedObjectProperties();
+      }
     }
   }
 
@@ -852,14 +855,18 @@ while (!window->shouldClose()) {
         simState.historyIndex < timelineSystem->getSnapshotCount()) {
       timelineSystem->restoreSnapshot(simState.historyIndex);
     }
+    if (networkManager) networkManager->flushInterpolation();
   } else if (simState.snapshotScrubbed) {
     simState.snapshotScrubbed = false;
+    if (networkManager) networkManager->flushInterpolation();
   }
 
   if (!simState.isBaking) {
 
   if (networkManager) {
     networkManager->tickReceive();
+    if (!simState.isPaused && !simState.baked && !simState.reversePlay)
+      networkManager->stepInterpolation(deltaTime);
 
     // Create entities spawned by remote peers
     if (spawnerSystem) {
@@ -920,6 +927,7 @@ while (!window->shouldClose()) {
       if (remoteExt == ".fbscene") loadFBScene(remotePath);
       else                         loadWorld(remotePath);
       applyingRemoteSceneLoad = false;
+      networkManager->flushInterpolation();
     }
 
     bool receivedStepForward = false;
