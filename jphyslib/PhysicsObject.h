@@ -108,6 +108,9 @@ class PhysicsObject {
   float getRestitution() const { return restitution; }
   void setRestitution(float r) { restitution = r; }
 
+  float getFriction() const { return friction; }
+  void setFriction(float f) { friction = f; }
+
   float getDamping() const { return damping; }
   void setDamping(float d) { damping = d; }
 
@@ -116,6 +119,26 @@ class PhysicsObject {
 
   bool isStatic() const { return staticBody; }
   void setStatic(bool s) { staticBody = s; }
+
+  bool isAsleep() const { return sleeping; }
+  void wakeUp() { sleeping = false; sleepTimer = 0.0f; }
+
+  void tickSleep(float dt, float linThreshSq, float angThreshSq, float sleepDelay) {
+    if (staticBody) return;
+    const float lsq = glm::dot(velocity, velocity);
+    const float asq = glm::dot(angularVelocity, angularVelocity);
+    if (lsq < linThreshSq && asq < angThreshSq) {
+      sleepTimer += dt;
+      if (sleepTimer >= sleepDelay) {
+        sleeping = true;
+        velocity = glm::vec3(0.0f);
+        angularVelocity = glm::vec3(0.0f);
+      }
+    } else {
+      sleepTimer = 0.0f;
+      sleeping = false;
+    }
+  }
 
   Collider& getCollider() { return collider; }
   const Collider& getCollider() const { return collider; }
@@ -132,9 +155,12 @@ class PhysicsObject {
 
   float mass = 1.0f;
   float restitution = 0.5f;
+  float friction = 0.4f;
   float damping = 0.99f;
   bool useGravity = true;
   bool staticBody = false;
+  float sleepTimer = 0.0f;
+  bool sleeping = false;
 
   Collider collider;
 

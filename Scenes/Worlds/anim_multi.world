@@ -1,0 +1,371 @@
+# Multi-Animated Objects — Orrery
+# A miniature solar system: a central star with five planets orbiting
+# at different radii, speeds, and slightly inclined planes.
+# No floor — pure animation showcase.
+
+BeginSettings
+  ClearColor = 0.0, 0.0, 0.03, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 60
+  KillboxEnabled = false
+EndSettings
+
+# ---- Materials ----
+
+BeginMaterial
+  Name = mat_star
+  AlbedoColor = 1.0, 0.92, 0.6
+  Roughness = 0.05
+  Metallic = 0.0
+EndMaterial
+
+BeginMaterial
+  Name = mat_p1_blue
+  AlbedoColor = 0.2, 0.5, 1.0
+  Roughness = 0.25
+  Metallic = 0.6
+EndMaterial
+
+BeginMaterial
+  Name = mat_p2_orange
+  AlbedoColor = 1.0, 0.45, 0.1
+  Roughness = 0.35
+  Metallic = 0.3
+EndMaterial
+
+BeginMaterial
+  Name = mat_p3_teal
+  AlbedoColor = 0.1, 0.85, 0.75
+  Roughness = 0.3
+  Metallic = 0.5
+EndMaterial
+
+BeginMaterial
+  Name = mat_p4_magenta
+  AlbedoColor = 0.9, 0.15, 0.7
+  Roughness = 0.2
+  Metallic = 0.7
+EndMaterial
+
+BeginMaterial
+  Name = mat_p5_purple
+  AlbedoColor = 0.55, 0.2, 0.95
+  Roughness = 0.4
+  Metallic = 0.4
+EndMaterial
+
+# ---- Meshes ----
+
+BeginMesh
+  Name = star_mesh
+  Type = sphere
+  Radius = 3.0
+  Segments = 48
+EndMesh
+
+BeginMesh
+  Name = p1_mesh
+  Type = sphere
+  Radius = 0.55
+  Segments = 24
+EndMesh
+
+BeginMesh
+  Name = p2_mesh
+  Type = sphere
+  Radius = 0.85
+  Segments = 24
+EndMesh
+
+BeginMesh
+  Name = p3_mesh
+  Type = sphere
+  Radius = 1.1
+  Segments = 32
+EndMesh
+
+BeginMesh
+  Name = p4_mesh
+  Type = sphere
+  Radius = 0.45
+  Segments = 20
+EndMesh
+
+BeginMesh
+  Name = p5_mesh
+  Type = sphere
+  Radius = 1.4
+  Segments = 32
+EndMesh
+
+# ---- Lights ----
+
+BeginLight
+  Name = StarGlow
+  Type = point
+  Position = 0.0, 0.0, 0.0
+  Color = 1.0, 0.9, 0.6
+  Intensity = 500.0
+  Linear = 0.025
+  Quadratic = 0.003
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = DeepFill
+  Type = point
+  Position = -30.0, 20.0, -25.0
+  Color = 0.15, 0.2, 0.5
+  Intensity = 350.0
+  Linear = 0.018
+  Quadratic = 0.002
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = CounterFill
+  Type = point
+  Position = 28.0, -18.0, 22.0
+  Color = 0.3, 0.12, 0.45
+  Intensity = 250.0
+  Linear = 0.020
+  Quadratic = 0.003
+  CastsShadows = false
+EndLight
+
+BeginCamera
+  Name = MainCamera
+  Position = 8.0, 30.0, -46.0
+  Target = 0.0, 0.0, 0.0
+  FOV = 68
+EndCamera
+
+# ---- Central Star (static) ----
+
+BeginObject
+  Name = Star
+  Position = 0.0, 0.0, 0.0
+  Mesh = star_mesh
+  Material = mat_star
+EndObject
+
+# ---- Planet 1: inner blue, R=5, T=4.5s (fast) ----
+# Hexagonal orbit approximation, slight Y tilt
+
+BeginObject
+  Name = Planet 1 (Blue)
+  Position = 5.0, 0.0, 0.0
+  Mesh = p1_mesh
+  Material = mat_p1_blue
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 4.5
+    BeginWaypoint
+      Position = 5.0, 0.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 2.5, 0.3, -4.33
+      Rotation = 0.0, 60.0, 0.0
+      Time = 0.75
+    EndWaypoint
+    BeginWaypoint
+      Position = -2.5, 0.5, -4.33
+      Rotation = 0.0, 120.0, 0.0
+      Time = 1.5
+    EndWaypoint
+    BeginWaypoint
+      Position = -5.0, 0.0, 0.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 2.25
+    EndWaypoint
+    BeginWaypoint
+      Position = -2.5, -0.3, 4.33
+      Rotation = 0.0, 240.0, 0.0
+      Time = 3.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 2.5, -0.5, 4.33
+      Rotation = 0.0, 300.0, 0.0
+      Time = 3.75
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# ---- Planet 2: orange, R=9, T=9s ----
+
+BeginObject
+  Name = Planet 2 (Orange)
+  Position = 9.0, 0.0, 0.0
+  Mesh = p2_mesh
+  Material = mat_p2_orange
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 9.0
+    BeginWaypoint
+      Position = 9.0, 0.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 4.5, 0.6, -7.79
+      Rotation = 0.0, 60.0, 0.0
+      Time = 1.5
+    EndWaypoint
+    BeginWaypoint
+      Position = -4.5, 1.0, -7.79
+      Rotation = 0.0, 120.0, 0.0
+      Time = 3.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -9.0, 0.0, 0.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 4.5
+    EndWaypoint
+    BeginWaypoint
+      Position = -4.5, -0.6, 7.79
+      Rotation = 0.0, 240.0, 0.0
+      Time = 6.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 4.5, -0.8, 7.79
+      Rotation = 0.0, 300.0, 0.0
+      Time = 7.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# ---- Planet 3: teal, R=14, T=15s ----
+
+BeginObject
+  Name = Planet 3 (Teal)
+  Position = 14.0, 0.0, 0.0
+  Mesh = p3_mesh
+  Material = mat_p3_teal
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 15.0
+    BeginWaypoint
+      Position = 14.0, 0.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 7.0, -0.8, -12.12
+      Rotation = 0.0, 60.0, 0.0
+      Time = 2.5
+    EndWaypoint
+    BeginWaypoint
+      Position = -7.0, 0.0, -12.12
+      Rotation = 0.0, 120.0, 0.0
+      Time = 5.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -14.0, 0.0, 0.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 7.5
+    EndWaypoint
+    BeginWaypoint
+      Position = -7.0, 1.0, 12.12
+      Rotation = 0.0, 240.0, 0.0
+      Time = 10.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 7.0, 0.5, 12.12
+      Rotation = 0.0, 300.0, 0.0
+      Time = 12.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# ---- Planet 4: magenta, R=4, T=3s (inner fast, inclined plane) ----
+
+BeginObject
+  Name = Planet 4 (Magenta)
+  Position = 4.0, 2.0, 0.0
+  Mesh = p4_mesh
+  Material = mat_p4_magenta
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 3.0
+    BeginWaypoint
+      Position = 4.0, 2.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 2.0, 1.0, -3.46
+      Rotation = 0.0, 60.0, 0.0
+      Time = 0.5
+    EndWaypoint
+    BeginWaypoint
+      Position = -2.0, 0.0, -3.46
+      Rotation = 0.0, 120.0, 0.0
+      Time = 1.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -4.0, -1.0, 0.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 1.5
+    EndWaypoint
+    BeginWaypoint
+      Position = -2.0, -2.0, 3.46
+      Rotation = 0.0, 240.0, 0.0
+      Time = 2.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 2.0, -1.0, 3.46
+      Rotation = 0.0, 300.0, 0.0
+      Time = 2.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# ---- Planet 5: outer purple, R=21, T=26s (slow, slightly tilted) ----
+
+BeginObject
+  Name = Planet 5 (Purple)
+  Position = 21.0, 0.0, 0.0
+  Mesh = p5_mesh
+  Material = mat_p5_purple
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 26.0
+    BeginWaypoint
+      Position = 21.0, 0.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.5, -1.2, -18.19
+      Rotation = 0.0, 60.0, 0.0
+      Time = 4.33
+    EndWaypoint
+    BeginWaypoint
+      Position = -10.5, 0.0, -18.19
+      Rotation = 0.0, 120.0, 0.0
+      Time = 8.67
+    EndWaypoint
+    BeginWaypoint
+      Position = -21.0, 0.0, 0.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 13.0
+    EndWaypoint
+    BeginWaypoint
+      Position = -10.5, 1.5, 18.19
+      Rotation = 0.0, 240.0, 0.0
+      Time = 17.33
+    EndWaypoint
+    BeginWaypoint
+      Position = 10.5, 1.0, 18.19
+      Rotation = 0.0, 300.0, 0.0
+      Time = 21.67
+    EndWaypoint
+  EndAnimation
+EndObject

@@ -334,10 +334,10 @@ class Debug final {
     std::lock_guard<std::mutex> lock(queueMutex);
     if (queue.size() >= MAX_QUEUED_LINES) {
       droppedCount.fetch_add(1, std::memory_order_relaxed);
-      return;
+    } else {
+      queue.push_back(oss.str());
+      queueCv.notify_one();
     }
-    queue.push_back(oss.str());
-    queueCv.notify_one();
   }
 
   static constexpr size_t MAX_QUEUED_LINES = 8192;

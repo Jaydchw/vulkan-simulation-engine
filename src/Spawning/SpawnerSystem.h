@@ -7,6 +7,7 @@
 #include "ECS/Registry.h"
 #include "Network/NetworkPackets.h"
 #include "Physics/PhysicsMaterialManager.h"
+#include "Timeline/TimelineSystem.h"
 
 class NetworkManager;
 
@@ -15,6 +16,7 @@ class SpawnerSystem final {
   void setRegistry(Registry* reg) { registry = reg; }
   void setNetworkManager(NetworkManager* nm) { networkManager = nm; }
   void setPhysicsMaterialManager(PhysicsMaterialManager* pmm) { physMatManager = pmm; }
+  void setTimelineSystem(TimelineSystem* tls) { timelineSystem = tls; }
 
   // Advances all locally-owned spawner timers; creates entities when intervals fire.
   void update(float deltaTime);
@@ -27,6 +29,7 @@ class SpawnerSystem final {
   Registry*               registry       = nullptr;
   NetworkManager*         networkManager = nullptr;
   PhysicsMaterialManager* physMatManager = nullptr;
+  TimelineSystem*         timelineSystem = nullptr;
   std::mt19937    rng{std::random_device{}()};
 
   // Counter for SEQUENTIAL spawner ownership — cycles across active peers in order.

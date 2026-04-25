@@ -72,6 +72,7 @@ struct SimulatedComponent {
   glm::vec3 constantTorque = glm::vec3(0.0f);
   float mass = 1.0f;
   float restitution = 0.5f;
+  float friction = 0.4f;
   float damping = 0.99f;
   bool useGravity = true;
 };

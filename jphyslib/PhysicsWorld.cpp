@@ -120,6 +120,12 @@ static const char* const kCollisionPairNames[36] = {
   nullptr,               // 35
 };
 
+struct ContactPair {
+  PhysicsObject* a;
+  PhysicsObject* b;
+  CollisionResult result;
+};
+
 static uint64_t makePairKey(uint32_t a, uint32_t b) {
   const uint32_t lo = std::min(a, b);
   const uint32_t hi = std::max(a, b);
@@ -154,7 +160,7 @@ void PhysicsWorld::step(float deltaTime) {
 
 void PhysicsWorld::integrate(float deltaTime) {
   for (auto* obj : objects) {
-    if (!obj || obj->isStatic()) continue;
+    if (!obj || obj->isStatic() || obj->isAsleep()) continue;
 
     glm::vec3 vel = obj->getVelocity();
 
@@ -185,6 +191,7 @@ void PhysicsWorld::integrate(float deltaTime) {
       }
     }
     obj->clearTorque();
+    obj->tickSleep(deltaTime, sleepLinearThreshSq, sleepAngularThreshSq, sleepDelay);
   }
 }
 
@@ -224,7 +231,21 @@ void PhysicsWorld::resolveCollisions() {
   }
   if (activeObjects.size() < 2) return;
 
-  constexpr float gridCellSize = 8.0f;
+  // Dynamic cell size: 2x the median broadphase radius, clamped to [2, 64].
+  float gridCellSize = 8.0f;
+  {
+    std::vector<float> radii;
+    radii.reserve(activeObjects.size());
+    for (const auto* obj : activeObjects) {
+      const float r = getBroadphaseRadius(*obj);
+      if (std::isfinite(r) && r > 0.0f) radii.push_back(r);
+    }
+    if (!radii.empty()) {
+      const size_t mid = radii.size() / 2;
+      std::nth_element(radii.begin(), radii.begin() + mid, radii.end());
+      gridCellSize = std::max(2.0f, std::min(64.0f, radii[mid] * 2.0f));
+    }
+  }
   const float invCellSize = 1.0f / gridCellSize;
 
   std::unordered_map<GridKey, std::vector<uint32_t>, GridKeyHash> grid;
@@ -251,6 +272,14 @@ void PhysicsWorld::resolveCollisions() {
     const int maxX = static_cast<int>(std::floor(bmax.x * invCellSize));
     const int maxY = static_cast<int>(std::floor(bmax.y * invCellSize));
     const int maxZ = static_cast<int>(std::floor(bmax.z * invCellSize));
+
+    // If the object spans too many cells it would flood the grid; treat as global.
+    static constexpr int kMaxCellSpan = 16;
+    if ((maxX - minX) > kMaxCellSpan || (maxY - minY) > kMaxCellSpan ||
+        (maxZ - minZ) > kMaxCellSpan) {
+      globalObjects.push_back(i);
+      continue;
+    }
 
     for (int x = minX; x <= maxX; ++x) {
       for (int y = minY; y <= maxY; ++y) {
@@ -325,6 +354,17 @@ void PhysicsWorld::resolveCollisions() {
       std::unique(candidatePairs.begin(), candidatePairs.end()),
       candidatePairs.end());
 
+  std::vector<ContactPair> contacts;
+  contacts.reserve(candidatePairs.size());
+
+  auto handleCollision = [&](PhysicsObject* a, PhysicsObject* b, CollisionResult r, int idx) {
+    recordCollision(idx, r.collided);
+    if (!r.collided) return;
+    a->wakeUp();
+    if (!b->isStatic()) b->wakeUp();
+    contacts.push_back({a, b, r});
+  };
+
   for (uint64_t pairKey : candidatePairs) {
     uint32_t ia = 0;
     uint32_t ib = 0;
@@ -342,100 +382,76 @@ void PhysicsWorld::resolveCollisions() {
     const ColliderType typeB = objB->getCollider().getType();
     const int pairIdx = static_cast<int>(typeA) * 6 + static_cast<int>(typeB);
 
-    // else-if chain: each pair has exactly one matching branch, so we exit
-    // immediately after the first match instead of evaluating all conditions.
     if (typeA == ColliderType::Sphere && typeB == ColliderType::Plane) {
-      auto r = testSpherePlane(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveSpherePlane(*objA, *objB, r);
+      handleCollision(objA, objB, testSpherePlane(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Sphere && typeB == ColliderType::Sphere) {
-      auto r = testSphereSphere(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveSphereSphere(*objA, *objB, r);
+      handleCollision(objA, objB, testSphereSphere(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Sphere && typeB == ColliderType::AABB) {
-      auto r = testSphereAABB(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveSphereAABB(*objA, *objB, r);
+      handleCollision(objA, objB, testSphereAABB(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Sphere && typeB == ColliderType::Cylinder) {
-      auto r = testSphereCylinder(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testSphereCylinder(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Sphere && typeB == ColliderType::Capsule) {
       auto r = testCapsuleSphere(*objB, *objA);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      if (r.collided) r.normal = -r.normal;
+      handleCollision(objA, objB, r, pairIdx);
     } else if (typeA == ColliderType::Sphere && typeB == ColliderType::Cone) {
       auto r = testConeSphere(*objB, *objA);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      if (r.collided) r.normal = -r.normal;
+      handleCollision(objA, objB, r, pairIdx);
     } else if (typeA == ColliderType::AABB && typeB == ColliderType::Sphere) {
       auto r = testSphereAABB(*objB, *objA);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      if (r.collided) r.normal = -r.normal;
+      handleCollision(objA, objB, r, pairIdx);
     } else if (typeA == ColliderType::AABB && typeB == ColliderType::AABB) {
-      auto r = testAABBAABB(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testAABBAABB(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::AABB && typeB == ColliderType::Plane) {
-      auto r = testAABBPlane(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testAABBPlane(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::AABB && typeB == ColliderType::Cylinder) {
-      auto r = testAABBCylinder(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testAABBCylinder(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::AABB && typeB == ColliderType::Capsule) {
       auto r = testCapsuleAABB(*objB, *objA);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      if (r.collided) r.normal = -r.normal;
+      handleCollision(objA, objB, r, pairIdx);
     } else if (typeA == ColliderType::Cylinder && typeB == ColliderType::Sphere) {
       auto r = testSphereCylinder(*objB, *objA);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      if (r.collided) r.normal = -r.normal;
+      handleCollision(objA, objB, r, pairIdx);
     } else if (typeA == ColliderType::Cylinder && typeB == ColliderType::AABB) {
       auto r = testAABBCylinder(*objB, *objA);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      if (r.collided) r.normal = -r.normal;
+      handleCollision(objA, objB, r, pairIdx);
     } else if (typeA == ColliderType::Cylinder && typeB == ColliderType::Plane) {
-      auto r = testCylinderPlane(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveCylinderPlane(*objA, *objB, r);
+      handleCollision(objA, objB, testCylinderPlane(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Cylinder && typeB == ColliderType::Cylinder) {
-      auto r = testCylinderCylinder(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testCylinderCylinder(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Cylinder && typeB == ColliderType::Capsule) {
       auto r = testCapsuleCylinder(*objB, *objA);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) { r.normal = -r.normal; resolveImpulse(*objA, *objB, r); }
+      if (r.collided) r.normal = -r.normal;
+      handleCollision(objA, objB, r, pairIdx);
     } else if (typeA == ColliderType::Capsule && typeB == ColliderType::Sphere) {
-      auto r = testCapsuleSphere(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testCapsuleSphere(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Capsule && typeB == ColliderType::AABB) {
-      auto r = testCapsuleAABB(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testCapsuleAABB(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Capsule && typeB == ColliderType::Plane) {
-      auto r = testCapsulePlane(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testCapsulePlane(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Capsule && typeB == ColliderType::Cylinder) {
-      auto r = testCapsuleCylinder(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testCapsuleCylinder(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Capsule && typeB == ColliderType::Capsule) {
-      auto r = testCapsuleCapsule(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testCapsuleCapsule(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Cone && typeB == ColliderType::Plane) {
-      auto r = testConePlane(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testConePlane(*objA, *objB), pairIdx);
     } else if (typeA == ColliderType::Cone && typeB == ColliderType::Sphere) {
-      auto r = testConeSphere(*objA, *objB);
-      recordCollision(pairIdx, r.collided);
-      if (r.collided) resolveImpulse(*objA, *objB, r);
+      handleCollision(objA, objB, testConeSphere(*objA, *objB), pairIdx);
+    }
+  }
+
+  for (auto& cp : contacts) {
+    applyPositionCorrection(*cp.a, *cp.b, cp.result);
+  }
+
+  for (int iter = 0; iter < solverIterations; ++iter) {
+    for (auto& cp : contacts) {
+      applyVelocityImpulse(*cp.a, *cp.b, cp.result);
     }
   }
 }
@@ -525,56 +541,6 @@ CollisionResult PhysicsWorld::testSphereAABB(const PhysicsObject& sphere,
   return result;
 }
 
-void PhysicsWorld::resolveSpherePlane(PhysicsObject& sphere,
-                                      PhysicsObject& plane,
-                                      const CollisionResult& result) {
-  sphere.setPosition(sphere.getPosition() + result.normal * result.penetration);
-  float velAlongNormal = glm::dot(sphere.getVelocity(), result.normal);
-  if (velAlongNormal < 0.0f) {
-    sphere.setVelocity(sphere.getVelocity() -
-                       result.normal * velAlongNormal *
-                           (1.0f + sphere.getRestitution()));
-  }
-}
-
-void PhysicsWorld::resolveSphereSphere(PhysicsObject& a, PhysicsObject& b,
-                                       const CollisionResult& result) {
-  if (!b.isStatic()) {
-    float totalMass = a.getMass() + b.getMass();
-    a.setPosition(a.getPosition() + result.normal * result.penetration *
-                                        (b.getMass() / totalMass));
-    b.setPosition(b.getPosition() - result.normal * result.penetration *
-                                        (a.getMass() / totalMass));
-
-    float velAlongNormal =
-        glm::dot(a.getVelocity() - b.getVelocity(), result.normal);
-    if (velAlongNormal > 0.0f) return;
-
-    float e = glm::min(a.getRestitution(), b.getRestitution());
-    float impulse = -(1.0f + e) * velAlongNormal / totalMass;
-
-    a.setVelocity(a.getVelocity() + result.normal * (impulse * b.getMass()));
-    b.setVelocity(b.getVelocity() - result.normal * (impulse * a.getMass()));
-  } else {
-    a.setPosition(a.getPosition() + result.normal * result.penetration);
-    float velAlongNormal = glm::dot(a.getVelocity(), result.normal);
-    if (velAlongNormal < 0.0f) {
-      a.setVelocity(a.getVelocity() - result.normal * velAlongNormal *
-                                          (1.0f + a.getRestitution()));
-    }
-  }
-}
-
-void PhysicsWorld::resolveSphereAABB(PhysicsObject& sphere, PhysicsObject& aabb,
-                                     const CollisionResult& result) {
-  sphere.setPosition(sphere.getPosition() + result.normal * result.penetration);
-  float velAlongNormal = glm::dot(sphere.getVelocity(), result.normal);
-  if (velAlongNormal < 0.0f) {
-    sphere.setVelocity(sphere.getVelocity() -
-                       result.normal * velAlongNormal *
-                           (1.0f + sphere.getRestitution()));
-  }
-}
 
 CollisionResult PhysicsWorld::testCylinderPlane(const PhysicsObject& cylinder,
                                                 const PhysicsObject& plane) {
@@ -628,39 +594,82 @@ CollisionResult PhysicsWorld::testCylinderPlane(const PhysicsObject& cylinder,
   return result;
 }
 
-void PhysicsWorld::resolveCylinderPlane(PhysicsObject& cylinder,
-                                        PhysicsObject& plane,
-                                        const CollisionResult& result) {
-  cylinder.setPosition(cylinder.getPosition() +
-                       result.normal * result.penetration);
-  float velAlongNormal = glm::dot(cylinder.getVelocity(), result.normal);
-  if (velAlongNormal < 0.0f) {
-    cylinder.setVelocity(cylinder.getVelocity() -
-                         result.normal * velAlongNormal *
-                             (1.0f + cylinder.getRestitution()));
+void PhysicsWorld::applyPositionCorrection(PhysicsObject& a, PhysicsObject& b,
+                                           const CollisionResult& result) {
+  const glm::vec3 n  = result.normal;
+  const bool bStatic = b.isStatic();
+
+  if (bStatic) {
+    a.setPosition(a.getPosition() + n * result.penetration);
+  } else {
+    const float totalMass = a.getMass() + b.getMass();
+    if (totalMass < 1e-10f) return;
+    a.setPosition(a.getPosition() + n * result.penetration * (b.getMass() / totalMass));
+    b.setPosition(b.getPosition() - n * result.penetration * (a.getMass() / totalMass));
   }
 }
 
-void PhysicsWorld::resolveImpulse(PhysicsObject& a, PhysicsObject& b,
-                                   const CollisionResult& result) {
-  if (b.isStatic()) {
-    a.setPosition(a.getPosition() + result.normal * result.penetration);
-    float van = glm::dot(a.getVelocity(), result.normal);
-    if (van < 0.0f)
-      a.setVelocity(a.getVelocity() -
-                    result.normal * van * (1.0f + a.getRestitution()));
-  } else {
-    float totalMass = a.getMass() + b.getMass();
-    a.setPosition(a.getPosition() +
-                  result.normal * result.penetration * (b.getMass() / totalMass));
-    b.setPosition(b.getPosition() -
-                  result.normal * result.penetration * (a.getMass() / totalMass));
-    float relVel = glm::dot(a.getVelocity() - b.getVelocity(), result.normal);
-    if (relVel > 0.0f) return;
-    float e    = std::min(a.getRestitution(), b.getRestitution());
-    float imp  = -(1.0f + e) * relVel / totalMass;
-    a.setVelocity(a.getVelocity() + result.normal * (imp * b.getMass()));
-    b.setVelocity(b.getVelocity() - result.normal * (imp * a.getMass()));
+void PhysicsWorld::applyVelocityImpulse(PhysicsObject& a, PhysicsObject& b,
+                                        const CollisionResult& result) {
+  if (a.getMass() <= 0.0f) return;
+  const glm::vec3 n  = result.normal;
+  const bool bStatic = b.isStatic();
+
+  const glm::vec3 rA = result.contactPoint - a.getPosition();
+  const glm::vec3 rB = result.contactPoint - b.getPosition();
+
+  const glm::vec3 vA = a.getVelocity() + glm::cross(a.getAngularVelocity(), rA);
+  const glm::vec3 vB = bStatic ? glm::vec3(0.0f)
+                                : b.getVelocity() + glm::cross(b.getAngularVelocity(), rB);
+  const glm::vec3 relVel = vA - vB;
+
+  const float relVelN = glm::dot(relVel, n);
+  if (relVelN >= 0.0f) return;
+
+  const glm::mat3& IinvA = a.getWorldInverseInertiaTensor();
+  const float invMA = 1.0f / a.getMass();
+  const float invMB = bStatic ? 0.0f : 1.0f / b.getMass();
+
+  auto angTerm = [](const glm::mat3& Iinv, const glm::vec3& r, const glm::vec3& d) {
+    return glm::dot(d, glm::cross(Iinv * glm::cross(r, d), r));
+  };
+
+  float denomN = invMA + invMB + angTerm(IinvA, rA, n);
+  if (!bStatic) denomN += angTerm(b.getWorldInverseInertiaTensor(), rB, n);
+  if (denomN < 1e-10f) return;
+
+  const float e  = std::min(a.getRestitution(), bStatic ? a.getRestitution() : b.getRestitution());
+  const float jN = -(1.0f + e) * relVelN / denomN;
+  const glm::vec3 impN = n * jN;
+
+  a.setVelocity(a.getVelocity() + impN * invMA);
+  a.setAngularVelocity(a.getAngularVelocity() + IinvA * glm::cross(rA, impN));
+  if (!bStatic) {
+    const glm::mat3& IinvB = b.getWorldInverseInertiaTensor();
+    b.setVelocity(b.getVelocity() - impN * invMB);
+    b.setAngularVelocity(b.getAngularVelocity() - IinvB * glm::cross(rB, impN));
+  }
+
+  const glm::vec3 tangVel = relVel - n * relVelN;
+  const float tangSpeed = glm::length(tangVel);
+  if (tangSpeed < 1e-4f) return;
+
+  const glm::vec3 t = tangVel / tangSpeed;
+  float denomT = invMA + invMB + angTerm(IinvA, rA, t);
+  if (!bStatic) denomT += angTerm(b.getWorldInverseInertiaTensor(), rB, t);
+  if (denomT < 1e-10f) return;
+
+  const float mu = std::sqrt(a.getFriction() * (bStatic ? a.getFriction() : b.getFriction()));
+  const float maxFric = mu * std::abs(jN);
+  const float jT = std::max(-maxFric, std::min(maxFric, -tangSpeed / denomT));
+  const glm::vec3 impT = t * jT;
+
+  a.setVelocity(a.getVelocity() + impT * invMA);
+  a.setAngularVelocity(a.getAngularVelocity() + IinvA * glm::cross(rA, impT));
+  if (!bStatic) {
+    const glm::mat3& IinvB = b.getWorldInverseInertiaTensor();
+    b.setVelocity(b.getVelocity() - impT * invMB);
+    b.setAngularVelocity(b.getAngularVelocity() - IinvB * glm::cross(rB, impT));
   }
 }
 

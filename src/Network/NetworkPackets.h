@@ -122,7 +122,8 @@ struct SpawnEntityPacket {
 
   // Render (0 = physics-only, no visible mesh)
   uint8_t hasRender;
-  uint8_t pad[2];
+  uint8_t ownerPeerId;
+  uint8_t pad[1];
   uint32_t meshId;
   uint32_t materialId;
 

@@ -1,0 +1,325 @@
+# Spawner Stress Test
+# A sealed invisible box with six high-rate spawners firing in every direction.
+# Only the spawned balls are visible; the box walls are collision-only (no render).
+# Designed to hammer the physics and rendering pipelines.
+
+BeginSettings
+  ClearColor = 0.02, 0.02, 0.04, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+  KillboxEnabled = false
+EndSettings
+
+# ---- Materials ----
+
+BeginMaterial
+  Name = BallA
+  AlbedoColor = 0.15, 0.60, 1.00
+  Roughness = 0.18
+  Metallic = 0.55
+EndMaterial
+
+BeginMaterial
+  Name = BallB
+  AlbedoColor = 1.00, 0.35, 0.15
+  Roughness = 0.22
+  Metallic = 0.45
+EndMaterial
+
+BeginMaterial
+  Name = BallC
+  AlbedoColor = 0.20, 0.90, 0.40
+  Roughness = 0.20
+  Metallic = 0.50
+EndMaterial
+
+BeginMaterial
+  Name = BallD
+  AlbedoColor = 0.90, 0.20, 0.80
+  Roughness = 0.25
+  Metallic = 0.40
+EndMaterial
+
+# ---- Meshes ----
+
+BeginMesh
+  Name = unit_cube
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = stress_ball
+  Type = sphere
+  Radius = 0.45
+  Segments = 16
+EndMesh
+
+# ============================================================
+# INVISIBLE BOX — 46×46×46, centred at origin
+# All walls: Visible=false, static, box collider
+# ============================================================
+
+BeginObject
+  Name = BoxFloor
+  Position = 0.0, -24.0, 0.0
+  Scale = 48.0, 2.0, 48.0
+  Mesh = unit_cube
+  Visible = false
+  Collider = box
+  ColliderHalfExtents = 24.0, 1.0, 24.0
+EndObject
+
+BeginObject
+  Name = BoxCeiling
+  Position = 0.0, 24.0, 0.0
+  Scale = 48.0, 2.0, 48.0
+  Mesh = unit_cube
+  Visible = false
+  Collider = box
+  ColliderHalfExtents = 24.0, 1.0, 24.0
+EndObject
+
+BeginObject
+  Name = BoxLeft
+  Position = -24.0, 0.0, 0.0
+  Scale = 2.0, 48.0, 48.0
+  Mesh = unit_cube
+  Visible = false
+  Collider = box
+  ColliderHalfExtents = 1.0, 24.0, 24.0
+EndObject
+
+BeginObject
+  Name = BoxRight
+  Position = 24.0, 0.0, 0.0
+  Scale = 2.0, 48.0, 48.0
+  Mesh = unit_cube
+  Visible = false
+  Collider = box
+  ColliderHalfExtents = 1.0, 24.0, 24.0
+EndObject
+
+BeginObject
+  Name = BoxFront
+  Position = 0.0, 0.0, 24.0
+  Scale = 48.0, 48.0, 2.0
+  Mesh = unit_cube
+  Visible = false
+  Collider = box
+  ColliderHalfExtents = 24.0, 24.0, 1.0
+EndObject
+
+BeginObject
+  Name = BoxBack
+  Position = 0.0, 0.0, -24.0
+  Scale = 48.0, 48.0, 2.0
+  Mesh = unit_cube
+  Visible = false
+  Collider = box
+  ColliderHalfExtents = 24.0, 24.0, 1.0
+EndObject
+
+# ============================================================
+# SPAWNERS — six positions firing in all directions
+# ============================================================
+
+# Centre — omnidirectional scatter
+BeginSpawner
+  Name = SpawnerCenter
+  Position = 0.0, 0.0, 0.0
+  SpawnDirection = 0.0, 1.0, 0.0
+  DirectionRandomness = 1.0
+  SpawnSpeed = 28.0
+  SpeedRandomness = 0.4
+  SpawnInterval = 0.038
+  SpawnIntervalRandomness = 0.2
+  AngularVelocityRandomness = 12.0
+  MaxSpawns = 500
+  BeginTemplate
+    Weight = 4.0
+    NamePrefix = StressBall
+    Mesh = stress_ball
+    Material = BallA
+    Mass = 0.3
+    Restitution = 0.75
+    Damping = 0.995
+    UseGravity = false
+    Collider = sphere
+    ColliderRadius = 0.45
+  EndTemplate
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = HeavyBall
+    Mesh = stress_ball
+    Material = BallB
+    Mass = 2.0
+    Restitution = 0.60
+    Damping = 0.995
+    UseGravity = false
+    Collider = sphere
+    ColliderRadius = 0.45
+  EndTemplate
+EndSpawner
+
+# Corner NE bottom
+BeginSpawner
+  Name = SpawnerNE
+  Position = 14.0, -14.0, 14.0
+  SpawnDirection = -0.577, 0.577, -0.577
+  DirectionRandomness = 0.55
+  SpawnSpeed = 26.0
+  SpeedRandomness = 0.35
+  SpawnInterval = 0.045
+  SpawnIntervalRandomness = 0.25
+  AngularVelocityRandomness = 10.0
+  MaxSpawns = 400
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = NE
+    Mesh = stress_ball
+    Material = BallC
+    Mass = 0.35
+    Restitution = 0.72
+    Damping = 0.995
+    UseGravity = false
+    Collider = sphere
+    ColliderRadius = 0.45
+  EndTemplate
+EndSpawner
+
+# Corner NW bottom
+BeginSpawner
+  Name = SpawnerNW
+  Position = -14.0, -14.0, 14.0
+  SpawnDirection = 0.577, 0.577, -0.577
+  DirectionRandomness = 0.55
+  SpawnSpeed = 26.0
+  SpeedRandomness = 0.35
+  SpawnInterval = 0.048
+  SpawnIntervalRandomness = 0.25
+  AngularVelocityRandomness = 10.0
+  MaxSpawns = 400
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = NW
+    Mesh = stress_ball
+    Material = BallD
+    Mass = 0.35
+    Restitution = 0.72
+    Damping = 0.995
+    UseGravity = false
+    Collider = sphere
+    ColliderRadius = 0.45
+  EndTemplate
+EndSpawner
+
+# Corner SE top
+BeginSpawner
+  Name = SpawnerSE
+  Position = 14.0, 14.0, -14.0
+  SpawnDirection = -0.577, -0.577, 0.577
+  DirectionRandomness = 0.55
+  SpawnSpeed = 25.0
+  SpeedRandomness = 0.3
+  SpawnInterval = 0.046
+  SpawnIntervalRandomness = 0.2
+  AngularVelocityRandomness = 10.0
+  MaxSpawns = 400
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = SE
+    Mesh = stress_ball
+    Material = BallA
+    Mass = 0.32
+    Restitution = 0.70
+    Damping = 0.995
+    UseGravity = false
+    Collider = sphere
+    ColliderRadius = 0.45
+  EndTemplate
+EndSpawner
+
+# Corner SW top
+BeginSpawner
+  Name = SpawnerSW
+  Position = -14.0, 14.0, -14.0
+  SpawnDirection = 0.577, -0.577, 0.577
+  DirectionRandomness = 0.55
+  SpawnSpeed = 25.0
+  SpeedRandomness = 0.3
+  SpawnInterval = 0.050
+  SpawnIntervalRandomness = 0.2
+  AngularVelocityRandomness = 10.0
+  MaxSpawns = 400
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = SW
+    Mesh = stress_ball
+    Material = BallB
+    Mass = 0.32
+    Restitution = 0.70
+    Damping = 0.995
+    UseGravity = false
+    Collider = sphere
+    ColliderRadius = 0.45
+  EndTemplate
+EndSpawner
+
+# Top-down sweeper
+BeginSpawner
+  Name = SpawnerTop
+  Position = 0.0, 20.0, 0.0
+  SpawnDirection = 0.0, -1.0, 0.0
+  DirectionRandomness = 0.75
+  SpawnSpeed = 22.0
+  SpeedRandomness = 0.4
+  SpawnInterval = 0.055
+  SpawnIntervalRandomness = 0.3
+  PositionRandomness = 8.0
+  AngularVelocityRandomness = 15.0
+  MaxSpawns = 350
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = TopBall
+    Mesh = stress_ball
+    Material = BallC
+    Mass = 0.28
+    Restitution = 0.78
+    Damping = 0.995
+    UseGravity = false
+    Collider = sphere
+    ColliderRadius = 0.45
+  EndTemplate
+EndSpawner
+
+# ---- Lights ----
+
+BeginLight
+  Name = LightA
+  Type = point
+  Position = 0.0, 22.0, 0.0
+  Color = 0.9, 0.85, 0.75
+  Intensity = 600.0
+  Linear = 0.03
+  Quadratic = 0.004
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = LightB
+  Type = point
+  Position = 0.0, -20.0, 0.0
+  Color = 0.4, 0.55, 1.0
+  Intensity = 400.0
+  Linear = 0.04
+  Quadratic = 0.006
+  CastsShadows = false
+EndLight
+
+BeginCamera
+  Name = MainCamera
+  Position = -8.0, 14.0, -44.0
+  Target = 0.0, 0.0, 0.0
+  FOV = 78
+EndCamera

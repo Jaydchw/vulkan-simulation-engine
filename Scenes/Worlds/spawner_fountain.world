@@ -1,95 +1,388 @@
-# Spawner Fountain Test
-# Tests: direction randomness (cone scatter), position randomness, speed randomness,
-#        angular velocity randomness, and fast spawn interval to create a dense fountain.
+# Spawner Fountain
+# Five spawners arranged in a ring shoot colourful balls upward and outward.
+# Gravity arcs them back down onto the floor, creating a cascading fountain effect.
 
 BeginSettings
-  ClearColor = 0.05, 0.08, 0.14, 1.0
+  ClearColor = 0.06, 0.08, 0.14, 1.0
   TimeSpeed = 1.0
   SimulationHz = 120
+  KillboxEnabled = true
+  KillboxY = -5.0
 EndSettings
 
+# ---- Materials ----
+
+BeginTexture
+  Name = tex_pool
+  Type = radial
+  ColorA = 0.30, 0.50, 0.70
+  ColorB = 0.10, 0.20, 0.40
+  Size = 256
+EndTexture
+
 BeginMaterial
-  Name = GroundMat
-  AlbedoColor = 0.25, 0.25, 0.30
-  Roughness = 0.95
-  Metallic = 0.0
+  Name = FloorMat
+  AlbedoColor = 0.30, 0.32, 0.38
+  Roughness = 0.85
+  Metallic = 0.05
+  AlbedoTexture = tex_pool
 EndMaterial
 
 BeginMaterial
-  Name = FountainBall
-  AlbedoColor = 0.2, 0.7, 1.0
-  Roughness = 0.2
-  Metallic = 0.5
+  Name = BasinMat
+  AlbedoColor = 0.22, 0.25, 0.32
+  Roughness = 0.70
+  Metallic = 0.10
 EndMaterial
+
+BeginMaterial
+  Name = BallRed
+  AlbedoColor = 0.95, 0.22, 0.18
+  Roughness = 0.22
+  Metallic = 0.35
+EndMaterial
+
+BeginMaterial
+  Name = BallOrange
+  AlbedoColor = 1.00, 0.55, 0.10
+  Roughness = 0.20
+  Metallic = 0.40
+EndMaterial
+
+BeginMaterial
+  Name = BallYellow
+  AlbedoColor = 0.98, 0.88, 0.15
+  Roughness = 0.18
+  Metallic = 0.45
+EndMaterial
+
+BeginMaterial
+  Name = BallGreen
+  AlbedoColor = 0.20, 0.88, 0.35
+  Roughness = 0.22
+  Metallic = 0.38
+EndMaterial
+
+BeginMaterial
+  Name = BallBlue
+  AlbedoColor = 0.18, 0.50, 1.00
+  Roughness = 0.20
+  Metallic = 0.42
+EndMaterial
+
+# ---- Meshes ----
 
 BeginMesh
-  Name = Floor
+  Name = floor_plane
   Type = plane
-  Width = 80.0
-  Height = 80.0
+  Width = 70.0
+  Height = 70.0
 EndMesh
 
 BeginMesh
-  Name = Ball
+  Name = basin_wall
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = ball_mesh
   Type = sphere
-  Radius = 0.4
+  Radius = 0.55
   Segments = 20
 EndMesh
 
+BeginMesh
+  Name = post_mesh
+  Type = cylinder
+  Radius = 0.22
+  Height = 2.0
+  Segments = 8
+EndMesh
+
+# ============================================================
+# FLOOR + LOW CIRCULAR BASIN WALLS
+# ============================================================
+
 BeginObject
-  Name = Ground
+  Name = Floor
   Position = 0.0, 0.0, 0.0
-  Mesh = Floor
-  Material = GroundMat
+  Mesh = floor_plane
+  Material = FloorMat
   Collider = plane
   ColliderNormal = 0.0, 1.0, 0.0
-  ColliderHalfExtents = 40.0, 0.0, 40.0
+  ColliderHalfExtents = 35.0, 0.0, 35.0
 EndObject
 
-# Fountain: launches upward with a 35-degree cone scatter and position jitter.
-# SpawnIntervalRandomness adds up to 50% variation so bursts feel organic.
-# AngularVelocityRandomness gives each ball a random tumble.
-BeginSpawner
-  Name = Fountain
-  Position = 0.0, 0.5, 0.0
-  SpawnInterval = 0.12
-  SpawnIntervalRandomness = 0.5
-  SpawnDirection = 0.0, 1.0, 0.0
-  DirectionRandomness = 0.61
-  SpawnSpeed = 12.0
-  SpeedRandomness = 0.30
-  PositionRandomness = 0.6
-  AngularVelocityRandomness = 8.0
+# Eight low curved-ish basin wall segments arranged in a ring
+BeginObject
+  Name = Basin_N
+  Position = 0.0, 0.5, 18.0
+  Scale = 14.0, 1.0, 1.5
+  Mesh = basin_wall
+  Material = BasinMat
+  Collider = box
+  ColliderHalfExtents = 7.0, 0.5, 0.75
+EndObject
 
+BeginObject
+  Name = Basin_S
+  Position = 0.0, 0.5, -18.0
+  Scale = 14.0, 1.0, 1.5
+  Mesh = basin_wall
+  Material = BasinMat
+  Collider = box
+  ColliderHalfExtents = 7.0, 0.5, 0.75
+EndObject
+
+BeginObject
+  Name = Basin_E
+  Position = 18.0, 0.5, 0.0
+  Scale = 1.5, 1.0, 14.0
+  Mesh = basin_wall
+  Material = BasinMat
+  Collider = box
+  ColliderHalfExtents = 0.75, 0.5, 7.0
+EndObject
+
+BeginObject
+  Name = Basin_W
+  Position = -18.0, 0.5, 0.0
+  Scale = 1.5, 1.0, 14.0
+  Mesh = basin_wall
+  Material = BasinMat
+  Collider = box
+  ColliderHalfExtents = 0.75, 0.5, 7.0
+EndObject
+
+BeginObject
+  Name = Basin_NE
+  Position = 13.0, 0.5, 13.0
+  Rotation = 0.0, 45.0, 0.0
+  Scale = 1.5, 1.0, 12.0
+  Mesh = basin_wall
+  Material = BasinMat
+  Collider = box
+  ColliderHalfExtents = 0.75, 0.5, 6.0
+EndObject
+
+BeginObject
+  Name = Basin_NW
+  Position = -13.0, 0.5, 13.0
+  Rotation = 0.0, -45.0, 0.0
+  Scale = 1.5, 1.0, 12.0
+  Mesh = basin_wall
+  Material = BasinMat
+  Collider = box
+  ColliderHalfExtents = 0.75, 0.5, 6.0
+EndObject
+
+BeginObject
+  Name = Basin_SE
+  Position = 13.0, 0.5, -13.0
+  Rotation = 0.0, -45.0, 0.0
+  Scale = 1.5, 1.0, 12.0
+  Mesh = basin_wall
+  Material = BasinMat
+  Collider = box
+  ColliderHalfExtents = 0.75, 0.5, 6.0
+EndObject
+
+BeginObject
+  Name = Basin_SW
+  Position = -13.0, 0.5, -13.0
+  Rotation = 0.0, 45.0, 0.0
+  Scale = 1.5, 1.0, 12.0
+  Mesh = basin_wall
+  Material = BasinMat
+  Collider = box
+  ColliderHalfExtents = 0.75, 0.5, 6.0
+EndObject
+
+# Small central post / plinth
+BeginObject
+  Name = FountainPost
+  Position = 0.0, 1.0, 0.0
+  Mesh = post_mesh
+  Material = BasinMat
+EndObject
+
+# ============================================================
+# SPAWNERS — five on a ring of radius 4, pointing up-and-out
+# Directions are (outward * 0.35 + up * 1.0) pre-normalised roughly
+# ============================================================
+
+# Spawner 0° (East)
+BeginSpawner
+  Name = Fountain_E
+  Position = 4.0, 1.2, 0.0
+  SpawnDirection = 1.0, 2.8, 0.0
+  DirectionRandomness = 0.22
+  SpawnSpeed = 14.0
+  SpeedRandomness = 0.20
+  SpawnInterval = 0.20
+  SpawnIntervalRandomness = 0.35
+  PositionRandomness = 0.4
+  AngularVelocityRandomness = 6.0
+  MaxSpawns = 200
   BeginTemplate
     Weight = 1.0
-    NamePrefix = Drop
-    Mesh = Ball
-    Material = FountainBall
-    ScaleUniform = 1.0
-    Mass = 0.8
-    Restitution = 0.55
+    NamePrefix = FE
+    Mesh = ball_mesh
+    Material = BallRed
+    Mass = 0.5
+    Restitution = 0.60
     Damping = 0.99
     UseGravity = true
     Collider = sphere
-    ColliderRadius = 0.4
+    ColliderRadius = 0.55
   EndTemplate
 EndSpawner
+
+# Spawner 72°
+BeginSpawner
+  Name = Fountain_A
+  Position = 1.24, 1.2, 3.80
+  SpawnDirection = 0.35, 2.8, 0.95
+  DirectionRandomness = 0.22
+  SpawnSpeed = 13.5
+  SpeedRandomness = 0.22
+  SpawnInterval = 0.22
+  SpawnIntervalRandomness = 0.3
+  PositionRandomness = 0.4
+  AngularVelocityRandomness = 6.0
+  MaxSpawns = 200
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = FA
+    Mesh = ball_mesh
+    Material = BallOrange
+    Mass = 0.5
+    Restitution = 0.60
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.55
+  EndTemplate
+EndSpawner
+
+# Spawner 144°
+BeginSpawner
+  Name = Fountain_B
+  Position = -3.24, 1.2, 2.35
+  SpawnDirection = -0.81, 2.8, 0.59
+  DirectionRandomness = 0.22
+  SpawnSpeed = 14.0
+  SpeedRandomness = 0.20
+  SpawnInterval = 0.21
+  SpawnIntervalRandomness = 0.3
+  PositionRandomness = 0.4
+  AngularVelocityRandomness = 6.0
+  MaxSpawns = 200
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = FB
+    Mesh = ball_mesh
+    Material = BallYellow
+    Mass = 0.5
+    Restitution = 0.60
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.55
+  EndTemplate
+EndSpawner
+
+# Spawner 216°
+BeginSpawner
+  Name = Fountain_C
+  Position = -3.24, 1.2, -2.35
+  SpawnDirection = -0.81, 2.8, -0.59
+  DirectionRandomness = 0.22
+  SpawnSpeed = 13.8
+  SpeedRandomness = 0.22
+  SpawnInterval = 0.20
+  SpawnIntervalRandomness = 0.35
+  PositionRandomness = 0.4
+  AngularVelocityRandomness = 6.0
+  MaxSpawns = 200
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = FC
+    Mesh = ball_mesh
+    Material = BallGreen
+    Mass = 0.5
+    Restitution = 0.60
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.55
+  EndTemplate
+EndSpawner
+
+# Spawner 288°
+BeginSpawner
+  Name = Fountain_D
+  Position = 1.24, 1.2, -3.80
+  SpawnDirection = 0.35, 2.8, -0.95
+  DirectionRandomness = 0.22
+  SpawnSpeed = 14.0
+  SpeedRandomness = 0.20
+  SpawnInterval = 0.22
+  SpawnIntervalRandomness = 0.3
+  PositionRandomness = 0.4
+  AngularVelocityRandomness = 6.0
+  MaxSpawns = 200
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = FD
+    Mesh = ball_mesh
+    Material = BallBlue
+    Mass = 0.5
+    Restitution = 0.60
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.55
+  EndTemplate
+EndSpawner
+
+# ---- Lights ----
 
 BeginLight
   Name = Sun
   Type = sun
-  Direction = 0.4, -1.0, 0.2
+  Direction = 0.3, -0.9, 0.4
   Color = 1.0, 0.96, 0.88
-  Intensity = 2.5
+  Intensity = 2.4
   CastsShadows = true
 EndLight
 
 BeginLight
-  Name = Blue Fill
+  Name = FountainGlow
   Type = point
-  Position = 0.0, 20.0, 0.0
-  Color = 0.4, 0.6, 1.0
-  Intensity = 2.0
+  Position = 0.0, 6.0, 0.0
+  Color = 0.6, 0.85, 1.0
+  Intensity = 200.0
+  Linear = 0.06
+  Quadratic = 0.012
   CastsShadows = false
 EndLight
+
+BeginLight
+  Name = AmbientFill
+  Type = point
+  Position = 0.0, 30.0, 0.0
+  Color = 0.4, 0.50, 0.85
+  Intensity = 350.0
+  Linear = 0.03
+  Quadratic = 0.005
+  CastsShadows = false
+EndLight
+
+BeginCamera
+  Name = MainCamera
+  Position = -20.0, 20.0, -25.0
+  Target = 0.0, 4.0, 0.0
+  FOV = 65
+EndCamera

@@ -125,7 +125,7 @@ class MainPipeline final {
     fragShaderStageInfo.pSpecializationInfo = &specializationInfo;
 
     const auto bindingDescription = Vertex::getBindingDescription();
-    const auto attributeDescriptions = Vertex::getAttributeDescriptions();
+    const auto& attributeDescriptions = Vertex::getAttributeDescriptions();
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType =

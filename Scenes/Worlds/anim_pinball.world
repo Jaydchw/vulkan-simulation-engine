@@ -1,0 +1,360 @@
+# Animated × Physics: Crash Course (Pinball)
+# Balls spawn at the top and navigate a gauntlet of animated obstacles:
+# spinning arms, a sliding block, and a sweeping gate.
+# The shaft is bounded by four thin walls; balls that reach the bottom
+# fall out and are cleaned up by the killbox.
+
+BeginSettings
+  ClearColor = 0.03, 0.04, 0.08, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+  KillboxEnabled = true
+  KillboxY = -5.0
+EndSettings
+
+# ---- Materials ----
+
+BeginTexture
+  Name = tex_wall_stripe
+  Type = stripe
+  ColorA = 0.20, 0.22, 0.28
+  ColorB = 0.14, 0.16, 0.20
+  Size = 128
+  StripeCount = 10
+  Vertical = true
+EndTexture
+
+BeginMaterial
+  Name = WallMat
+  AlbedoColor = 0.20, 0.22, 0.28
+  Roughness = 0.80
+  Metallic = 0.05
+  AlbedoTexture = tex_wall_stripe
+EndMaterial
+
+BeginMaterial
+  Name = ArmMat
+  AlbedoColor = 0.85, 0.55, 0.10
+  Roughness = 0.25
+  Metallic = 0.75
+EndMaterial
+
+BeginMaterial
+  Name = SliderMat
+  AlbedoColor = 0.10, 0.65, 0.85
+  Roughness = 0.30
+  Metallic = 0.60
+EndMaterial
+
+BeginMaterial
+  Name = GateMat
+  AlbedoColor = 0.75, 0.20, 0.80
+  Roughness = 0.20
+  Metallic = 0.80
+EndMaterial
+
+BeginMaterial
+  Name = BallMat
+  AlbedoColor = 0.95, 0.92, 0.88
+  Roughness = 0.18
+  Metallic = 0.30
+EndMaterial
+
+BeginMaterial
+  Name = BallMatB
+  AlbedoColor = 0.90, 0.30, 0.30
+  Roughness = 0.20
+  Metallic = 0.25
+EndMaterial
+
+# ---- Meshes ----
+
+BeginMesh
+  Name = unit_cube
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = ball_mesh
+  Type = sphere
+  Radius = 0.6
+  Segments = 20
+EndMesh
+
+# ============================================================
+# SHAFT WALLS — visible, with box colliders
+# Shaft: X ±8, Z ±3, Y 0 to 45
+# ============================================================
+
+BeginObject
+  Name = WallLeft
+  Position = -9.0, 22.5, 0.0
+  Scale = 2.0, 45.0, 6.0
+  Mesh = unit_cube
+  Material = WallMat
+  Collider = box
+  ColliderHalfExtents = 1.0, 22.5, 3.0
+EndObject
+
+BeginObject
+  Name = WallRight
+  Position = 9.0, 22.5, 0.0
+  Scale = 2.0, 45.0, 6.0
+  Mesh = unit_cube
+  Material = WallMat
+  Collider = box
+  ColliderHalfExtents = 1.0, 22.5, 3.0
+EndObject
+
+BeginObject
+  Name = WallFront
+  Position = 0.0, 22.5, 4.0
+  Scale = 20.0, 45.0, 2.0
+  Mesh = unit_cube
+  Material = WallMat
+  Collider = box
+  ColliderHalfExtents = 10.0, 22.5, 1.0
+EndObject
+
+BeginObject
+  Name = WallBack
+  Position = 0.0, 22.5, -4.0
+  Scale = 20.0, 45.0, 2.0
+  Mesh = unit_cube
+  Material = WallMat
+  Collider = box
+  ColliderHalfExtents = 10.0, 22.5, 1.0
+EndObject
+
+# ============================================================
+# ANIMATED OBSTACLES
+# ============================================================
+
+# --- Level 1 (Y=36): Fast spinning arm — full 360° loop every 2s ---
+BeginObject
+  Name = Arm_L1
+  Position = 0.0, 36.0, 0.0
+  Scale = 14.0, 0.8, 1.8
+  Mesh = unit_cube
+  Material = ArmMat
+  Collider = box
+  ColliderHalfExtents = 7.0, 0.4, 0.9
+  BeginAnimation
+    PathMode = loop
+    Easing = linear
+    TotalDuration = 2.0
+    BeginWaypoint
+      Position = 0.0, 36.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 36.0, 0.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 0.5
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 36.0, 0.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 1.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 36.0, 0.0
+      Rotation = 0.0, 270.0, 0.0
+      Time = 1.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# --- Level 2 (Y=27): Slower arm sweeps 180° and reverses ---
+BeginObject
+  Name = Arm_L2
+  Position = 0.0, 27.0, 0.0
+  Scale = 13.0, 0.8, 2.0
+  Mesh = unit_cube
+  Material = ArmMat
+  Collider = box
+  ColliderHalfExtents = 6.5, 0.4, 1.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 5.0
+    BeginWaypoint
+      Position = 0.0, 27.0, 0.0
+      Rotation = 0.0, -80.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 27.0, 0.0
+      Rotation = 0.0, 80.0, 0.0
+      Time = 2.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# --- Level 3 (Y=18): Horizontal sliding block ---
+BeginObject
+  Name = Slider_L3
+  Position = -4.0, 18.0, 0.0
+  Scale = 5.5, 1.2, 4.5
+  Mesh = unit_cube
+  Material = SliderMat
+  Collider = box
+  ColliderHalfExtents = 2.75, 0.6, 2.25
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 3.0
+    BeginWaypoint
+      Position = -5.0, 18.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 5.0, 18.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 1.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# --- Level 4 (Y=9): Sweeping gate arm, slower ---
+BeginObject
+  Name = Gate_L4
+  Position = 0.0, 9.0, 0.0
+  Scale = 12.0, 0.8, 1.6
+  Mesh = unit_cube
+  Material = GateMat
+  Collider = box
+  ColliderHalfExtents = 6.0, 0.4, 0.8
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 4.0
+    BeginWaypoint
+      Position = 0.0, 9.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 9.0, 0.0
+      Rotation = 0.0, 90.0, 0.0
+      Time = 1.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 9.0, 0.0
+      Rotation = 0.0, 180.0, 0.0
+      Time = 2.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 9.0, 0.0
+      Rotation = 0.0, 270.0, 0.0
+      Time = 3.0
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# ---- Spawner at top — randomised balls raining down ----
+
+BeginSpawner
+  Name = BallDrop
+  Position = 0.0, 48.0, 0.0
+  SpawnDirection = 0.0, -1.0, 0.0
+  DirectionRandomness = 0.28
+  SpawnSpeed = 6.0
+  SpeedRandomness = 0.35
+  SpawnInterval = 0.55
+  SpawnIntervalRandomness = 0.5
+  PositionRandomness = 4.5
+  AngularVelocityRandomness = 8.0
+  MaxSpawns = -1
+  BeginTemplate
+    Weight = 3.0
+    NamePrefix = Ball
+    Mesh = ball_mesh
+    Material = BallMat
+    Mass = 0.6
+    Restitution = 0.65
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.6
+  EndTemplate
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = RedBall
+    Mesh = ball_mesh
+    Material = BallMatB
+    Mass = 1.5
+    Restitution = 0.50
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.6
+  EndTemplate
+EndSpawner
+
+# ---- Lights ----
+
+BeginLight
+  Name = TopDown
+  Type = point
+  Position = 0.0, 50.0, 0.0
+  Color = 0.95, 0.90, 0.80
+  Intensity = 600.0
+  Linear = 0.030
+  Quadratic = 0.003
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = NeonBlue
+  Type = point
+  Position = -5.0, 15.0, 2.0
+  Color = 0.3, 0.6, 1.0
+  Intensity = 220.0
+  Linear = 0.08
+  Quadratic = 0.016
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = NeonOrange
+  Type = point
+  Position = 5.0, 32.0, 2.0
+  Color = 1.0, 0.5, 0.15
+  Intensity = 200.0
+  Linear = 0.08
+  Quadratic = 0.016
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = GatePurple
+  Type = point
+  Position = 0.0, 9.0, 0.0
+  Color = 0.75, 0.15, 1.0
+  Intensity = 160.0
+  Linear = 0.10
+  Quadratic = 0.022
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = SliderCyan
+  Type = point
+  Position = 0.0, 18.0, 0.0
+  Color = 0.15, 0.85, 1.0
+  Intensity = 140.0
+  Linear = 0.12
+  Quadratic = 0.026
+  CastsShadows = false
+EndLight
+
+BeginCamera
+  Name = MainCamera
+  Position = -22.0, 30.0, -26.0
+  Target = 0.0, 20.0, 0.0
+  FOV = 75
+EndCamera

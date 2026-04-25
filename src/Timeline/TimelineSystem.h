@@ -1,16 +1,32 @@
 #pragma once
 #include <deque>
+#include <unordered_map>
 #include <vector>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
+#include "ECS/Components.h"
 #include "ECS/Entity.h"
+#include "Physics/PhysicsMaterial.h"
 
 class Registry;
 
 struct EntitySnapshot {
   glm::vec3 position;
   glm::vec3 velocity;
+};
+
+struct SpawnedEntityRecord {
+  std::string name;
+  glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+  glm::vec3 scale    = glm::vec3(1.0f);
+  SimulatedComponent simulated;
+  ColliderComponent  collider;
+  bool hasRender = false;
+  MeshID meshID = INVALID_MESH_ID;
+  RenderMaterialID renderMaterialID = INVALID_RENDER_MATERIAL_ID;
+  PhysicsMaterialID physicsMaterialID = INVALID_PHYSICS_MATERIAL_ID;
 };
 
 struct FrameSnapshot {
@@ -39,6 +55,8 @@ class TimelineSystem final {
   void clearSnapshots();
   int getSnapshotCount() const;
 
+  void registerSpawnedEntity(Entity e, SpawnedEntityRecord record);
+
   // Read-only access to the snapshot deque (for serialization)
   const std::deque<FrameSnapshot>& getSnapshots() const { return snapshots; }
 
@@ -52,7 +70,9 @@ class TimelineSystem final {
   bool initialSnapshotValid = false;
 
   std::deque<FrameSnapshot> snapshots;
+  std::unordered_map<Entity, SpawnedEntityRecord> spawnedEntities;
 
   FrameSnapshot captureFrame() const;
   void applyFrame(const FrameSnapshot& snap);
+  void recreateSpawnedEntity(Entity e, const SpawnedEntityRecord& rec);
 };

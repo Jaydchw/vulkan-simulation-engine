@@ -712,3 +712,21 @@ void MeshManager::createBuffers(Mesh* mesh) const {
 }
 
 void MeshManager::createDefaultMeshes() { defaultCubeID = createCube(1.0f); }
+
+void MeshManager::markSceneBase() {
+  sceneBaseMeshID = static_cast<MeshID>(meshes.size());
+}
+
+void MeshManager::resetForNewScene() {
+  if (sceneBaseMeshID == 0) return;
+  for (MeshID i = sceneBaseMeshID; i < static_cast<MeshID>(meshes.size()); ++i) {
+    if (!meshes[i]) continue;
+    if (meshes[i]->getVertexBuffer() != VK_NULL_HANDLE)
+      renderDevice->destroyBuffer(meshes[i]->getVertexBuffer(), meshes[i]->getVertexBufferAllocation());
+    if (meshes[i]->getIndexBuffer() != VK_NULL_HANDLE)
+      renderDevice->destroyBuffer(meshes[i]->getIndexBuffer(), meshes[i]->getIndexBufferAllocation());
+  }
+  meshes.resize(sceneBaseMeshID);
+  filepathToID.clear();
+  Debug::log(Debug::Category::MESH, "MeshManager: Reset scene meshes, base=", sceneBaseMeshID);
+}

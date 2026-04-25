@@ -120,6 +120,7 @@ void Application::loadWorld(const std::string& filepath) {
   {
     std::lock_guard<std::mutex> lock(simMutex);
 
+    meshManager->resetForNewScene();
     materialManager->resetForNewScene();
     lightManager->resetForNewScene();
 
@@ -182,6 +183,7 @@ void Application::loadFBScene(const std::string& filepath) {
   {
     std::lock_guard<std::mutex> lock(simMutex);
 
+    meshManager->resetForNewScene();
     materialManager->resetForNewScene();
     lightManager->resetForNewScene();
 
@@ -340,6 +342,8 @@ void Application::simulationThreadFunc() {
           if (spawnerSystem)
             spawnerSystem->update(dt * simState.timeSpeed);
           if (doPerfTiming) simPerf.spawnerMs.store(msec(t0, Clock::now()));
+          if (networkManager && networkManager->colorByOwner)
+            applyOwnerColors(true);
         }
 
         if (simState.stepFrame) {
@@ -513,6 +517,7 @@ void Application::initVulkan() {
 
   meshManager = std::make_unique<MeshManager>(renderDevice.get());
   gizmoMeshID = meshManager->createSphere(0.3f, 16);
+  meshManager->markSceneBase();
   Debug::log(Debug::Category::MESH, "Mesh: MeshManager created, gizmo sphere mesh=", gizmoMeshID);
 
   lightManager = std::make_unique<LightManager>(renderDevice.get());
@@ -592,6 +597,7 @@ void Application::initVulkan() {
 
   timelineSystem  = std::make_unique<TimelineSystem>();
   Debug::log(Debug::Category::TIMELINE, "Timeline: TimelineSystem created");
+  spawnerSystem->setTimelineSystem(timelineSystem.get());
 
   networkManager = std::make_unique<NetworkManager>();
   networkManager->init(nullptr);
@@ -871,9 +877,15 @@ while (!window->shouldClose()) {
     // Create entities spawned by remote peers
     if (spawnerSystem) {
       SpawnEntityPacket spawnPkt{};
+      bool anyRemoteSpawns = false;
       while (networkManager->pollPendingSpawnedEntity(spawnPkt)) {
         std::lock_guard<std::mutex> lock(simMutex);
         spawnerSystem->applyRemoteSpawn(spawnPkt);
+        anyRemoteSpawns = true;
+      }
+      if (anyRemoteSpawns && networkManager->colorByOwner) {
+        std::lock_guard<std::mutex> lock(simMutex);
+        applyOwnerColors(true);
       }
     }
 
@@ -928,6 +940,7 @@ while (!window->shouldClose()) {
       else                         loadWorld(remotePath);
       applyingRemoteSceneLoad = false;
       networkManager->flushInterpolation();
+      if (interface) interface->setLastLoadedWorld(remotePath);
     }
 
     bool receivedStepForward = false;

@@ -110,8 +110,30 @@ void SpawnerSystem::applyRemoteSpawn(const SpawnEntityPacket& pkt) {
     registry->addComponent<RenderComponent>(entity, {});
   }
 
-  if (networkManager) {
-    networkManager->assignObjectOwnership();
+  if (networkManager && pkt.ownerPeerId != 0)
+    networkManager->setEntityOwner(entity, pkt.ownerPeerId);
+
+  if (timelineSystem) {
+    SpawnedEntityRecord rec;
+    rec.name               = std::string(pkt.name);
+    rec.rotation           = glm::quat(pkt.rotW, pkt.rotX, pkt.rotY, pkt.rotZ);
+    rec.scale              = {pkt.scaleX, pkt.scaleY, pkt.scaleZ};
+    rec.simulated.velocity        = {pkt.velX, pkt.velY, pkt.velZ};
+    rec.simulated.angularVelocity = {pkt.angVelX, pkt.angVelY, pkt.angVelZ};
+    rec.simulated.mass            = pkt.mass;
+    rec.simulated.restitution     = pkt.restitution;
+    rec.simulated.damping         = pkt.damping;
+    rec.simulated.useGravity      = pkt.useGravity != 0;
+    rec.collider.type        = static_cast<ColliderType>(pkt.colliderType);
+    rec.collider.radius      = pkt.radius;
+    rec.collider.height      = pkt.height;
+    rec.collider.halfExtents = {pkt.halfExtX, pkt.halfExtY, pkt.halfExtZ};
+    rec.collider.normal      = {pkt.normalX, pkt.normalY, pkt.normalZ};
+    rec.collider.finite      = pkt.finite != 0;
+    rec.hasRender         = pkt.hasRender != 0;
+    rec.meshID            = pkt.meshId;
+    rec.renderMaterialID  = pkt.materialId;
+    timelineSystem->registerSpawnedEntity(entity, rec);
   }
 
   Debug::log(Debug::Category::SPAWNING, "SpawnerSystem: Replicated remote entity ", entity,
@@ -213,6 +235,20 @@ Entity SpawnerSystem::doSpawn(Entity spawnerEntity, SpawnerComponent& spawner,
 
   if (tmpl.physicsMaterialID != INVALID_PHYSICS_MATERIAL_ID) {
     registry->addComponent<PhysicsMaterialComponent>(entity, {tmpl.physicsMaterialID});
+  }
+
+  if (timelineSystem) {
+    SpawnedEntityRecord rec;
+    rec.name              = entityName;
+    rec.rotation          = transform.rotation;
+    rec.scale             = transform.scale;
+    rec.simulated         = phys;
+    rec.collider          = tmpl.collider;
+    rec.hasRender         = tmpl.hasRender && tmpl.meshID != INVALID_MESH_ID && tmpl.renderMaterialID != INVALID_RENDER_MATERIAL_ID;
+    rec.meshID            = tmpl.meshID;
+    rec.renderMaterialID  = tmpl.renderMaterialID;
+    rec.physicsMaterialID = tmpl.physicsMaterialID;
+    timelineSystem->registerSpawnedEntity(entity, rec);
   }
 
   return entity;

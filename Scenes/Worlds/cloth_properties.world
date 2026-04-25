@@ -1,0 +1,182 @@
+# Cloth Properties Showcase
+# Three cloths demonstrating distinct simulation properties, side by side.
+# No floors, no spawners.
+#
+# LEFT   — Flag: LeftCol pinned, high stiffness, strong wind. Like a banner.
+# CENTRE — Trampoline: AllCorners pinned, medium stiffness, gravity sags the middle.
+# RIGHT  — Gossamer: TopRow pinned, very low stiffness, zero gravity, gentle swirling wind.
+
+BeginSettings
+  ClearColor = 0.06, 0.07, 0.12, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+  KillboxEnabled = false
+EndSettings
+
+# ---- Materials ----
+
+BeginTexture
+  Name = tex_flag
+  Type = stripe
+  ColorA = 0.85, 0.15, 0.15
+  ColorB = 0.95, 0.88, 0.88
+  Size = 256
+  StripeCount = 6
+  Vertical = true
+EndTexture
+
+BeginTexture
+  Name = tex_trampoline
+  Type = checker
+  ColorA = 0.15, 0.55, 0.88
+  ColorB = 0.08, 0.35, 0.65
+  Size = 256
+  Divisions = 8
+EndTexture
+
+BeginTexture
+  Name = tex_gossamer
+  Type = radial
+  ColorA = 0.88, 0.75, 1.0
+  ColorB = 0.35, 0.15, 0.55
+  Size = 256
+EndTexture
+
+BeginMaterial
+  Name = FlagMat
+  AlbedoColor = 0.95, 0.55, 0.55
+  Roughness = 0.78
+  Metallic = 0.0
+  AlbedoTexture = tex_flag
+EndMaterial
+
+BeginMaterial
+  Name = TrampolineMat
+  AlbedoColor = 0.25, 0.60, 0.95
+  Roughness = 0.65
+  Metallic = 0.1
+  AlbedoTexture = tex_trampoline
+EndMaterial
+
+BeginMaterial
+  Name = GossamerMat
+  AlbedoColor = 0.82, 0.68, 1.0
+  Roughness = 0.50
+  Metallic = 0.05
+  AlbedoTexture = tex_gossamer
+EndMaterial
+
+# ---- LEFT: Flag (LeftCol pinned, strong wind) ----
+# Positioned at X=-22. Vertical-ish drape from the left edge.
+
+BeginCloth
+  Name = Flag
+  Position = -22.0, 12.0, 0.0
+  Material = FlagMat
+  ResolutionX = 18
+  ResolutionZ = 14
+  Width = 14.0
+  ClothHeight = 10.0
+  StructuralStiffness = 0.90
+  BendingStiffness = 0.08
+  Damping = 0.985
+  ParticleMass = 0.05
+  UseGravity = true
+  EulerAngles = 90.0, 0.0, 0.0
+  Hinge = LeftCol
+  Wind = 10.0, 0.5, 1.5
+  SolverIterations = 6
+EndCloth
+
+# ---- CENTRE: Trampoline (AllCorners pinned, gravity sags centre) ----
+# Positioned at origin. Horizontal, corners fixed, middle droops.
+
+BeginCloth
+  Name = Trampoline
+  Position = 0.0, 8.0, 0.0
+  Material = TrampolineMat
+  ResolutionX = 20
+  ResolutionZ = 20
+  Width = 18.0
+  ClothHeight = 18.0
+  StructuralStiffness = 0.60
+  BendingStiffness = 0.05
+  Damping = 0.980
+  ParticleMass = 0.12
+  UseGravity = true
+  Hinge = AllCorners
+  SolverIterations = 10
+EndCloth
+
+# ---- RIGHT: Gossamer (TopRow pinned, zero gravity, swirling wind) ----
+# Positioned at X=+22. Floats freely, only held at the top edge.
+
+BeginCloth
+  Name = Gossamer
+  Position = 22.0, 14.0, 0.0
+  Material = GossamerMat
+  ResolutionX = 16
+  ResolutionZ = 16
+  Width = 12.0
+  ClothHeight = 12.0
+  StructuralStiffness = 0.25
+  BendingStiffness = 0.02
+  Damping = 0.970
+  ParticleMass = 0.02
+  UseGravity = false
+  EulerAngles = 90.0, 0.0, 0.0
+  Hinge = TopRow
+  Wind = 2.5, 1.2, 3.5
+  SolverIterations = 4
+EndCloth
+
+# ---- Lights ----
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.35, -0.80, 0.45
+  Color = 1.0, 0.97, 0.90
+  Intensity = 2.5
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = FillLeft
+  Type = point
+  Position = -28.0, 18.0, 10.0
+  Color = 1.0, 0.5, 0.4
+  Intensity = 250.0
+  Linear = 0.06
+  Quadratic = 0.012
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = FillCentre
+  Type = point
+  Position = 0.0, 22.0, -8.0
+  Color = 0.4, 0.65, 1.0
+  Intensity = 200.0
+  Linear = 0.05
+  Quadratic = 0.010
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = FillRight
+  Type = point
+  Position = 28.0, 18.0, 10.0
+  Color = 0.75, 0.55, 1.0
+  Intensity = 250.0
+  Linear = 0.06
+  Quadratic = 0.012
+  CastsShadows = false
+EndLight
+
+BeginCamera
+  Name = MainCamera
+  Position = 0.0, 15.0, -46.0
+  Target = 0.0, 10.0, 0.0
+  FOV = 72
+EndCamera

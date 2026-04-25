@@ -62,7 +62,7 @@ CONTROLS
 
     Debug::log(Debug::Category::MAIN, "Starting main loop...");
     app.run();
-  } catch (const std::exception& e) {
+  } catch (const std::exception& e [[maybe_unused]]) {
 #ifdef _DEBUG
     std::cerr << e.what() << std::endl;
 #endif

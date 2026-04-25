@@ -298,6 +298,7 @@ void PhysicsSystem::syncToLibrary() {
       obj->setAcceleration(acceleration);
       obj->setMass(phys->mass);
       obj->setRestitution(phys->restitution);
+      obj->setFriction(phys->friction);
       obj->setDamping(phys->damping);
       obj->setUseGravity(phys->useGravity);
       obj->setAngularVelocity(phys->angularVelocity);

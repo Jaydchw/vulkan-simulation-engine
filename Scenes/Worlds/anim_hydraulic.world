@@ -1,0 +1,308 @@
+# Animated × Physics: Hydraulic Press
+# A large animated press plate cycles down and up, crushing simulated objects
+# that pile up on the base. Invisible walls keep everything contained.
+
+BeginSettings
+  ClearColor = 0.05, 0.04, 0.04, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+  KillboxEnabled = true
+  KillboxY = -10.0
+EndSettings
+
+# ---- Materials ----
+
+BeginMaterial
+  Name = BaseMat
+  AlbedoColor = 0.28, 0.28, 0.30
+  Roughness = 0.88
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = PressMat
+  AlbedoColor = 0.72, 0.72, 0.76
+  Roughness = 0.20
+  Metallic = 0.90
+EndMaterial
+
+BeginMaterial
+  Name = PistonMat
+  AlbedoColor = 0.45, 0.45, 0.50
+  Roughness = 0.35
+  Metallic = 0.80
+EndMaterial
+
+BeginMaterial
+  Name = FrameMat
+  AlbedoColor = 0.18, 0.18, 0.22
+  Roughness = 0.45
+  Metallic = 0.70
+EndMaterial
+
+BeginMaterial
+  Name = BallRed
+  AlbedoColor = 0.88, 0.18, 0.12
+  Roughness = 0.25
+  Metallic = 0.15
+EndMaterial
+
+BeginMaterial
+  Name = BallBlue
+  AlbedoColor = 0.18, 0.42, 0.92
+  Roughness = 0.30
+  Metallic = 0.20
+EndMaterial
+
+BeginMaterial
+  Name = BoxMat
+  AlbedoColor = 0.72, 0.55, 0.22
+  Roughness = 0.65
+  Metallic = 0.05
+EndMaterial
+
+# ---- Meshes ----
+
+BeginMesh
+  Name = unit_cube
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = sm_ball
+  Type = sphere
+  Radius = 0.7
+  Segments = 24
+EndMesh
+
+BeginMesh
+  Name = med_ball
+  Type = sphere
+  Radius = 1.0
+  Segments = 28
+EndMesh
+
+# ---- Static floor / base ----
+
+BeginObject
+  Name = Base
+  Position = 0.0, 0.0, 0.0
+  Scale = 32.0, 1.0, 32.0
+  Mesh = unit_cube
+  Material = BaseMat
+  Collider = box
+  ColliderHalfExtents = 16.0, 0.5, 16.0
+EndObject
+
+# Invisible containing walls — no mesh render, colliders only
+
+BeginObject
+  Name = WallFront
+  Position = 0.0, 12.0, 14.0
+  Scale = 32.0, 24.0, 1.0
+  Mesh = unit_cube
+  Visible = false
+  Collider = box
+  ColliderHalfExtents = 16.0, 12.0, 0.5
+EndObject
+
+BeginObject
+  Name = WallBack
+  Position = 0.0, 12.0, -14.0
+  Scale = 32.0, 24.0, 1.0
+  Mesh = unit_cube
+  Visible = false
+  Collider = box
+  ColliderHalfExtents = 16.0, 12.0, 0.5
+EndObject
+
+BeginObject
+  Name = WallLeft
+  Position = -14.0, 12.0, 0.0
+  Scale = 1.0, 24.0, 28.0
+  Mesh = unit_cube
+  Visible = false
+  Collider = box
+  ColliderHalfExtents = 0.5, 12.0, 14.0
+EndObject
+
+BeginObject
+  Name = WallRight
+  Position = 14.0, 12.0, 0.0
+  Scale = 1.0, 24.0, 28.0
+  Mesh = unit_cube
+  Visible = false
+  Collider = box
+  ColliderHalfExtents = 0.5, 12.0, 14.0
+EndObject
+
+# ---- Visual frame arms (aesthetic, no collider) ----
+
+BeginObject
+  Name = FrameLeft
+  Position = -13.0, 16.0, 0.0
+  Scale = 1.5, 32.0, 1.5
+  Mesh = unit_cube
+  Material = FrameMat
+EndObject
+
+BeginObject
+  Name = FrameRight
+  Position = 13.0, 16.0, 0.0
+  Scale = 1.5, 32.0, 1.5
+  Mesh = unit_cube
+  Material = FrameMat
+EndObject
+
+BeginObject
+  Name = FrameTop
+  Position = 0.0, 32.5, 0.0
+  Scale = 28.0, 1.5, 4.0
+  Mesh = unit_cube
+  Material = FrameMat
+EndObject
+
+# Piston rod — purely visual, animates in sync with the press plate
+BeginObject
+  Name = PistonRod
+  Position = 0.0, 28.0, 0.0
+  Scale = 2.0, 18.0, 2.0
+  Mesh = unit_cube
+  Material = PistonMat
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 11.0
+    BeginWaypoint
+      Position = 0.0, 28.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 10.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 5.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# ---- Animated press plate ----
+# Starts at Y=22, descends to Y=1.5 (just above base top face), then rises back.
+
+BeginObject
+  Name = PressPlate
+  Position = 0.0, 22.0, 0.0
+  Scale = 26.0, 1.8, 26.0
+  Mesh = unit_cube
+  Material = PressMat
+  Collider = box
+  ColliderHalfExtents = 13.0, 0.9, 13.0
+  BeginAnimation
+    PathMode = reverse
+    Easing = smoothstep
+    TotalDuration = 11.0
+    BeginWaypoint
+      Position = 0.0, 22.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, 1.5, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 5.5
+    EndWaypoint
+  EndAnimation
+EndObject
+
+# ---- Simulated objects — pile on the base before the press arrives ----
+
+BeginSpawner
+  Name = ObjectDrop
+  Position = 0.0, 18.0, 0.0
+  SpawnDirection = 0.0, -1.0, 0.0
+  DirectionRandomness = 0.0
+  SpawnSpeed = 0.5
+  SpawnInterval = 0.18
+  PositionRandomness = 10.0
+  MaxSpawns = 30
+  BeginTemplate
+    Weight = 3.0
+    NamePrefix = RedBall
+    Mesh = sm_ball
+    Material = BallRed
+    Mass = 1.2
+    Restitution = 0.55
+    Damping = 0.98
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.7
+  EndTemplate
+  BeginTemplate
+    Weight = 2.0
+    NamePrefix = BlueBall
+    Mesh = med_ball
+    Material = BallBlue
+    Mass = 2.5
+    Restitution = 0.45
+    Damping = 0.98
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 1.0
+  EndTemplate
+  BeginTemplate
+    Weight = 1.5
+    NamePrefix = Box
+    Mesh = unit_cube
+    Material = BoxMat
+    Scale = 1.4, 1.4, 1.4
+    Mass = 3.0
+    Restitution = 0.30
+    Damping = 0.97
+    UseGravity = true
+    Collider = box
+    ColliderHalfExtents = 0.7, 0.7, 0.7
+  EndTemplate
+EndSpawner
+
+# ---- Lights ----
+
+BeginLight
+  Name = Overhead
+  Type = point
+  Position = 0.0, 35.0, 0.0
+  Color = 0.95, 0.90, 0.80
+  Intensity = 600.0
+  Linear = 0.05
+  Quadratic = 0.008
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = RimLeft
+  Type = point
+  Position = -20.0, 8.0, -12.0
+  Color = 0.4, 0.6, 1.0
+  Intensity = 200.0
+  Linear = 0.06
+  Quadratic = 0.012
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = RimRight
+  Type = point
+  Position = 20.0, 8.0, 12.0
+  Color = 1.0, 0.5, 0.3
+  Intensity = 150.0
+  Linear = 0.07
+  Quadratic = 0.015
+  CastsShadows = false
+EndLight
+
+BeginCamera
+  Name = MainCamera
+  Position = -28.0, 26.0, -30.0
+  Target = 0.0, 12.0, 0.0
+  FOV = 65
+EndCamera

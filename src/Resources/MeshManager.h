@@ -112,11 +112,15 @@ class MeshManager final {
   MeshID getDefaultCube() const { return defaultCubeID; }
   void cleanup();
 
+  void markSceneBase();
+  void resetForNewScene();
+
  private:
   std::unordered_map<std::string, MeshID> filepathToID;
   std::vector<std::unique_ptr<Mesh>> meshes;
   RenderDevice* renderDevice;
   MeshID defaultCubeID;
+  MeshID sceneBaseMeshID = 0;
 
   MeshID registerMesh(Mesh* mesh);
   void createBuffers(Mesh* mesh) const;

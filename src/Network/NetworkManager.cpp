@@ -1192,9 +1192,10 @@ void NetworkManager::broadcastSpawnEntity(Entity e) {
   pkt.normalZ      = collider->normal.z;
   pkt.finite       = collider->finite ? 1 : 0;
 
-  pkt.hasRender  = (render && mesh && material) ? 1 : 0;
-  pkt.meshId     = mesh     ? mesh->meshID         : 0;
-  pkt.materialId = material ? material->renderMaterialID : 0;
+  pkt.hasRender   = (render && mesh && material) ? 1 : 0;
+  pkt.ownerPeerId = getOwnerPeerID(e);
+  pkt.meshId      = mesh     ? mesh->meshID              : 0;
+  pkt.materialId  = material ? material->renderMaterialID : 0;
 
   if (nameComp) {
     strncpy_s(pkt.name, sizeof(pkt.name), nameComp->name.c_str(), _TRUNCATE);

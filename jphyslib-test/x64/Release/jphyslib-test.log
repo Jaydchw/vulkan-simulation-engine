@@ -1,6 +1,4 @@
-﻿  pch.cpp
-  test.cpp
-  jphyslib.lib(PhysicsWorld.obj) : MSIL .netmodule or module compiled with /GL found; restarting link with /LTCG; add /LTCG to the link command line to improve linker performance
+﻿  jphyslib.lib(PhysicsWorld.obj) : MSIL .netmodule or module compiled with /GL found; restarting link with /LTCG; add /LTCG to the link command line to improve linker performance
   Generating code
   Finished generating code
   jphyslib-test.vcxproj -> D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\x64\Release\jphyslib-test.exe

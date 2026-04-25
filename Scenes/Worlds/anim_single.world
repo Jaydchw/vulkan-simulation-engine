@@ -1,0 +1,114 @@
+# Single Animated Object
+# A lone metallic orb traces a graceful 3D figure-eight path through a dark void.
+# No floor — pure animation showcase.
+
+BeginSettings
+  ClearColor = 0.01, 0.01, 0.05, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 60
+  KillboxEnabled = false
+EndSettings
+
+BeginTexture
+  Name = tex_plasma
+  Type = radial
+  ColorA = 0.95, 0.55, 1.0
+  ColorB = 0.08, 0.02, 0.22
+  Size = 512
+EndTexture
+
+BeginMaterial
+  Name = mat_orb
+  AlbedoColor = 0.88, 0.58, 1.0
+  Metallic = 0.88
+  Roughness = 0.07
+  AlbedoTexture = tex_plasma
+EndMaterial
+
+BeginMesh
+  Name = orb_mesh
+  Type = sphere
+  Radius = 1.8
+  Segments = 64
+EndMesh
+
+BeginLight
+  Name = KeyLight
+  Type = sun
+  Direction = 0.4, -0.7, 0.3
+  Color = 0.85, 0.8, 1.0
+  Intensity = 1.8
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = BackLight
+  Type = point
+  Position = -18.0, 8.0, -12.0
+  Color = 0.2, 0.5, 1.0
+  Intensity = 200.0
+  Linear = 0.04
+  Quadratic = 0.008
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = RimLight
+  Type = point
+  Position = 14.0, -6.0, -8.0
+  Color = 1.0, 0.35, 0.6
+  Intensity = 150.0
+  Linear = 0.05
+  Quadratic = 0.01
+  CastsShadows = false
+EndLight
+
+BeginCamera
+  Name = MainCamera
+  Position = 0.0, 8.0, -32.0
+  Target = 0.0, 0.0, 0.0
+  FOV = 58
+EndCamera
+
+# The orb sweeps a smooth 3D loop — rising, diving, spiralling back
+BeginObject
+  Name = Orb
+  Position = 10.0, 0.0, 0.0
+  Mesh = orb_mesh
+  Material = mat_orb
+  BeginAnimation
+    PathMode = loop
+    Easing = smoothstep
+    TotalDuration = 14.0
+    BeginWaypoint
+      Position = 10.0, 0.0, 0.0
+      Rotation = 0.0, 0.0, 0.0
+      Time = 0.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 5.0, 7.0, -6.0
+      Rotation = 60.0, 120.0, 0.0
+      Time = 2.3
+    EndWaypoint
+    BeginWaypoint
+      Position = -8.0, 4.0, -2.0
+      Rotation = 130.0, 55.0, 45.0
+      Time = 4.6
+    EndWaypoint
+    BeginWaypoint
+      Position = -10.0, -2.0, 5.0
+      Rotation = 200.0, 90.0, -30.0
+      Time = 7.0
+    EndWaypoint
+    BeginWaypoint
+      Position = 0.0, -7.0, 8.0
+      Rotation = 270.0, 45.0, 90.0
+      Time = 9.5
+    EndWaypoint
+    BeginWaypoint
+      Position = 8.0, -3.0, -4.0
+      Rotation = 330.0, 160.0, 60.0
+      Time = 12.0
+    EndWaypoint
+  EndAnimation
+EndObject

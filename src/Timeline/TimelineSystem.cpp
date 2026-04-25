@@ -1,5 +1,7 @@
 #include "TimelineSystem.h"
 
+#include <unordered_set>
+
 #include "ECS/Components.h"
 #include "ECS/Registry.h"
 #include "Util/Debug.h"
@@ -11,6 +13,7 @@ TimelineSystem::TimelineSystem() {
 void TimelineSystem::setRegistry(Registry* reg) {
   registry = reg;
   clearSnapshots();
+  spawnedEntities.clear();
   initialSnapshotValid = false;
   Debug::log(Debug::Category::TIMELINE, "TimelineSystem: Registry set, snapshots cleared");
 }
@@ -30,6 +33,25 @@ FrameSnapshot TimelineSystem::captureFrame() const {
 
 void TimelineSystem::applyFrame(const FrameSnapshot& snap) {
   if (!registry) return;
+
+  std::unordered_set<Entity> snapSet(snap.entities.begin(), snap.entities.end());
+
+  std::vector<Entity> toDestroy;
+  for (const auto& [entity, _] : registry->allSimulated()) {
+    if (!snapSet.count(entity) && spawnedEntities.count(entity))
+      toDestroy.push_back(entity);
+  }
+  for (Entity e : toDestroy)
+    registry->destroyEntity(e);
+
+  for (Entity entity : snap.entities) {
+    if (!registry->getComponent<SimulatedComponent>(entity)) {
+      auto it = spawnedEntities.find(entity);
+      if (it != spawnedEntities.end())
+        recreateSpawnedEntity(entity, it->second);
+    }
+  }
+
   for (size_t i = 0; i < snap.entities.size(); ++i) {
     const Entity entity = snap.entities[i];
     const EntitySnapshot& state = snap.states[i];
@@ -104,4 +126,33 @@ void TimelineSystem::loadFromBake(std::vector<FrameSnapshot> frames) {
     snapshots.push_back(std::move(f));
   Debug::log(Debug::Category::TIMELINE,
       "TimelineSystem: Loaded ", snapshots.size(), " frames from bake");
+}
+
+void TimelineSystem::registerSpawnedEntity(Entity e, SpawnedEntityRecord record) {
+  spawnedEntities[e] = std::move(record);
+}
+
+void TimelineSystem::recreateSpawnedEntity(Entity e, const SpawnedEntityRecord& rec) {
+  registry->createEntityWithId(e);
+  registry->addComponent<NameComponent>(e, {rec.name});
+
+  TransformComponent tc;
+  tc.rotation = rec.rotation;
+  tc.scale    = rec.scale;
+  registry->addComponent<TransformComponent>(e, tc);
+
+  registry->addComponent<SimulatedComponent>(e, rec.simulated);
+  registry->addComponent<ColliderComponent>(e, rec.collider);
+
+  if (rec.hasRender && rec.meshID != INVALID_MESH_ID && rec.renderMaterialID != INVALID_RENDER_MATERIAL_ID) {
+    registry->addComponent<MeshComponent>(e, {rec.meshID});
+    registry->addComponent<RenderMaterialComponent>(e, {rec.renderMaterialID});
+    registry->addComponent<RenderComponent>(e, {});
+  }
+
+  if (rec.physicsMaterialID != INVALID_PHYSICS_MATERIAL_ID)
+    registry->addComponent<PhysicsMaterialComponent>(e, {rec.physicsMaterialID});
+
+  Debug::logVerbose(Debug::Category::TIMELINE,
+      "TimelineSystem: Recreated spawned entity ", e, " '", rec.name, "'");
 }

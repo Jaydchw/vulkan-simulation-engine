@@ -34,6 +34,15 @@ public:
 
  void step(float deltaTime);
 
+ void setSolverIterations(int n) { solverIterations = (std::max)(1, n); }
+ int getSolverIterations() const { return solverIterations; }
+
+ void setSleepThresholds(float linearSpeed, float angularSpeed, float delay) {
+   sleepLinearThreshSq  = linearSpeed * linearSpeed;
+   sleepAngularThreshSq = angularSpeed * angularSpeed;
+   sleepDelay           = delay;
+ }
+
  const std::vector<CollisionPairStat>& getLastCollisionStats() const { return lastCollisionStats; }
 
  long long getLastCollisionChecks() const;
@@ -83,23 +92,20 @@ private:
  // ColliderType enum: Sphere=0, AABB=1, Plane=2, Cylinder=3, Capsule=4, Cone=5.
  int pairStatIndex[36];
 
+ int   solverIterations     = 4;
+ float sleepLinearThreshSq  = 0.0025f;  // (0.05 m/s)^2
+ float sleepAngularThreshSq = 0.01f;    // (0.10 rad/s)^2
+ float sleepDelay           = 0.3f;
+
  void integrate(float deltaTime);
  void resolveCollisions();
 
  void recordCollision(int pairIdx, bool resolved);
 
- static void resolveImpulse(PhysicsObject& a, PhysicsObject& b,
-                             const CollisionResult& result);
- static void resolveSpherePlane(PhysicsObject& sphere,
-                                  PhysicsObject& plane,
+ static void applyPositionCorrection(PhysicsObject& a, PhysicsObject& b,
+                                     const CollisionResult& result);
+ static void applyVelocityImpulse(PhysicsObject& a, PhysicsObject& b,
                                   const CollisionResult& result);
- static void resolveSphereSphere(PhysicsObject& a, PhysicsObject& b,
-                                   const CollisionResult& result);
- static void resolveSphereAABB(PhysicsObject& sphere, PhysicsObject& aabb,
-                                const CollisionResult& result);
- static void resolveCylinderPlane(PhysicsObject& cylinder,
-                                   PhysicsObject& plane,
-                                   const CollisionResult& result);
 };
 
 }  // namespace jphys

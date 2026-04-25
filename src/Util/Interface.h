@@ -166,6 +166,7 @@ class Interface {
   void setFBSceneDirectory(const std::string& dir);
   void refreshWorldList();
   void setCurrentWorldPath(const std::string& path);
+  void setLastLoadedWorld(const std::string& path) { lastLoadedWorld = path; }
   void notifyBakeSaved();
 
   void setActiveCameraIndex(int idx) { activeCameraIdx = idx; }
