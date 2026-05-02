@@ -231,12 +231,14 @@ void PhysicsWorld::resolveCollisions() {
   }
   if (activeObjects.size() < 2) return;
 
-  // Dynamic cell size: 2x the median broadphase radius, clamped to [2, 64].
+  // Dynamic cell size: 2x the median broadphase radius of non-sleeping objects,
+  // clamped to [2, 64].
   float gridCellSize = 8.0f;
   {
     std::vector<float> radii;
     radii.reserve(activeObjects.size());
     for (const auto* obj : activeObjects) {
+      if (obj->isAsleep()) continue;   // sleeping objects excluded from sizing
       const float r = getBroadphaseRadius(*obj);
       if (std::isfinite(r) && r > 0.0f) radii.push_back(r);
     }
@@ -246,26 +248,61 @@ void PhysicsWorld::resolveCollisions() {
       gridCellSize = std::max(2.0f, std::min(64.0f, radii[mid] * 2.0f));
     }
   }
+  lastGridCellSize = gridCellSize;
   const float invCellSize = 1.0f / gridCellSize;
+
+  // ── Change 3: two-grid broad phase ───────────────────────────────────────────
+  // Sleeping dynamic objects are placed in a SEPARATE sleeping grid and never
+  // enter the main grid. This keeps the main grid small (only awake objects),
+  // making bucket pair generation much faster at high object counts.
+  // An active object queries both its own grid cells AND the sleeping grid cells
+  // to detect wake-up collisions.
 
   std::unordered_map<GridKey, std::vector<uint32_t>, GridKeyHash> grid;
   grid.reserve(activeObjects.size() * 2);
 
-  std::vector<uint32_t> globalObjects;
-  globalObjects.reserve(activeObjects.size());
+  // Separate grid for sleeping dynamic objects.
+  std::unordered_map<GridKey, std::vector<uint32_t>, GridKeyHash> sleepingGrid;
+
+  std::vector<uint32_t> globalObjects;   // awake global (infinite/oversized)
+  std::vector<uint32_t> globalSleeping;  // sleeping global objects (edge case)
+  globalObjects.reserve(8);
+  globalSleeping.reserve(8);
+
+  static constexpr int kMaxCellSpan = 16;
 
   for (uint32_t i = 0; i < static_cast<uint32_t>(activeObjects.size()); ++i) {
     const PhysicsObject& obj = *activeObjects[i];
     const float r = getBroadphaseRadius(obj);
-    if (!std::isfinite(r)) {
-      globalObjects.push_back(i);
+
+    if (obj.isAsleep()) {
+      // Sleeping dynamic: goes to sleeping grid, never the main grid.
+      if (!std::isfinite(r)) { globalSleeping.push_back(i); continue; }
+
+      const glm::vec3 p    = obj.getPosition();
+      const glm::vec3 bmin = p - glm::vec3(r);
+      const glm::vec3 bmax = p + glm::vec3(r);
+      const int minX = static_cast<int>(std::floor(bmin.x * invCellSize));
+      const int minY = static_cast<int>(std::floor(bmin.y * invCellSize));
+      const int minZ = static_cast<int>(std::floor(bmin.z * invCellSize));
+      const int maxX = static_cast<int>(std::floor(bmax.x * invCellSize));
+      const int maxY = static_cast<int>(std::floor(bmax.y * invCellSize));
+      const int maxZ = static_cast<int>(std::floor(bmax.z * invCellSize));
+      if ((maxX - minX) > kMaxCellSpan || (maxY - minY) > kMaxCellSpan ||
+          (maxZ - minZ) > kMaxCellSpan) { globalSleeping.push_back(i); continue; }
+      for (int x = minX; x <= maxX; ++x)
+        for (int y = minY; y <= maxY; ++y)
+          for (int z = minZ; z <= maxZ; ++z)
+            sleepingGrid[{x, y, z}].push_back(i);
       continue;
     }
 
-    const glm::vec3 p = obj.getPosition();
+    // Awake (or static) object: goes into the main grid.
+    if (!std::isfinite(r)) { globalObjects.push_back(i); continue; }
+
+    const glm::vec3 p    = obj.getPosition();
     const glm::vec3 bmin = p - glm::vec3(r);
     const glm::vec3 bmax = p + glm::vec3(r);
-
     const int minX = static_cast<int>(std::floor(bmin.x * invCellSize));
     const int minY = static_cast<int>(std::floor(bmin.y * invCellSize));
     const int minZ = static_cast<int>(std::floor(bmin.z * invCellSize));
@@ -273,22 +310,24 @@ void PhysicsWorld::resolveCollisions() {
     const int maxY = static_cast<int>(std::floor(bmax.y * invCellSize));
     const int maxZ = static_cast<int>(std::floor(bmax.z * invCellSize));
 
-    // If the object spans too many cells it would flood the grid; treat as global.
-    static constexpr int kMaxCellSpan = 16;
     if ((maxX - minX) > kMaxCellSpan || (maxY - minY) > kMaxCellSpan ||
-        (maxZ - minZ) > kMaxCellSpan) {
-      globalObjects.push_back(i);
-      continue;
-    }
+        (maxZ - minZ) > kMaxCellSpan) { globalObjects.push_back(i); continue; }
 
-    for (int x = minX; x <= maxX; ++x) {
-      for (int y = minY; y <= maxY; ++y) {
-        for (int z = minZ; z <= maxZ; ++z) {
+    for (int x = minX; x <= maxX; ++x)
+      for (int y = minY; y <= maxY; ++y)
+        for (int z = minZ; z <= maxZ; ++z)
           grid[{x, y, z}].push_back(i);
-        }
-      }
-    }
   }
+
+  // Snapshot both grids for debug visualisation (read by render thread under simMutex).
+  lastGridCells.clear();
+  lastGridCells.reserve(grid.size() + sleepingGrid.size());
+  for (const auto& [key, indices] : grid)
+    lastGridCells.push_back({key.x, key.y, key.z,
+                              static_cast<uint32_t>(indices.size()), false});
+  for (const auto& [key, indices] : sleepingGrid)
+    lastGridCells.push_back({key.x, key.y, key.z,
+                              static_cast<uint32_t>(indices.size()), true});
 
   std::vector<const std::vector<uint32_t>*> buckets;
   buckets.reserve(grid.size());
@@ -338,13 +377,51 @@ void PhysicsWorld::resolveCollisions() {
     }
   }
 
+  // Awake global objects (planes, etc.) vs all awake objects.
   for (uint32_t gi : globalObjects) {
     for (uint32_t i = 0; i < static_cast<uint32_t>(activeObjects.size()); ++i) {
-      if (i == gi) continue;
+      if (i == gi || activeObjects[i]->isAsleep()) continue;
       PhysicsObject* a = activeObjects[gi];
       PhysicsObject* b = activeObjects[i];
       if (a->isStatic() && b->isStatic()) continue;
       candidatePairs.push_back(makePairKey(gi, i));
+    }
+  }
+
+  // Awake objects vs sleeping objects: query sleeping grid locally so we only
+  // test nearby pairs rather than all (active × sleeping) combinations.
+  if (!sleepingGrid.empty() || !globalSleeping.empty()) {
+    for (uint32_t i = 0; i < static_cast<uint32_t>(activeObjects.size()); ++i) {
+      const PhysicsObject& obj = *activeObjects[i];
+      if (obj.isStatic() || obj.isAsleep()) continue;
+      const float ri = getBroadphaseRadius(obj);
+      if (!std::isfinite(ri)) continue;  // already handled as global
+
+      // Query sleeping grid with the awake object's AABB.
+      const glm::vec3 p    = obj.getPosition();
+      const glm::vec3 bmin = p - glm::vec3(ri);
+      const glm::vec3 bmax = p + glm::vec3(ri);
+      const int minX = static_cast<int>(std::floor(bmin.x * invCellSize));
+      const int minY = static_cast<int>(std::floor(bmin.y * invCellSize));
+      const int minZ = static_cast<int>(std::floor(bmin.z * invCellSize));
+      const int maxX = static_cast<int>(std::floor(bmax.x * invCellSize));
+      const int maxY = static_cast<int>(std::floor(bmax.y * invCellSize));
+      const int maxZ = static_cast<int>(std::floor(bmax.z * invCellSize));
+
+      for (int cx = minX; cx <= maxX; ++cx) {
+        for (int cy = minY; cy <= maxY; ++cy) {
+          for (int cz = minZ; cz <= maxZ; ++cz) {
+            auto it = sleepingGrid.find({cx, cy, cz});
+            if (it == sleepingGrid.end()) continue;
+            for (uint32_t si : it->second)
+              candidatePairs.push_back(makePairKey(i, si));
+          }
+        }
+      }
+
+      // Global sleeping objects (e.g. oversized): always pair with awake objects.
+      for (uint32_t si : globalSleeping)
+        candidatePairs.push_back(makePairKey(i, si));
     }
   }
 
@@ -523,18 +600,24 @@ CollisionResult PhysicsWorld::testSphereAABB(const PhysicsObject& sphere,
                                              const PhysicsObject& aabb) {
   CollisionResult result;
 
-  glm::vec3 boxMin = aabb.getPosition() -
-                     aabb.getCollider().getHalfExtents() * aabb.getScale();
-  glm::vec3 boxMax = aabb.getPosition() +
-                     aabb.getCollider().getHalfExtents() * aabb.getScale();
-  glm::vec3 closest = glm::clamp(sphere.getPosition(), boxMin, boxMax);
-  glm::vec3 diff = sphere.getPosition() - closest;
-  float dist = glm::length(diff);
+  const glm::mat3 R  = glm::mat3_cast(aabb.getOrientation());
+  const glm::vec3 he = aabb.getCollider().getHalfExtents() * glm::abs(aabb.getScale());
+  const float     r  = sphere.getCollider().getRadius();
 
-  if (dist < sphere.getCollider().getRadius() && dist > 0.0001f) {
-    result.collided = true;
-    result.normal = diff / dist;
-    result.penetration = sphere.getCollider().getRadius() - dist;
+  // Transform sphere centre into OBB local space, clamp, transform back.
+  const glm::vec3 d = sphere.getPosition() - aabb.getPosition();
+  const glm::vec3 local(glm::dot(d, R[0]), glm::dot(d, R[1]), glm::dot(d, R[2]));
+  const glm::vec3 clamped = glm::clamp(local, -he, he);
+  const glm::vec3 closest = aabb.getPosition()
+                           + R[0] * clamped.x + R[1] * clamped.y + R[2] * clamped.z;
+
+  const glm::vec3 diff = sphere.getPosition() - closest;
+  const float     dist = glm::length(diff);
+
+  if (dist < r && dist > 1e-4f) {
+    result.collided     = true;
+    result.normal       = diff / dist;
+    result.penetration  = r - dist;
     result.contactPoint = closest;
   }
 
@@ -703,31 +786,50 @@ static std::pair<glm::vec3, glm::vec3> closestSegmentPoints(
 CollisionResult PhysicsWorld::testAABBPlane(const PhysicsObject& aabb,
                                              const PhysicsObject& plane) {
   CollisionResult result;
-  glm::vec3 n          = plane.getCollider().getNormal();
-  glm::vec3 relPos     = aabb.getPosition() - plane.getPosition();
-  float     projCenter = glm::dot(relPos, n);
-  glm::vec3 he         = aabb.getCollider().getHalfExtents() * aabb.getScale();
-  float     effRadius  = std::abs(he.x * n.x) + std::abs(he.y * n.y) + std::abs(he.z * n.z);
-  float     penetration = effRadius - projCenter;
+  const glm::vec3 n  = plane.getCollider().getNormal();
+  const glm::mat3 R  = glm::mat3_cast(aabb.getOrientation());
+  const glm::vec3 he = aabb.getCollider().getHalfExtents() * glm::abs(aabb.getScale());
+
+  const float projCenter = glm::dot(aabb.getPosition() - plane.getPosition(), n);
+
+  // Effective support radius of OBB along plane normal, accounting for orientation.
+  const float effRadius = he.x * std::abs(glm::dot(R[0], n))
+                        + he.y * std::abs(glm::dot(R[1], n))
+                        + he.z * std::abs(glm::dot(R[2], n));
+  const float penetration = effRadius - projCenter;
 
   if (penetration > 0.0f) {
+    // Support point of OBB deepest into the plane (in direction -n).
+    glm::vec3 supportPt = aabb.getPosition();
+    supportPt -= R[0] * he.x * (glm::dot(R[0], n) > 0.0f ? 1.0f : -1.0f);
+    supportPt -= R[1] * he.y * (glm::dot(R[1], n) > 0.0f ? 1.0f : -1.0f);
+    supportPt -= R[2] * he.z * (glm::dot(R[2], n) > 0.0f ? 1.0f : -1.0f);
+
     if (plane.getCollider().isFinite()) {
-      glm::vec3 contact      = aabb.getPosition() - n * projCenter;
-      glm::vec3 localContact = contact - plane.getPosition();
-      glm::vec3 phe          = plane.getCollider().getHalfExtents() * plane.getScale();
-      glm::vec3 absN         = glm::abs(n);
+      // Project support point onto the plane surface and check bounds.
+      const glm::vec3 contact = supportPt - n * glm::dot(supportPt - plane.getPosition(), n);
+      const glm::vec3 lc  = contact - plane.getPosition();
+      const glm::vec3 phe = plane.getCollider().getHalfExtents() * plane.getScale();
+      const glm::vec3 absN = glm::abs(n);
       glm::vec3 t1, t2;
       if (absN.y > 0.5f)      { t1 = {1,0,0}; t2 = {0,0,1}; }
       else if (absN.x > 0.5f) { t1 = {0,1,0}; t2 = {0,0,1}; }
       else                    { t1 = {1,0,0}; t2 = {0,1,0}; }
-      if (std::abs(glm::dot(localContact, t1)) > glm::dot(phe, glm::abs(t1)) + glm::dot(he, glm::abs(t1)) ||
-          std::abs(glm::dot(localContact, t2)) > glm::dot(phe, glm::abs(t2)) + glm::dot(he, glm::abs(t2)))
+      // OBB footprint on the plane tangents.
+      const float obbExt1 = he.x * std::abs(glm::dot(R[0], t1))
+                          + he.y * std::abs(glm::dot(R[1], t1))
+                          + he.z * std::abs(glm::dot(R[2], t1));
+      const float obbExt2 = he.x * std::abs(glm::dot(R[0], t2))
+                          + he.y * std::abs(glm::dot(R[1], t2))
+                          + he.z * std::abs(glm::dot(R[2], t2));
+      if (std::abs(glm::dot(lc, t1)) > glm::dot(phe, glm::abs(t1)) + obbExt1 ||
+          std::abs(glm::dot(lc, t2)) > glm::dot(phe, glm::abs(t2)) + obbExt2)
         return result;
     }
-    result.collided      = true;
-    result.normal        = n;
-    result.penetration   = penetration;
-    result.contactPoint  = aabb.getPosition() - n * projCenter;
+    result.collided     = true;
+    result.normal       = n;
+    result.penetration  = penetration;
+    result.contactPoint = supportPt;
   }
   return result;
 }
@@ -735,32 +837,65 @@ CollisionResult PhysicsWorld::testAABBPlane(const PhysicsObject& aabb,
 CollisionResult PhysicsWorld::testAABBAABB(const PhysicsObject& a,
                                             const PhysicsObject& b) {
   CollisionResult result;
-  glm::vec3 heA  = a.getCollider().getHalfExtents() * a.getScale();
-  glm::vec3 heB  = b.getCollider().getHalfExtents() * b.getScale();
-  glm::vec3 diff = a.getPosition() - b.getPosition();
 
-  float ox = (heA.x + heB.x) - std::abs(diff.x);
-  float oy = (heA.y + heB.y) - std::abs(diff.y);
-  float oz = (heA.z + heB.z) - std::abs(diff.z);
-  if (ox <= 0.0f || oy <= 0.0f || oz <= 0.0f) return result;
+  const glm::mat3 Ra  = glm::mat3_cast(a.getOrientation());
+  const glm::mat3 Rb  = glm::mat3_cast(b.getOrientation());
+  const glm::vec3 heA = a.getCollider().getHalfExtents() * glm::abs(a.getScale());
+  const glm::vec3 heB = b.getCollider().getHalfExtents() * glm::abs(b.getScale());
+  // T points from A to B.
+  const glm::vec3 T   = b.getPosition() - a.getPosition();
 
-  glm::vec3 normal;
-  float     penetration;
-  if (ox <= oy && ox <= oz) {
-    penetration = ox;
-    normal      = {diff.x > 0.0f ? 1.0f : -1.0f, 0.0f, 0.0f};
-  } else if (oy <= ox && oy <= oz) {
-    penetration = oy;
-    normal      = {0.0f, diff.y > 0.0f ? 1.0f : -1.0f, 0.0f};
-  } else {
-    penetration = oz;
-    normal      = {0.0f, 0.0f, diff.z > 0.0f ? 1.0f : -1.0f};
+  float     bestPen  = std::numeric_limits<float>::max();
+  glm::vec3 bestAxis = glm::vec3(0.0f);
+
+  // Combined projection of both OBBs onto a given axis.
+  auto project = [&](const glm::vec3& ax) -> float {
+    return heA.x * std::abs(glm::dot(Ra[0], ax))
+         + heA.y * std::abs(glm::dot(Ra[1], ax))
+         + heA.z * std::abs(glm::dot(Ra[2], ax))
+         + heB.x * std::abs(glm::dot(Rb[0], ax))
+         + heB.y * std::abs(glm::dot(Rb[1], ax))
+         + heB.z * std::abs(glm::dot(Rb[2], ax));
+  };
+
+  // Returns true if this axis separates the two OBBs; updates bestPen/bestAxis otherwise.
+  auto testSAT = [&](glm::vec3 ax) -> bool {
+    const float len = glm::length(ax);
+    if (len < 1e-6f) return false;  // degenerate cross-product (parallel edges), skip
+    ax /= len;
+    const float tProj = std::abs(glm::dot(T, ax));
+    const float pen   = project(ax) - tProj;
+    if (pen <= 0.0f) return true;   // separating axis found — no collision
+    if (pen < bestPen) {
+      bestPen  = pen;
+      // Normal points from B toward A (convention used by applyPositionCorrection).
+      bestAxis = (glm::dot(T, ax) >= 0.0f) ? -ax : ax;
+    }
+    return false;
+  };
+
+  // 3 face normals of A, 3 of B.
+  for (int i = 0; i < 3; i++) { if (testSAT(Ra[i])) return result; }
+  for (int i = 0; i < 3; i++) { if (testSAT(Rb[i])) return result; }
+  // 9 edge-cross-product axes.
+  for (int i = 0; i < 3; i++)
+    for (int j = 0; j < 3; j++)
+      if (testSAT(glm::cross(Ra[i], Rb[j]))) return result;
+
+  // Approximate contact point: midpoint of the two deepest-penetrating support vertices.
+  glm::vec3 supA = a.getPosition();
+  glm::vec3 supB = b.getPosition();
+  for (int i = 0; i < 3; i++) {
+    // supA: vertex of A in direction -bestAxis (toward B).
+    supA -= Ra[i] * heA[i] * (glm::dot(Ra[i], bestAxis) > 0.0f ? 1.0f : -1.0f);
+    // supB: vertex of B in direction +bestAxis (toward A).
+    supB += Rb[i] * heB[i] * (glm::dot(Rb[i], bestAxis) > 0.0f ? 1.0f : -1.0f);
   }
 
   result.collided     = true;
-  result.normal       = normal;
-  result.penetration  = penetration;
-  result.contactPoint = (a.getPosition() + b.getPosition()) * 0.5f;
+  result.normal       = bestAxis;
+  result.penetration  = bestPen;
+  result.contactPoint = (supA + supB) * 0.5f;
   return result;
 }
 
@@ -844,48 +979,99 @@ CollisionResult PhysicsWorld::testCylinderCylinder(const PhysicsObject& a,
   return result;
 }
 
+// Shared helper: find the point on segment [p0L, p1L] (in OBB local space) closest
+// to the OBB [-he, he], returning both the segment point and its clamped counterpart.
+// Also checks the 6 face-plane intersections of the segment for thoroughness.
+static void closestSegmentToOBB(const glm::vec3& p0L, const glm::vec3& p1L,
+                                 const glm::vec3& he,
+                                 glm::vec3& outSegPt, glm::vec3& outBoxPt) {
+  const glm::vec3 segVec = p1L - p0L;
+  const float     segLen = glm::length(segVec);
+  const glm::vec3 segDir = (segLen > 1e-6f) ? segVec / segLen : glm::vec3(0, 1, 0);
+
+  float     bestDSq = std::numeric_limits<float>::max();
+
+  auto evalT = [&](float t) {
+    t = std::max(0.0f, std::min(segLen, t));
+    const glm::vec3 ptL     = p0L + segDir * t;
+    const glm::vec3 clampL  = glm::clamp(ptL, -he, he);
+    const glm::vec3 diff    = ptL - clampL;
+    const float     dsq     = glm::dot(diff, diff);
+    if (dsq < bestDSq) {
+      bestDSq    = dsq;
+      outSegPt   = ptL;
+      outBoxPt   = clampL;
+    }
+  };
+
+  evalT(0.0f);
+  evalT(segLen);
+  evalT(segLen * 0.5f);
+  // Face-plane crossings.
+  for (int ax = 0; ax < 3; ax++) {
+    const float d = segDir[ax];
+    if (std::abs(d) > 1e-6f) {
+      evalT((-he[ax] - p0L[ax]) / d);
+      evalT(( he[ax] - p0L[ax]) / d);
+    }
+  }
+}
+
 CollisionResult PhysicsWorld::testAABBCylinder(const PhysicsObject& aabb,
                                                 const PhysicsObject& cylinder) {
   CollisionResult result;
-  glm::mat3 R    = glm::mat3_cast(cylinder.getOrientation());
-  glm::vec3 axis = R[2];
-  float r_cyl    = cylinder.getCollider().getRadius();
-  float halfH    = cylinder.getCollider().getHeight() * 0.5f;
-  glm::vec3 he   = aabb.getCollider().getHalfExtents() * aabb.getScale();
+  const glm::mat3 Ra    = glm::mat3_cast(aabb.getOrientation());
+  const glm::vec3 he    = aabb.getCollider().getHalfExtents() * glm::abs(aabb.getScale());
+  const glm::mat3 Rcyl  = glm::mat3_cast(cylinder.getOrientation());
+  const glm::vec3 cylAx = Rcyl[2];                             // cylinder axis in world space
+  const float     rCyl  = cylinder.getCollider().getRadius();
+  const float     halfH = cylinder.getCollider().getHeight() * 0.5f;
 
-  glm::vec3 relPos = aabb.getPosition() - cylinder.getPosition();
-  float t = std::max(-halfH, std::min(halfH, glm::dot(relPos, axis)));
-  glm::vec3 axisPoint  = cylinder.getPosition() + axis * t;
-  glm::vec3 aabbMin    = aabb.getPosition() - he;
-  glm::vec3 aabbMax    = aabb.getPosition() + he;
-  glm::vec3 closestBox = glm::clamp(axisPoint, aabbMin, aabbMax);
-  glm::vec3 diff       = axisPoint - closestBox;
-  float     dist       = glm::length(diff);
+  // Transform cylinder segment into OBB local space.
+  auto toLocal = [&](const glm::vec3& pw) -> glm::vec3 {
+    const glm::vec3 dw = pw - aabb.getPosition();
+    return {glm::dot(dw, Ra[0]), glm::dot(dw, Ra[1]), glm::dot(dw, Ra[2])};
+  };
+  auto toWorld = [&](const glm::vec3& pl) -> glm::vec3 {
+    return aabb.getPosition() + Ra[0] * pl.x + Ra[1] * pl.y + Ra[2] * pl.z;
+  };
 
-  if (dist < r_cyl) {
+  const glm::vec3 p0L = toLocal(cylinder.getPosition() - cylAx * halfH);
+  const glm::vec3 p1L = toLocal(cylinder.getPosition() + cylAx * halfH);
+
+  glm::vec3 ptL, boxL;
+  closestSegmentToOBB(p0L, p1L, he, ptL, boxL);
+
+  const glm::vec3 ptW      = toWorld(ptL);
+  const glm::vec3 closestW = toWorld(boxL);
+  const glm::vec3 diffW    = ptW - closestW;   // from box surface → cylinder axis point
+  const float     dist     = glm::length(diffW);
+
+  if (dist < rCyl) {
     glm::vec3 normal;
     float     pen;
     if (dist > 1e-4f) {
-      normal = -diff / dist;
-      pen    = r_cyl - dist;
+      // Normal: from cylinder (B) toward aabb (A) = negate diffW direction.
+      normal = -diffW / dist;
+      pen    = rCyl - dist;
     } else {
-      glm::vec3 d  = axisPoint - aabb.getPosition();
-      glm::vec3 ov = he - glm::abs(d);
+      // Cylinder axis point is inside OBB — use minimum-overlap face.
+      const glm::vec3 ov = he - glm::abs(ptL);
       if (ov.x <= ov.y && ov.x <= ov.z) {
-        normal = {d.x > 0.0f ? -1.0f : 1.0f, 0, 0};
-        pen    = ov.x + r_cyl;
+        normal = -Ra[0] * (ptL.x > 0.0f ? 1.0f : -1.0f);
+        pen    = ov.x + rCyl;
       } else if (ov.y <= ov.x && ov.y <= ov.z) {
-        normal = {0, d.y > 0.0f ? -1.0f : 1.0f, 0};
-        pen    = ov.y + r_cyl;
+        normal = -Ra[1] * (ptL.y > 0.0f ? 1.0f : -1.0f);
+        pen    = ov.y + rCyl;
       } else {
-        normal = {0, 0, d.z > 0.0f ? -1.0f : 1.0f};
-        pen    = ov.z + r_cyl;
+        normal = -Ra[2] * (ptL.z > 0.0f ? 1.0f : -1.0f);
+        pen    = ov.z + rCyl;
       }
     }
     result.collided     = true;
     result.normal       = normal;
     result.penetration  = pen;
-    result.contactPoint = closestBox;
+    result.contactPoint = closestW;
   }
   return result;
 }
@@ -963,44 +1149,58 @@ CollisionResult PhysicsWorld::testCapsuleSphere(const PhysicsObject& capsule,
 CollisionResult PhysicsWorld::testCapsuleAABB(const PhysicsObject& capsule,
                                                const PhysicsObject& aabb) {
   CollisionResult result;
-  glm::vec3 ax  = capsuleAxis(capsule);
-  float     hc  = capsuleHalfCyl(capsule);
-  float     r   = capsule.getCollider().getRadius();
-  glm::vec3 he  = aabb.getCollider().getHalfExtents() * aabb.getScale();
-  glm::vec3 aabbMin = aabb.getPosition() - he;
-  glm::vec3 aabbMax = aabb.getPosition() + he;
+  const glm::mat3 Ra = glm::mat3_cast(aabb.getOrientation());
+  const glm::vec3 he = aabb.getCollider().getHalfExtents() * glm::abs(aabb.getScale());
+  const float     r  = capsule.getCollider().getRadius();
 
-  glm::vec3 relPos  = aabb.getPosition() - capsule.getPosition();
-  float     t       = std::max(-hc, std::min(hc, glm::dot(relPos, ax)));
-  glm::vec3 axPt    = capsule.getPosition() + ax * t;
-  glm::vec3 closest = glm::clamp(axPt, aabbMin, aabbMax);
-  glm::vec3 diff    = axPt - closest;
-  float     dist    = glm::length(diff);
+  // Transform capsule segment into OBB local space.
+  const glm::vec3 axW = capsuleAxis(capsule);
+  const float     hc  = capsuleHalfCyl(capsule);
+
+  auto toLocal = [&](const glm::vec3& pw) -> glm::vec3 {
+    const glm::vec3 dw = pw - aabb.getPosition();
+    return {glm::dot(dw, Ra[0]), glm::dot(dw, Ra[1]), glm::dot(dw, Ra[2])};
+  };
+  auto toWorld = [&](const glm::vec3& pl) -> glm::vec3 {
+    return aabb.getPosition() + Ra[0] * pl.x + Ra[1] * pl.y + Ra[2] * pl.z;
+  };
+
+  const glm::vec3 p0L = toLocal(capsule.getPosition() - axW * hc);
+  const glm::vec3 p1L = toLocal(capsule.getPosition() + axW * hc);
+
+  glm::vec3 ptL, boxL;
+  closestSegmentToOBB(p0L, p1L, he, ptL, boxL);
+
+  const glm::vec3 ptW      = toWorld(ptL);
+  const glm::vec3 closestW = toWorld(boxL);
+  const glm::vec3 diffW    = ptW - closestW;   // from box surface → capsule axis point
+  const float     dist     = glm::length(diffW);
 
   if (dist < r) {
     glm::vec3 normal;
     float     pen;
     if (dist > 1e-4f) {
-      normal = diff / dist;
+      // Normal: from aabb (B) toward capsule (A).
+      normal = diffW / dist;
       pen    = r - dist;
     } else {
-      glm::vec3 d  = axPt - aabb.getPosition();
-      glm::vec3 ov = he - glm::abs(d);
+      // Capsule axis point is inside OBB — use minimum-overlap face.
+      const glm::vec3 ov = he - glm::abs(ptL);
       if (ov.x <= ov.y && ov.x <= ov.z) {
-        normal = {d.x > 0.0f ? 1.0f : -1.0f, 0, 0};
+        normal = Ra[0] * (ptL.x > 0.0f ? 1.0f : -1.0f);
         pen    = ov.x + r;
       } else if (ov.y <= ov.x && ov.y <= ov.z) {
-        normal = {0, d.y > 0.0f ? 1.0f : -1.0f, 0};
+        normal = Ra[1] * (ptL.y > 0.0f ? 1.0f : -1.0f);
         pen    = ov.y + r;
       } else {
-        normal = {0, 0, d.z > 0.0f ? 1.0f : -1.0f};
+        normal = Ra[2] * (ptL.z > 0.0f ? 1.0f : -1.0f);
         pen    = ov.z + r;
       }
     }
     result.collided     = true;
     result.normal       = normal;
     result.penetration  = pen;
-    result.contactPoint = closest;
+    result.contactPoint = closestW;
   }
   return result;
 }

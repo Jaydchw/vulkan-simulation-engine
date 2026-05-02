@@ -13,10 +13,11 @@ EndSettings
 # ---- Materials ----
 
 BeginTexture
-  Name = tex_pool
-  Type = radial
-  ColorA = 0.30, 0.50, 0.70
-  ColorB = 0.10, 0.20, 0.40
+  Name = GridTex
+  Type = checker
+  ColorA = 0.32, 0.38, 0.45
+  ColorB = 0.15, 0.20, 0.28
+  Divisions = 16
   Size = 256
 EndTexture
 
@@ -25,7 +26,7 @@ BeginMaterial
   AlbedoColor = 0.30, 0.32, 0.38
   Roughness = 0.85
   Metallic = 0.05
-  AlbedoTexture = tex_pool
+  AlbedoTexture = GridTex
 EndMaterial
 
 BeginMaterial
@@ -363,7 +364,7 @@ BeginLight
   Type = point
   Position = 0.0, 6.0, 0.0
   Color = 0.6, 0.85, 1.0
-  Intensity = 200.0
+  Intensity = 40.0
   Linear = 0.06
   Quadratic = 0.012
   CastsShadows = false
@@ -374,7 +375,7 @@ BeginLight
   Type = point
   Position = 0.0, 30.0, 0.0
   Color = 0.4, 0.50, 0.85
-  Intensity = 350.0
+  Intensity = 60.0
   Linear = 0.03
   Quadratic = 0.005
   CastsShadows = false

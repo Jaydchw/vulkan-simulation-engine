@@ -1,0 +1,210 @@
+BeginSettings
+  ClearColor = 0.04, 0.06, 0.12, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+  KillboxEnabled = true
+  KillboxY = -3.0
+EndSettings
+
+BeginTexture
+  Name = ClothGrid
+  Type = checker
+  ColorA = 0.20, 0.50, 0.90
+  ColorB = 0.08, 0.22, 0.50
+  Divisions = 16
+  Size = 256
+EndTexture
+
+BeginTexture
+  Name = GroundGrid
+  Type = checker
+  ColorA = 0.28, 0.30, 0.36
+  ColorB = 0.14, 0.15, 0.18
+  Divisions = 16
+  Size = 256
+EndTexture
+
+BeginMaterial
+  Name = ClothMat
+  AlbedoColor = 0.15, 0.45, 0.85
+  Roughness = 0.8
+  Metallic = 0.0
+  AlbedoTexture = ClothGrid
+EndMaterial
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.25, 0.27, 0.32
+  Roughness = 0.95
+  Metallic = 0.0
+  AlbedoTexture = GroundGrid
+EndMaterial
+
+BeginMaterial
+  Name = SmallBallMat
+  AlbedoColor = 0.95, 0.85, 0.20
+  Roughness = 0.2
+  Metallic = 0.3
+EndMaterial
+
+BeginMaterial
+  Name = MedBallMat
+  AlbedoColor = 0.90, 0.35, 0.15
+  Roughness = 0.35
+  Metallic = 0.1
+EndMaterial
+
+BeginMaterial
+  Name = LargeBallMat
+  AlbedoColor = 0.30, 0.85, 0.40
+  Roughness = 0.5
+  Metallic = 0.05
+EndMaterial
+
+BeginMesh
+  Name = Floor
+  Type = plane
+  Width = 40.0
+  Height = 40.0
+EndMesh
+
+BeginMesh
+  Name = SmallBall
+  Type = sphere
+  Radius = 0.35
+  Segments = 16
+EndMesh
+
+BeginMesh
+  Name = MedBall
+  Type = sphere
+  Radius = 0.65
+  Segments = 20
+EndMesh
+
+BeginMesh
+  Name = LargeBall
+  Type = sphere
+  Radius = 1.1
+  Segments = 24
+EndMesh
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Floor
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 20.0, 0.0, 20.0
+EndObject
+
+BeginCloth
+  Name = Medium Cloth
+  Position = 0.0, 16.0, -0.5
+  Material = ClothMat
+  ResolutionX = 18
+  ResolutionZ = 16
+  Width = 9.0
+  ClothHeight = 10.0
+  StructuralStiffness = 0.85
+  BendingStiffness = 0.08
+  Damping = 0.99
+  ParticleMass = 0.07
+  UseGravity = true
+  Hinge = TopRow
+  Wind = 0.0, 0.0, 0.0
+EndCloth
+
+BeginSpawner
+  Name = SpawnerLeft
+  Position = -3.0, 12.0, 9.0
+  SpawnInterval = 0.6
+  SpawnIntervalRandomness = 0.15
+  SpawnDirection = 0.0, 0.15, -1.0
+  DirectionRandomness = 0.12
+  SpawnSpeed = 15.0
+  SpeedRandomness = 0.2
+  PositionRandomness = 0.4
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = SB
+    Mesh = SmallBall
+    Material = SmallBallMat
+    ScaleUniform = 1.0
+    Mass = 0.4
+    Restitution = 0.5
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.35
+  EndTemplate
+EndSpawner
+
+BeginSpawner
+  Name = SpawnerCentre
+  Position = 0.0, 12.0, 9.0
+  SpawnInterval = 0.9
+  SpawnIntervalRandomness = 0.2
+  SpawnDirection = 0.0, 0.15, -1.0
+  DirectionRandomness = 0.15
+  SpawnSpeed = 11.0
+  SpeedRandomness = 0.2
+  PositionRandomness = 0.5
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = MB
+    Mesh = MedBall
+    Material = MedBallMat
+    ScaleUniform = 1.0
+    Mass = 1.5
+    Restitution = 0.4
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 0.65
+  EndTemplate
+EndSpawner
+
+BeginSpawner
+  Name = SpawnerRight
+  Position = 3.0, 12.0, 9.0
+  SpawnInterval = 1.4
+  SpawnIntervalRandomness = 0.25
+  SpawnDirection = 0.0, 0.15, -1.0
+  DirectionRandomness = 0.1
+  SpawnSpeed = 8.0
+  SpeedRandomness = 0.15
+  PositionRandomness = 0.3
+  BeginTemplate
+    Weight = 1.0
+    NamePrefix = LB
+    Mesh = LargeBall
+    Material = LargeBallMat
+    ScaleUniform = 1.0
+    Mass = 4.0
+    Restitution = 0.3
+    Damping = 0.99
+    UseGravity = true
+    Collider = sphere
+    ColliderRadius = 1.1
+  EndTemplate
+EndSpawner
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.4, -1.0, 0.5
+  Color = 1.0, 0.97, 0.88
+  Intensity = 2.8
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = Fill
+  Type = point
+  Position = -8.0, 12.0, 8.0
+  Color = 0.5, 0.6, 1.0
+  Intensity = 60.0
+  CastsShadows = false
+EndLight

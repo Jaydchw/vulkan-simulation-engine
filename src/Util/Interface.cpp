@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -437,6 +438,7 @@ NetworkManager* networkManager) {
   }
 
   if (applyPeerTint) ImGui::PopStyleColor(1);
+
   ImGui::Render();
 }
 
@@ -1112,13 +1114,10 @@ void Interface::renderObjectsMenu(Registry& registry) {
   ImGui::PopStyleColor();
   ImGui::Spacing();
 
-  auto propRow = [&](const char* label, const char* fmt, ...) {
+  auto propRow = [&](const char* label, const char* value) {
     fieldLabel(label);
     ImGui::SameLine(labelCol);
-    va_list args;
-    va_start(args, fmt);
-    ImGui::TextV(fmt, args);
-    va_end(args);
+    ImGui::TextUnformatted(value);
   };
 
   hoveredEntity = INVALID_ENTITY;
@@ -1294,8 +1293,7 @@ void Interface::renderObjectsMenu(Registry& registry) {
       if (isLight) {
         auto* light = registry.getComponent<LightComponent>(selectedEntity);
         if (light) {
-          propRow("Type", "%s",
-                  light->type == LightType::Sun ? "Sun" : "Point");
+          propRow("Type", light->type == LightType::Sun ? "Sun" : "Point");
 
           if (light->type == LightType::Sun) {
             fieldLabel("Direction");
@@ -1345,12 +1343,14 @@ void Interface::renderObjectsMenu(Registry& registry) {
       if (registry.hasComponent<MeshComponent>(selectedEntity)) {
         const auto* meshComp =
             registry.getComponent<MeshComponent>(selectedEntity);
-        propRow("Mesh", "#%u", meshComp->meshID);
+        char meshBuf[32]; snprintf(meshBuf, sizeof(meshBuf), "#%u", meshComp->meshID);
+        propRow("Mesh", meshBuf);
       }
       if (registry.hasComponent<RenderMaterialComponent>(selectedEntity)) {
         const auto* matComp =
             registry.getComponent<RenderMaterialComponent>(selectedEntity);
-        propRow("Material", "#%u", matComp->renderMaterialID);
+        char matBuf[32]; snprintf(matBuf, sizeof(matBuf), "#%u", matComp->renderMaterialID);
+        propRow("Material", matBuf);
       }
       if (registry.hasComponent<RenderComponent>(selectedEntity)) {
         auto* renderComp =
@@ -1429,6 +1429,12 @@ void Interface::renderSceneMenu(SceneSettings& sceneSettings,
   ImGui::SetNextItemWidth(sliderW);
   ImGui::SliderInt("##maxfps", &simState.maxFps, 0, 300,
                    simState.maxFps == 0 ? "Unlimited" : "%d");
+
+  sectionHeader("Debug Overlays");
+  ImGui::Checkbox("Collider Wireframes", &sceneSettings.showColliderWireframes);
+  ImGui::Checkbox("Velocity Vectors",    &sceneSettings.showVelocityVectors);
+  ImGui::Checkbox("Sleep State",         &sceneSettings.showSleepState);
+  ImGui::Checkbox("Physics Grid",        &sceneSettings.showPhysicsGrid);
 }
 
 void Interface::renderEnvironmentMenu(EnvironmentSettings& environmentSettings,
@@ -1855,7 +1861,7 @@ void Interface::renderWorldsMenu() {
     { "Spawners",  ImVec4(0.90f, 0.68f, 0.35f, 1.0f) },
     { "Animation", ImVec4(0.65f, 0.68f, 0.95f, 1.0f) },
     { "Stress",    ImVec4(0.85f, 0.40f, 0.40f, 1.0f) },
-    { "Showcase",  ImVec4(0.80f, 0.75f, 0.50f, 1.0f) },
+    { "Gallery",   ImVec4(0.80f, 0.75f, 0.50f, 1.0f) },
   };
 
   auto getCat = [&](const std::string& stem) -> int {
@@ -1865,8 +1871,7 @@ void Interface::renderWorldsMenu() {
     if (lower.find("spawner") != std::string::npos) return 2;
     if (lower.find("anim") == 0 || lower.find("animated") != std::string::npos) return 3;
     if (lower.find("stress") != std::string::npos || lower.find("big") != std::string::npos) return 4;
-    if (lower.find("showcase") != std::string::npos ||
-        lower.find("gallery") != std::string::npos ||
+    if (lower.find("gallery") != std::string::npos ||
         lower.find("mix") != std::string::npos) return 5;
     return 0;
   };

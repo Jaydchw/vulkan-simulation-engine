@@ -7,11 +7,21 @@ BeginSettings
   SimulationHz = 120
 EndSettings
 
+BeginTexture
+  Name = GridTex
+  Type = checker
+  ColorA = 0.22, 0.22, 0.28
+  ColorB = 0.10, 0.10, 0.13
+  Divisions = 16
+  Size = 256
+EndTexture
+
 BeginMaterial
   Name = GroundMat
   AlbedoColor = 0.18, 0.18, 0.22
   Roughness = 0.92
   Metallic = 0.0
+  AlbedoTexture = GridTex
 EndMaterial
 
 BeginMaterial

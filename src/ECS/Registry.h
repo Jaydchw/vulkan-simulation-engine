@@ -1,5 +1,4 @@
 #pragma once
-#include <optional>
 #include <vector>
 
 #include "ECS/ComponentStore.h"
@@ -7,11 +6,14 @@
 #include "ECS/Entity.h"
 #include <PhysicsObject.h>
 
-// All component types except PhysicsObject (which is managed separately by the
-// physics library) are stored in a ComponentStore<T> — a dense parallel-vector
+// All component types are stored in a ComponentStore<T> — a dense parallel-vector
 // structure that keeps each component type contiguous in memory.  This ensures
 // that hot iteration paths (renderer, physics, timeline) read linearly from
 // cache-friendly memory rather than chasing scattered heap-node pointers.
+//
+// PhysicsObject is also stored in a ComponentStore (not an unordered_map) so
+// that PhysicsWorld iterates a contiguous array rather than scattered heap nodes.
+// Callers must explicitly addPhysicsObject(e) before calling getPhysicsObject(e).
 
 class Registry final {
  public:
@@ -29,7 +31,7 @@ class Registry final {
     lights.erase(entity);
     simulated.erase(entity);
     colliders.erase(entity);
-    physicsObjects.erase(entity);
+    physicsObjects.erase(entity);   // swap-remove; caller must rebuildWorldObjects()
     spawners.erase(entity);
     cameras.erase(entity);
     animations.erase(entity);
@@ -79,16 +81,28 @@ class Registry final {
   const ComponentStore<ClothComponent>&            allCloths()            const { return cloths; }
   ComponentStore<ClothComponent>&                  allClothsMut()               { return cloths; }
 
+  // ── Physics object accessors ─────────────────────────────────────────────────
+  // Explicit creation required before calling getPhysicsObject.
+  void addPhysicsObject(Entity entity) {
+    physicsObjects.insert(entity, jphys::PhysicsObject{});
+  }
+
   jphys::PhysicsObject& getPhysicsObject(Entity entity) {
-    return physicsObjects[entity];
+    return *physicsObjects.get(entity);
   }
   const jphys::PhysicsObject& getPhysicsObject(Entity entity) const {
-    return physicsObjects.at(entity);
+    return *physicsObjects.get(entity);
   }
   jphys::PhysicsObject* getPhysicsObjectPtr(Entity entity) {
-    auto it = physicsObjects.find(entity);
-    return it != physicsObjects.end() ? &it->second : nullptr;
+    return physicsObjects.get(entity);
   }
+  const jphys::PhysicsObject* getPhysicsObjectPtr(Entity entity) const {
+    return physicsObjects.get(entity);
+  }
+
+  // Dense store for direct iteration by PhysicsSystem::rebuildWorldObjects().
+  ComponentStore<jphys::PhysicsObject>&       allPhysicsObjectsMut()       { return physicsObjects; }
+  const ComponentStore<jphys::PhysicsObject>& allPhysicsObjects()    const { return physicsObjects; }
 
  private:
   Entity nextEntity;
@@ -107,8 +121,8 @@ class Registry final {
   ComponentStore<AnimationComponent>       animations;
   ComponentStore<ClothComponent>           cloths;
 
-  // PhysicsObject is owned by the physics library and uses a map directly.
-  std::unordered_map<Entity, jphys::PhysicsObject> physicsObjects;
+  // Dense contiguous storage — iteration in PhysicsWorld is cache-friendly.
+  ComponentStore<jphys::PhysicsObject>     physicsObjects;
 };
 
 // ── addComponent specialisations ────────────────────────────────────────────

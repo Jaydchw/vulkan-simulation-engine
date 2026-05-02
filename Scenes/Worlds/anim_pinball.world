@@ -302,7 +302,7 @@ BeginLight
   Type = point
   Position = 0.0, 50.0, 0.0
   Color = 0.95, 0.90, 0.80
-  Intensity = 600.0
+  Intensity = 80.0
   Linear = 0.030
   Quadratic = 0.003
   CastsShadows = true
@@ -313,7 +313,7 @@ BeginLight
   Type = point
   Position = -5.0, 15.0, 2.0
   Color = 0.3, 0.6, 1.0
-  Intensity = 220.0
+  Intensity = 50.0
   Linear = 0.08
   Quadratic = 0.016
   CastsShadows = false
@@ -324,7 +324,7 @@ BeginLight
   Type = point
   Position = 5.0, 32.0, 2.0
   Color = 1.0, 0.5, 0.15
-  Intensity = 200.0
+  Intensity = 40.0
   Linear = 0.08
   Quadratic = 0.016
   CastsShadows = false
@@ -335,7 +335,7 @@ BeginLight
   Type = point
   Position = 0.0, 9.0, 0.0
   Color = 0.75, 0.15, 1.0
-  Intensity = 160.0
+  Intensity = 35.0
   Linear = 0.10
   Quadratic = 0.022
   CastsShadows = false
@@ -346,7 +346,7 @@ BeginLight
   Type = point
   Position = 0.0, 18.0, 0.0
   Color = 0.15, 0.85, 1.0
-  Intensity = 140.0
+  Intensity = 30.0
   Linear = 0.12
   Quadratic = 0.026
   CastsShadows = false

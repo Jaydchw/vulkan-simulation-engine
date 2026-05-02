@@ -150,6 +150,7 @@
     <ClCompile Include="src\Resources\MaterialManager.cpp" />
     <ClCompile Include="src\Resources\MeshManager.cpp" />
     <ClCompile Include="src\Scene\LightManager.cpp" />
+    <ClCompile Include="src\Rendering\DebugRenderer.cpp" />
     <ClCompile Include="src\Rendering\PostProcessing.cpp" />
     <ClCompile Include="src\Rendering\RenderDevice.cpp" />
     <ClCompile Include="src\Rendering\vma_impl.cpp" />

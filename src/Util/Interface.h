@@ -18,7 +18,6 @@
 #include "../ECS/Entity.h"
 #include "../ECS/Registry.h"
 #include "../Environment/EnvironmentSettings.h"
-#include "../Physics/PhysicsSystem.h"
 #include "../Network/NetworkManager.h"
 
 class MainPipeline;
@@ -90,6 +89,11 @@ struct SimulationState {
 
 struct SceneSettings {
   glm::vec4 clearColor = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
+
+  bool showColliderWireframes = false;
+  bool showVelocityVectors    = false;
+  bool showSleepState         = false;
+  bool showPhysicsGrid        = false;
 };
 
 enum class UIScalePreset { Small, Normal, Large, XL };

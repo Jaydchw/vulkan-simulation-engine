@@ -90,6 +90,7 @@ class ComponentStore {
   bool   has(Entity entity) const { return idx.count(entity) > 0; }
   size_t size()             const { return comps.size(); }
   bool   empty()            const { return comps.empty(); }
+  void   reserve(size_t n)        { comps.reserve(n); ents.reserve(n); }
 
   // ── Direct dense-array access (e.g. for TimelineSystem) ────────────────────
   const std::vector<Entity>& entityList()    const { return ents; }

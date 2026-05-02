@@ -1,12 +1,14 @@
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Application.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\Application.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\main.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\main.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Animation\AnimationSystem.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\AnimationSystem.obj
+D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Cloth\ClothSystem.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\ClothSystem.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Network\NetworkManager.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\NetworkManager.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Physics\PhysicsSystem.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\PhysicsSystem.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Spawning\SpawnerSystem.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\SpawnerSystem.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Resources\MaterialManager.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\MaterialManager.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Resources\MeshManager.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\MeshManager.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Scene\LightManager.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\LightManager.obj
+D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Rendering\DebugRenderer.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\DebugRenderer.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Rendering\PostProcessing.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\PostProcessing.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Rendering\RenderDevice.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\RenderDevice.obj
 D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\src\Rendering\vma_impl.cpp;D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\vulkan-s.f8ccff3a\x64\Debug\vma_impl.obj

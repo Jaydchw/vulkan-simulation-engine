@@ -22,6 +22,7 @@
 #include "Network/NetworkManager.h"
 #include "Physics/PhysicsMaterialManager.h"
 #include "Physics/PhysicsSystem.h"
+#include "Rendering/DebugRenderer.h"
 #include "Rendering/MainPipeline.h"
 #include "Rendering/PostProcessing.h"
 #include "Rendering/PushConstants.h"
@@ -248,6 +249,8 @@ class Application final {
   MeshID gizmoMeshID = INVALID_MESH_ID;
   RenderMaterialID gizmoRenderMaterialID = INVALID_RENDER_MATERIAL_ID;
 
+  std::unique_ptr<DebugRenderer> debugRenderer;
+
   // Shadow area is recomputed every N frames; Y is never adjusted (no vertical
   // drift).
   static constexpr int SHADOW_UPDATE_INTERVAL = 200;
@@ -298,6 +301,7 @@ class Application final {
   void createDepthResources();
   void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
   void updateUniformBuffer(uint32_t currentImage);
+  void buildDebugGeometry(uint32_t frameIndex);
 
   void recreateTextureSamplers(VkFilter magFilter, VkFilter minFilter);
   void toggleShadingMode();

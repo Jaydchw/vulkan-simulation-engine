@@ -1,0 +1,598 @@
+# Collider Showcase
+# One row of dynamic objects per collider type — all falling onto a shared ground
+# and bouncing off static box platforms, so every shape pair can be observed.
+#
+#   Row Z=-10 : Spheres
+#   Row Z= -5 : Boxes  (pre-rotated to tumble and land on edges/faces)
+#   Row Z=  0 : Cylinders (upright + on their side)
+#   Row Z=  5 : Capsules
+#   Row Z= 10 : Cones
+#
+# Two static box shelves interrupt the fall at mid-height so shapes collide
+# with a box surface before hitting the ground.
+
+BeginSettings
+  ClearColor = 0.04, 0.04, 0.08, 1.0
+  TimeSpeed = 1.0
+  SimulationHz = 120
+EndSettings
+
+# ── Materials ──────────────────────────────────────────────────────────────────
+
+BeginTexture
+  Name = GridTex
+  Type = checker
+  ColorA = 0.22, 0.22, 0.28
+  ColorB = 0.10, 0.10, 0.13
+  Divisions = 16
+  Size = 256
+EndTexture
+
+BeginMaterial
+  Name = GroundMat
+  AlbedoColor = 0.18, 0.18, 0.22
+  Roughness = 0.92
+  Metallic = 0.0
+  AlbedoTexture = GridTex
+EndMaterial
+
+BeginMaterial
+  Name = ShelfMat
+  AlbedoColor = 0.30, 0.28, 0.35
+  Roughness = 0.80
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = SphereMat
+  AlbedoColor = 0.15, 0.55, 1.00
+  Roughness = 0.18
+  Metallic = 0.45
+EndMaterial
+
+BeginMaterial
+  Name = BoxMat
+  AlbedoColor = 1.00, 0.50, 0.10
+  Roughness = 0.55
+  Metallic = 0.05
+EndMaterial
+
+BeginMaterial
+  Name = CylMat
+  AlbedoColor = 0.95, 0.85, 0.05
+  Roughness = 0.35
+  Metallic = 0.15
+EndMaterial
+
+BeginMaterial
+  Name = CapsuleMat
+  AlbedoColor = 0.20, 0.90, 0.40
+  Roughness = 0.25
+  Metallic = 0.20
+EndMaterial
+
+BeginMaterial
+  Name = ConeMat
+  AlbedoColor = 0.90, 0.20, 0.55
+  Roughness = 0.30
+  Metallic = 0.25
+EndMaterial
+
+# ── Meshes ─────────────────────────────────────────────────────────────────────
+
+BeginMesh
+  Name = Ground
+  Type = plane
+  Width = 60.0
+  Height = 30.0
+EndMesh
+
+BeginMesh
+  Name = ShelfMesh
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = Ball
+  Type = sphere
+  Radius = 0.50
+  Segments = 24
+EndMesh
+
+BeginMesh
+  Name = BoxMesh
+  Type = cube
+  Size = 1.0
+EndMesh
+
+BeginMesh
+  Name = CylMesh
+  Type = cylinder
+  Radius = 0.42
+  Height = 1.0
+  Segments = 24
+EndMesh
+
+BeginMesh
+  Name = CapMesh
+  Type = capsule
+  Radius = 0.36
+  Height = 1.2
+  Segments = 24
+EndMesh
+
+BeginMesh
+  Name = ConeMesh
+  Type = cone
+  Radius = 0.48
+  Height = 1.1
+  Segments = 24
+EndMesh
+
+# ── Static geometry ────────────────────────────────────────────────────────────
+
+BeginObject
+  Name = Ground
+  Position = 0.0, 0.0, 0.0
+  Mesh = Ground
+  Material = GroundMat
+  Collider = plane
+  ColliderNormal = 0.0, 1.0, 0.0
+  ColliderHalfExtents = 30.0, 0.0, 15.0
+EndObject
+
+# Left shelf (catches rows Z=-10 and Z=-5)
+BeginObject
+  Name = LeftShelf
+  Position = -8.0, 5.0, -7.5
+  Scale = 14.0, 1.0, 8.0
+  Mesh = ShelfMesh
+  Material = ShelfMat
+  Collider = box
+  ColliderHalfExtents = 7.0, 0.5, 4.0
+EndObject
+
+# Right shelf (catches rows Z=5 and Z=10)
+BeginObject
+  Name = RightShelf
+  Position = 8.0, 5.0, 7.5
+  Scale = 14.0, 1.0, 8.0
+  Mesh = ShelfMesh
+  Material = ShelfMat
+  Collider = box
+  ColliderHalfExtents = 7.0, 0.5, 4.0
+EndObject
+
+# Central dividing wall — boxes and spheres can bounce off this
+BeginObject
+  Name = CentreWall
+  Position = 0.0, 3.5, 0.0
+  Rotation = 0.0, 0.0, 0.0
+  Scale = 1.5, 7.0, 22.0
+  Mesh = ShelfMesh
+  Material = ShelfMat
+  Collider = box
+  ColliderHalfExtents = 0.75, 3.5, 11.0
+EndObject
+
+# ── Row 1: Spheres (Z = -10) ───────────────────────────────────────────────────
+
+BeginObject
+  Name = Sphere A
+  Position = -9.0, 16.0, -10.0
+  Mesh = Ball
+  Material = SphereMat
+  Mass = 0.8
+  Restitution = 0.75
+  Friction = 0.30
+  Damping = 0.99
+  UseGravity = true
+  Collider = sphere
+  ColliderRadius = 0.50
+EndObject
+
+BeginObject
+  Name = Sphere B
+  Position = -5.0, 18.0, -10.0
+  Mesh = Ball
+  Material = SphereMat
+  Mass = 1.5
+  Restitution = 0.55
+  Friction = 0.35
+  Damping = 0.99
+  UseGravity = true
+  Collider = sphere
+  ColliderRadius = 0.50
+EndObject
+
+BeginObject
+  Name = Sphere C
+  Position = -1.0, 20.0, -10.0
+  Mesh = Ball
+  Material = SphereMat
+  Mass = 0.5
+  Restitution = 0.85
+  Friction = 0.20
+  Damping = 0.99
+  UseGravity = true
+  Collider = sphere
+  ColliderRadius = 0.50
+EndObject
+
+BeginObject
+  Name = Sphere D
+  Position = 3.0, 17.0, -10.0
+  Mesh = Ball
+  Material = SphereMat
+  Mass = 2.0
+  Restitution = 0.40
+  Friction = 0.50
+  Damping = 0.99
+  UseGravity = true
+  Collider = sphere
+  ColliderRadius = 0.50
+EndObject
+
+BeginObject
+  Name = Sphere E
+  Position = 7.0, 19.0, -10.0
+  Mesh = Ball
+  Material = SphereMat
+  Mass = 1.0
+  Restitution = 0.65
+  Friction = 0.30
+  Damping = 0.99
+  UseGravity = true
+  Collider = sphere
+  ColliderRadius = 0.50
+EndObject
+
+# ── Row 2: Boxes (Z = -5) ─────────────────────────────────────────────────────
+# Pre-rotated so they tumble and land on different faces, exercising OBB-plane
+# and OBB-OBB contacts.
+
+BeginObject
+  Name = Box A
+  Position = -10.0, 17.0, -5.0
+  Rotation = 15.0, 20.0, 10.0
+  Mesh = BoxMesh
+  Material = BoxMat
+  Mass = 2.5
+  Restitution = 0.25
+  Friction = 0.55
+  Damping = 0.98
+  UseGravity = true
+  Collider = box
+  ColliderHalfExtents = 0.50, 0.50, 0.50
+EndObject
+
+BeginObject
+  Name = Box B
+  Position = -5.5, 19.0, -5.0
+  Rotation = 45.0, 30.0, 0.0
+  Mesh = BoxMesh
+  Material = BoxMat
+  Mass = 3.5
+  Restitution = 0.20
+  Friction = 0.60
+  Damping = 0.98
+  UseGravity = true
+  Collider = box
+  ColliderHalfExtents = 0.50, 0.50, 0.50
+EndObject
+
+BeginObject
+  Name = Box C
+  Position = -0.5, 21.0, -5.0
+  Rotation = 0.0, 60.0, 35.0
+  Mesh = BoxMesh
+  Material = BoxMat
+  Mass = 1.8
+  Restitution = 0.30
+  Friction = 0.50
+  Damping = 0.98
+  UseGravity = true
+  Collider = box
+  ColliderHalfExtents = 0.50, 0.50, 0.50
+EndObject
+
+BeginObject
+  Name = Box D
+  Position = 4.5, 18.0, -5.0
+  Rotation = 20.0, 45.0, 55.0
+  Mesh = BoxMesh
+  Material = BoxMat
+  Mass = 2.0
+  Restitution = 0.22
+  Friction = 0.58
+  Damping = 0.98
+  UseGravity = true
+  Collider = box
+  ColliderHalfExtents = 0.65, 0.40, 0.40
+EndObject
+
+BeginObject
+  Name = Box E
+  Position = 9.0, 20.0, -5.0
+  Rotation = 30.0, 10.0, 70.0
+  Mesh = BoxMesh
+  Material = BoxMat
+  Mass = 4.0
+  Restitution = 0.15
+  Friction = 0.65
+  Damping = 0.97
+  UseGravity = true
+  Collider = box
+  ColliderHalfExtents = 0.70, 0.35, 0.70
+EndObject
+
+# ── Row 3: Cylinders (Z = 0) ──────────────────────────────────────────────────
+# Mix of upright and on-their-side to show different collision profiles.
+
+BeginObject
+  Name = Cyl A Upright
+  Position = -9.0, 17.0, 0.0
+  Mesh = CylMesh
+  Material = CylMat
+  Mass = 1.5
+  Restitution = 0.40
+  Friction = 0.45
+  Damping = 0.99
+  UseGravity = true
+  Collider = cylinder
+  ColliderRadius = 0.42
+  ColliderHeight = 1.0
+EndObject
+
+BeginObject
+  Name = Cyl B Side
+  Position = -4.5, 19.0, 0.0
+  Rotation = 0.0, 0.0, 90.0
+  Mesh = CylMesh
+  Material = CylMat
+  Mass = 1.5
+  Restitution = 0.40
+  Friction = 0.45
+  Damping = 0.99
+  UseGravity = true
+  Collider = cylinder
+  ColliderRadius = 0.42
+  ColliderHeight = 1.0
+EndObject
+
+BeginObject
+  Name = Cyl C Tilted
+  Position = 0.5, 21.0, 0.0
+  Rotation = 40.0, 0.0, 0.0
+  Mesh = CylMesh
+  Material = CylMat
+  Mass = 2.0
+  Restitution = 0.35
+  Friction = 0.50
+  Damping = 0.99
+  UseGravity = true
+  Collider = cylinder
+  ColliderRadius = 0.42
+  ColliderHeight = 1.0
+EndObject
+
+BeginObject
+  Name = Cyl D Upright
+  Position = 5.5, 18.0, 0.0
+  Mesh = CylMesh
+  Material = CylMat
+  Mass = 1.2
+  Restitution = 0.45
+  Friction = 0.40
+  Damping = 0.99
+  UseGravity = true
+  Collider = cylinder
+  ColliderRadius = 0.42
+  ColliderHeight = 1.0
+EndObject
+
+BeginObject
+  Name = Cyl E Side
+  Position = 10.0, 20.0, 0.0
+  Rotation = 0.0, 45.0, 90.0
+  Mesh = CylMesh
+  Material = CylMat
+  Mass = 1.8
+  Restitution = 0.38
+  Friction = 0.48
+  Damping = 0.99
+  UseGravity = true
+  Collider = cylinder
+  ColliderRadius = 0.42
+  ColliderHeight = 1.0
+EndObject
+
+# ── Row 4: Capsules (Z = 5) ───────────────────────────────────────────────────
+
+BeginObject
+  Name = Cap A Upright
+  Position = -9.5, 18.0, 5.0
+  Mesh = CapMesh
+  Material = CapsuleMat
+  Mass = 1.0
+  Restitution = 0.50
+  Friction = 0.35
+  Damping = 0.99
+  UseGravity = true
+  Collider = capsule
+  ColliderRadius = 0.36
+  ColliderHeight = 1.2
+EndObject
+
+BeginObject
+  Name = Cap B Side
+  Position = -5.0, 20.0, 5.0
+  Rotation = 0.0, 0.0, 90.0
+  Mesh = CapMesh
+  Material = CapsuleMat
+  Mass = 1.0
+  Restitution = 0.50
+  Friction = 0.35
+  Damping = 0.99
+  UseGravity = true
+  Collider = capsule
+  ColliderRadius = 0.36
+  ColliderHeight = 1.2
+EndObject
+
+BeginObject
+  Name = Cap C Tilted
+  Position = 0.0, 22.0, 5.0
+  Rotation = 55.0, 15.0, 0.0
+  Mesh = CapMesh
+  Material = CapsuleMat
+  Mass = 1.3
+  Restitution = 0.45
+  Friction = 0.38
+  Damping = 0.99
+  UseGravity = true
+  Collider = capsule
+  ColliderRadius = 0.36
+  ColliderHeight = 1.2
+EndObject
+
+BeginObject
+  Name = Cap D Upright
+  Position = 5.0, 19.0, 5.0
+  Mesh = CapMesh
+  Material = CapsuleMat
+  Mass = 0.8
+  Restitution = 0.60
+  Friction = 0.30
+  Damping = 0.99
+  UseGravity = true
+  Collider = capsule
+  ColliderRadius = 0.36
+  ColliderHeight = 1.2
+EndObject
+
+BeginObject
+  Name = Cap E Angled
+  Position = 9.5, 21.0, 5.0
+  Rotation = 0.0, 30.0, 45.0
+  Mesh = CapMesh
+  Material = CapsuleMat
+  Mass = 1.5
+  Restitution = 0.42
+  Friction = 0.40
+  Damping = 0.99
+  UseGravity = true
+  Collider = capsule
+  ColliderRadius = 0.36
+  ColliderHeight = 1.2
+EndObject
+
+# ── Row 5: Cones (Z = 10) ─────────────────────────────────────────────────────
+
+BeginObject
+  Name = Cone A Upright
+  Position = -9.0, 17.0, 10.0
+  Mesh = ConeMesh
+  Material = ConeMat
+  Mass = 1.2
+  Restitution = 0.35
+  Friction = 0.45
+  Damping = 0.99
+  UseGravity = true
+  Collider = cone
+  ColliderRadius = 0.48
+  ColliderHeight = 1.1
+EndObject
+
+BeginObject
+  Name = Cone B Inverted
+  Position = -4.5, 19.0, 10.0
+  Rotation = 180.0, 0.0, 0.0
+  Mesh = ConeMesh
+  Material = ConeMat
+  Mass = 1.2
+  Restitution = 0.35
+  Friction = 0.45
+  Damping = 0.99
+  UseGravity = true
+  Collider = cone
+  ColliderRadius = 0.48
+  ColliderHeight = 1.1
+EndObject
+
+BeginObject
+  Name = Cone C Tilted
+  Position = 0.5, 21.0, 10.0
+  Rotation = 30.0, 20.0, 0.0
+  Mesh = ConeMesh
+  Material = ConeMat
+  Mass = 1.5
+  Restitution = 0.30
+  Friction = 0.50
+  Damping = 0.98
+  UseGravity = true
+  Collider = cone
+  ColliderRadius = 0.48
+  ColliderHeight = 1.1
+EndObject
+
+BeginObject
+  Name = Cone D Upright
+  Position = 5.5, 18.0, 10.0
+  Mesh = ConeMesh
+  Material = ConeMat
+  Mass = 0.9
+  Restitution = 0.40
+  Friction = 0.42
+  Damping = 0.99
+  UseGravity = true
+  Collider = cone
+  ColliderRadius = 0.48
+  ColliderHeight = 1.1
+EndObject
+
+BeginObject
+  Name = Cone E Angled
+  Position = 9.5, 20.0, 10.0
+  Rotation = 15.0, 45.0, 0.0
+  Mesh = ConeMesh
+  Material = ConeMat
+  Mass = 1.8
+  Restitution = 0.28
+  Friction = 0.55
+  Damping = 0.98
+  UseGravity = true
+  Collider = cone
+  ColliderRadius = 0.48
+  ColliderHeight = 1.1
+EndObject
+
+# ── Lighting ───────────────────────────────────────────────────────────────────
+
+BeginLight
+  Name = Sun
+  Type = sun
+  Direction = 0.40, -1.0, 0.35
+  Color = 1.0, 0.96, 0.88
+  Intensity = 2.4
+  CastsShadows = true
+EndLight
+
+BeginLight
+  Name = FillLeft
+  Type = point
+  Position = -12.0, 18.0, 0.0
+  Color = 0.30, 0.50, 1.00
+  Intensity = 60.0
+  CastsShadows = false
+EndLight
+
+BeginLight
+  Name = FillRight
+  Type = point
+  Position = 12.0, 18.0, 0.0
+  Color = 1.00, 0.40, 0.20
+  Intensity = 60.0
+  CastsShadows = false
+EndLight

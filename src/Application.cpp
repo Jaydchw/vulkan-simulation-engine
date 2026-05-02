@@ -29,6 +29,7 @@
 #include "Vulkan/VulkanInstance.h"
 #include "Vulkan/VulkanSwapchain.h"
 #include "Vulkan/VulkanSyncObjects.h"
+#include "Rendering/DebugRenderer.h"
 
 Application::Application() {
   Debug::log(Debug::Category::MAIN, "Application: Constructor called");
@@ -318,6 +319,9 @@ void Application::simulationThreadFunc() {
                 simState.timeHistory.end());
           simState.historyIndex = -1;
           simState.baked        = false;
+          // The ECS was restored to the scrubbed frame; tell the physics library
+          // so syncToLibrary() pushes those positions rather than ignoring them.
+          physicsSystem->markAllDirty();
         }
 
         simState.rewinding   = false;
@@ -613,6 +617,17 @@ void Application::initVulkan() {
   clothSystem->setEnvironmentSettings(&environmentSettings);
   physicsSystem->setEnvironmentSettings(&environmentSettings);
 
+  try {
+    debugRenderer = std::make_unique<DebugRenderer>();
+    debugRenderer->init(device, renderDevice.get(), swapChainImageFormat,
+                        MAX_FRAMES_IN_FLIGHT);
+    Debug::log(Debug::Category::RENDERING, "DebugRenderer: initialized OK");
+  } catch (const std::exception& e) {
+    std::cerr << "[DebugRenderer] init failed: " << e.what() << "\n";
+    Debug::log(Debug::Category::RENDERING, "DebugRenderer: init failed:", e.what());
+    debugRenderer.reset();  // leave null → render/build calls all no-op
+  }
+
   interface->setWorldDirectory("Scenes/Worlds");
   interface->setFBSceneDirectory("Scenes/FBs");
   interface->setWorldLoadCallback([this](const std::string& path) {
@@ -668,11 +683,15 @@ while (!window->shouldClose()) {
 
   if (simState.resetRequested) {
     simState.resetRequested = false;
-    if (snapshotsOn) {
-      timelineSystem->restoreInitialSnapshot();
-      timelineSystem->clearSnapshots();
+    {
+      std::lock_guard<std::mutex> lock(simMutex);
+      if (snapshotsOn) {
+        timelineSystem->restoreInitialSnapshot();
+        timelineSystem->clearSnapshots();
+      }
+      animationSystem->reset();
+      physicsSystem->markAllDirty();
     }
-    animationSystem->reset();
     simState.timeHistory.clear();
     simState.currentTime = 0.0f;
     simState.historyIndex = -1;
@@ -1177,6 +1196,7 @@ while (!window->shouldClose()) {
 void Application::cleanup() {
   vkDeviceWaitIdle(device);
   cleanupSwapChain();
+  if (debugRenderer) { debugRenderer->cleanup(); debugRenderer.reset(); }
   interface->cleanup();
   postProcessing.reset();
   lightManager.reset();
@@ -1205,8 +1225,9 @@ void Application::cleanup() {
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     renderDevice->destroyBuffer(uniformBuffers[i], uniformBuffersAlloc[i]);
   vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+  for (size_t i = 0; i < renderFinishedSemaphores.size(); i++)
     vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
     vkDestroyFence(device, inFlightFences[i], nullptr);
   }
@@ -1330,6 +1351,7 @@ void Application::drawFrame() {
     const auto tUbo0 = doPerfTiming ? FrameClock::now() : FrameClock::time_point{};
     updateUniformBuffer(currentFrame);
     buildRenderProxies();
+    buildDebugGeometry(currentFrame);
     if (doPerfTiming) perfUniformBufferMs = msec(tUbo0, FrameClock::now());
   }
 
@@ -1347,7 +1369,7 @@ void Application::drawFrame() {
   submitInfo.pWaitDstStageMask = waitStages;
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
-  VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
+  VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[imageIndex]};
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = signalSemaphores;
   if (vkQueueSubmit(graphicsQueue, 1, &submitInfo,
@@ -1433,6 +1455,116 @@ lightManager->updateLightBuffer();
   for (size_t i = shadowMaps.size(); i < MAX_SHADOW_CASTERS; i++)
     ubo.lightSpaceMatrices[i] = glm::mat4(1.0f);
   memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+}
+
+void Application::buildDebugGeometry(uint32_t frameIndex) {
+  if (!debugRenderer || !physicsSystem) return;
+
+  debugRenderer->begin(frameIndex);
+
+  const bool anyActive = sceneSettings.showColliderWireframes ||
+                         sceneSettings.showVelocityVectors    ||
+                         sceneSettings.showSleepState         ||
+                         sceneSettings.showPhysicsGrid;
+  if (!anyActive) return;
+
+  const auto& objects = physicsSystem->getWorld().getObjects();
+
+  // ── Collider wireframes ──────────────────────────────────────────────────
+  if (sceneSettings.showColliderWireframes) {
+    for (const jphys::PhysicsObject* obj : objects) {
+      if (!obj) continue;
+      const glm::vec4 col = obj->isStatic()
+          ? glm::vec4(0.86f, 0.78f, 0.24f, 0.9f)   // static  → yellow
+          : glm::vec4(0.24f, 0.86f, 0.39f, 0.9f);  // dynamic → green
+      const glm::vec3 pos = obj->getPosition();
+      const glm::vec3 sc  = glm::abs(obj->getScale());
+      const glm::quat ori = obj->getOrientation();
+      const jphys::Collider& c = obj->getCollider();
+
+      switch (c.getType()) {
+        case jphys::ColliderType::Sphere: {
+          const float r = c.getRadius() * std::max({sc.x, sc.y, sc.z});
+          debugRenderer->addWireSphere(pos, r, ori, col);
+          break;
+        }
+        case jphys::ColliderType::AABB:
+        case jphys::ColliderType::Plane: {
+          const glm::vec3 he = c.getHalfExtents() * sc;
+          debugRenderer->addWireBox(pos, he, ori, col);
+          break;
+        }
+        case jphys::ColliderType::Cylinder: {
+          const float r  = c.getRadius() * std::max(sc.x, sc.z);
+          const float hh = c.getHeight() * 0.5f * sc.y;
+          debugRenderer->addWireCylinder(pos, r, hh, ori, col);
+          break;
+        }
+        case jphys::ColliderType::Capsule:
+        case jphys::ColliderType::Cone: {
+          const float r  = c.getRadius() * std::max(sc.x, sc.z);
+          const float hh = c.getHeight() * 0.5f * sc.y;
+          debugRenderer->addWireCapsule(pos, r, hh, ori, col);
+          break;
+        }
+      }
+    }
+  }
+
+  // ── Velocity vectors ─────────────────────────────────────────────────────
+  if (sceneSettings.showVelocityVectors) {
+    constexpr float kVelScale = 0.25f;
+    const glm::vec4 velCol{1.0f, 0.63f, 0.12f, 0.9f};
+    for (const jphys::PhysicsObject* obj : objects) {
+      if (!obj || obj->isStatic()) continue;
+      const glm::vec3 vel = obj->getVelocity();
+      if (glm::dot(vel, vel) < 0.001f) continue;
+      debugRenderer->addArrow(obj->getPosition(),
+                              obj->getPosition() + vel * kVelScale, velCol);
+    }
+  }
+
+  // ── Sleep state indicators ────────────────────────────────────────────────
+  if (sceneSettings.showSleepState) {
+    const glm::vec4 sleepCol{0.31f, 0.55f, 1.0f, 0.9f};
+    for (const jphys::PhysicsObject* obj : objects) {
+      if (!obj || obj->isStatic() || !obj->isAsleep()) continue;
+      const glm::vec3 pos = obj->getPosition();
+      constexpr float sz = 0.2f;
+      debugRenderer->addLine(pos + glm::vec3(-sz, 0, 0), pos + glm::vec3(sz, 0, 0), sleepCol);
+      debugRenderer->addLine(pos + glm::vec3(0, -sz, 0), pos + glm::vec3(0, sz, 0), sleepCol);
+      debugRenderer->addLine(pos + glm::vec3(0, 0, -sz), pos + glm::vec3(0, 0, sz), sleepCol);
+    }
+  }
+
+  // ── Physics grid (actual 3D broadphase cells) ────────────────────────────
+  if (sceneSettings.showPhysicsGrid) {
+    const float cell = physicsSystem->getLastGridCellSize();
+    const float half = cell * 0.5f;
+    const glm::quat noRot(1.f, 0.f, 0.f, 0.f);
+
+    for (const auto& c : physicsSystem->getWorld().getLastGridCells()) {
+      // Centre of this cell in world space
+      const glm::vec3 centre{
+        (c.x + 0.5f) * cell,
+        (c.y + 0.5f) * cell,
+        (c.z + 0.5f) * cell,
+      };
+
+      glm::vec4 col;
+      if (c.sleeping) {
+        // Sleeping objects — dim grey-blue
+        col = {0.35f, 0.35f, 0.55f, 0.45f};
+      } else {
+        // Awake cells: blue (1 object) → yellow (2) → red (3+)
+        const float t = std::min(1.f, (c.objectCount - 1) / 2.f);
+        col = glm::mix(glm::vec4(0.20f, 0.55f, 1.00f, 0.75f),
+                       glm::vec4(1.00f, 0.20f, 0.10f, 0.75f), t);
+      }
+
+      debugRenderer->addWireBox(centre, glm::vec3(half), noRot, col);
+    }
+  }
 }
 
 void Application::recreateGraphicsPipeline() {
@@ -2285,6 +2417,9 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
                      meshManager->getMesh(batch.meshID)->getIndexCount(),
                      batch.instanceCount, 0, 0, batch.firstInstance);
   }
+
+  if (debugRenderer)
+    debugRenderer->render(commandBuffer, currentViewProj, currentFrame, swapChainExtent);
 
   postProcessing->endOffscreenPass(commandBuffer);
 

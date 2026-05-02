@@ -48,6 +48,16 @@ public:
  long long getLastCollisionChecks() const;
  long long getLastCollisionsResolved() const;
 
+ float getLastGridCellSize() const { return lastGridCellSize; }
+
+ // One entry per occupied broadphase cell, captured after each step.
+ struct GridCellDebug {
+   int x, y, z;          // integer cell coordinates
+   uint32_t objectCount; // number of objects in the cell
+   bool sleeping;        // true = from the sleeping grid
+ };
+ const std::vector<GridCellDebug>& getLastGridCells() const { return lastGridCells; }
+
  static CollisionResult testSphereSphere(const PhysicsObject& a,
                                           const PhysicsObject& b);
  static CollisionResult testSpherePlane(const PhysicsObject& sphere,
@@ -96,6 +106,8 @@ private:
  float sleepLinearThreshSq  = 0.0025f;  // (0.05 m/s)^2
  float sleepAngularThreshSq = 0.01f;    // (0.10 rad/s)^2
  float sleepDelay           = 0.3f;
+ float lastGridCellSize     = 8.0f;
+ std::vector<GridCellDebug> lastGridCells;
 
  void integrate(float deltaTime);
  void resolveCollisions();
