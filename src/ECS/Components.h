@@ -156,6 +156,7 @@ struct ClothComponent {
   int solverIterations = 8;
   glm::vec3 wind = glm::vec3(0.0f);
   float tearability = 0.0f;
+  bool twoWayCoupling = false;
   uint8_t ownerPeerId = 0;
 };
 

@@ -78,6 +78,7 @@ void ClothSystem::initCloth(Entity e) {
   sim->setTearability(cloth->tearability);
   sim->setParticleMass(cloth->particleMass);
   sim->setSolverIterations(cloth->solverIterations);
+  sim->setTwoWayCoupling(cloth->twoWayCoupling);
 
   int sp = (std::max)(cloth->pinSpacing, 1);
 

@@ -36,6 +36,7 @@ class ClothSim {
   void setTearability(float t)         { tearability = t; }
   void setParticleMass(float m);
   void setSolverIterations(int n) { solverIterations = n; }
+  void setTwoWayCoupling(bool b)       { twoWayCoupling = b; }
   void pinParticle(int index);
 
   void step(float dt, const std::vector<PhysicsObject*>& obstacles);
@@ -57,6 +58,9 @@ class ClothSim {
   float windDrag            = 0.2f;
   float tearability         = 0.0f;
   int solverIterations      = 8;
+  bool twoWayCoupling       = false;
+  float stepDt              = 0.016f;
+  bool applyImpulseThisIter = false;
 
   std::vector<ClothParticle>   particles;
   std::vector<ClothConstraint> constraints;
@@ -64,12 +68,15 @@ class ClothSim {
   void integrate(float dt);
   void satisfyConstraints();
   void resolveCollisions(const std::vector<PhysicsObject*>& obstacles);
-  void resolveVsObject(ClothParticle& p, const PhysicsObject& obj);
-  void resolveVsSphere(ClothParticle& p, const PhysicsObject& obj);
-  void resolveVsAABB(ClothParticle& p, const PhysicsObject& obj);
-  void resolveVsPlane(ClothParticle& p, const PhysicsObject& obj);
-  void resolveVsCylinder(ClothParticle& p, const PhysicsObject& obj);
-  void resolveVsCapsule(ClothParticle& p, const PhysicsObject& obj);
+  void resolveVsObject(ClothParticle& p, PhysicsObject& obj);
+  void resolveVsSphere(ClothParticle& p, PhysicsObject& obj);
+  void resolveVsAABB(ClothParticle& p, PhysicsObject& obj);
+  void resolveVsPlane(ClothParticle& p, PhysicsObject& obj);
+  void resolveVsCylinder(ClothParticle& p, PhysicsObject& obj);
+  void resolveVsCapsule(ClothParticle& p, PhysicsObject& obj);
+  void resolveTrianglesVsObject(PhysicsObject& obj);
+  void applyContactImpulse(ClothParticle& p, PhysicsObject& obj,
+                            const glm::vec3& n, const glm::vec3& contactPt);
 };
 
 }  // namespace jphys
