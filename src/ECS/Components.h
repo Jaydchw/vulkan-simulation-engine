@@ -88,7 +88,6 @@ struct ColliderComponent {
   bool finite = false;
 };
 
-// Defines a single spawnable object prototype with its own weight for random selection.
 struct SpawnTemplate {
   float weight = 1.0f;
 
@@ -163,40 +162,31 @@ struct ClothComponent {
 struct SpawnerComponent {
   std::vector<SpawnTemplate> templates;
 
-  // How often to spawn (seconds). Actual interval = spawnInterval * (1 + U[0, intervalRandomness]).
   float spawnInterval = 1.0f;
   float spawnIntervalRandomness = 0.0f;
 
-  // Launch direction and speed applied on top of the template's base velocity.
   glm::vec3 spawnDirection = glm::vec3(0.0f, 1.0f, 0.0f);
   float directionRandomness = 0.0f;  // half-angle cone in radians
   float spawnSpeed = 0.0f;
   float speedRandomness = 0.0f;      // speed *= (1 + U[-r, r])
 
-  // Spawned entity position = spawner position + spawnOffset + random sphere sample.
   glm::vec3 spawnOffset = glm::vec3(0.0f);
   float positionRandomness = 0.0f;   // sphere radius for random offset
 
-  // Angular velocity applied to spawned entities (template angularVelocity is additive).
   glm::vec3 angularVelocity = glm::vec3(0.0f);
   float angularVelocityRandomness = 0.0f;
 
   int maxSpawns = -1;  // -1 = unlimited
   bool enabled = true;
 
-  // Burst spawn: fire all maxSpawns at once on the first trigger, then disable.
   bool burstMode = false;
 
-  // Owner assignment: 0=auto round-robin, 1-4=fixed peer, 5=SEQUENTIAL round-robin across active peers.
   uint8_t ownerMode = 0;
 
-  // Axis-aligned box spawn location (RandomBox). When useBoxSpawn is true,
-  // spawnPos/positionRandomness are ignored and a point is sampled uniformly from [spawnBoxMin, spawnBoxMax].
   glm::vec3 spawnBoxMin = glm::vec3(0.0f);
   glm::vec3 spawnBoxMax = glm::vec3(0.0f);
   bool useBoxSpawn = false;
 
-  // Runtime state — not intended for serialization.
   float timer = 0.0f;
   float currentInterval = -1.0f;  // recomputed after each spawn; -1 triggers first computation
   int spawnCount = 0;

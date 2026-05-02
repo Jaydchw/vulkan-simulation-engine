@@ -40,8 +40,6 @@ void RenderDevice::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
   VmaAllocationCreateInfo allocInfo{};
   allocInfo.requiredFlags = properties;
   if (mappedData) {
-    // Persistent host-visible mapping: VMA keeps the pointer alive for the
-    // lifetime of the allocation (replaces the old vkMapMemory pattern).
     allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
   }
 

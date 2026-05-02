@@ -4,20 +4,9 @@
 
 #include "Entity.h"
 
-// Dense, cache-coherent component storage backed by two parallel vectors:
-//   ents  – flat array of owning Entity IDs  (contiguous in memory)
-//   comps – flat array of component values   (contiguous in memory)
-//
-// A hash map provides O(1) index lookup so getComponent() stays fast.
-// Deletion uses swap-remove to keep the arrays dense at all times.
-//
-// Range-for iteration yields (entity, component) pairs via lightweight
-// proxy structs.  Const iteration requires `const auto& [e, c]` or
-// `auto&&`; mutable iteration requires `auto&&`.
 template <typename T>
 class ComponentStore {
  public:
-  // ── Proxy types returned by iterators ──────────────────────────────────────
   struct ConstEntry {
     Entity     entity;
     const T&   component;
@@ -27,7 +16,6 @@ class ComponentStore {
     T&      component;
   };
 
-  // ── Iterators ───────────────────────────────────────────────────────────────
   struct const_iterator {
     const ComponentStore* store;
     size_t i;
@@ -48,7 +36,6 @@ class ComponentStore {
   iterator       begin()       { return {this, 0}; }
   iterator       end()         { return {this, comps.size()}; }
 
-  // ── Mutation ────────────────────────────────────────────────────────────────
   void insert(Entity entity, T component) {
     auto [it, inserted] =
         idx.emplace(entity, static_cast<uint32_t>(comps.size()));
@@ -60,8 +47,6 @@ class ComponentStore {
     }
   }
 
-  // Swap-remove: moves the last element into the deleted slot so the
-  // arrays remain dense and no holes are left.
   void erase(Entity entity) {
     auto it = idx.find(entity);
     if (it == idx.end()) return;
@@ -77,7 +62,6 @@ class ComponentStore {
     idx.erase(it);
   }
 
-  // ── Lookup ──────────────────────────────────────────────────────────────────
   T*       get(Entity entity)       {
     auto it = idx.find(entity);
     return it != idx.end() ? &comps[it->second] : nullptr;
@@ -92,7 +76,6 @@ class ComponentStore {
   bool   empty()            const { return comps.empty(); }
   void   reserve(size_t n)        { comps.reserve(n); ents.reserve(n); }
 
-  // ── Direct dense-array access (e.g. for TimelineSystem) ────────────────────
   const std::vector<Entity>& entityList()    const { return ents; }
   const std::vector<T>&      componentList() const { return comps; }
   std::vector<T>&            componentListMut()    { return comps; }

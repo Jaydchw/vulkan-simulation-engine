@@ -192,8 +192,6 @@ class MainPipeline final {
         static_cast<uint32_t>(dynamicStates.size());
     dynamicState.pDynamicStates = dynamicStates.data();
 
-    // set=0: frame UBO+lights, set=1: material, set=2: shadow maps,
-    // set=3: per-instance SSBO (replaces push constants for the main pass)
     std::array<VkDescriptorSetLayout, 4> layouts = {
         descriptorSetLayout, materialDescriptorSetLayout,
         shadowDescriptorSetLayout, instanceDescriptorSetLayout};

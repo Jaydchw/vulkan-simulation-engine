@@ -366,7 +366,6 @@ NetworkManager* networkManager) {
         prevTotalSent = prevTotalRecv = 0;
       }
 
-      // Build display strings
       char fpsText[48];
       snprintf(fpsText, sizeof(fpsText), "%.0f FPS  |  %.1f ms", fps, 1000.0f / fps);
 
@@ -382,7 +381,6 @@ NetworkManager* networkManager) {
         if (lat  > 0.0f) snprintf(latStr,  sizeof(latStr),  "  +%.0fms",     lat);
       }
 
-      // Measure total width for right-alignment
       float totalWidth = ImGui::CalcTextSize(fpsText).x;
       if (showNet) {
         totalWidth += ImGui::CalcTextSize(txStr).x
@@ -395,13 +393,10 @@ NetworkManager* networkManager) {
       ImGui::SetCursorPosX(ImGui::GetWindowWidth() - totalWidth - 20.0f);
 
       if (showNet) {
-        // TX — green
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.5f, 1.0f), "%s", txStr);
         ImGui::SameLine(0, 0);
-        // RX — cyan-blue
         ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", rxStr);
         ImGui::SameLine(0, 0);
-        // Loss — yellow → red
         if (lossStr[0]) {
           const ImVec4 lossCol = loss >= 50.0f ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f)
                                : loss >= 20.0f ? ImVec4(1.0f, 0.7f, 0.2f, 1.0f)
@@ -409,17 +404,14 @@ NetworkManager* networkManager) {
           ImGui::TextColored(lossCol, "%s", lossStr);
           ImGui::SameLine(0, 0);
         }
-        // Latency — orange
         if (latStr[0]) {
           ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "%s", latStr);
           ImGui::SameLine(0, 0);
         }
-        // Separator
         ImGui::TextDisabled("  |  ");
         ImGui::SameLine(0, 0);
       }
 
-      // FPS — green / yellow / red
       if (fps >= 60.0f)
         ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%s", fpsText);
       else if (fps >= 30.0f)
@@ -1822,7 +1814,6 @@ void Interface::renderWorldsMenu() {
   const float s = currentScale;
   static char searchBuf[128] = {};
 
-  // --- Reload button — always visible, disabled when no world is loaded ---
   {
     bool hasWorld = !lastLoadedWorld.empty();
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.22f, 0.36f, 0.22f, 1.0f));
@@ -1883,7 +1874,6 @@ void Interface::renderWorldsMenu() {
     return lower.find(filter) != std::string::npos;
   };
 
-  // Render a row inside a 3-column table: selectable name | obj count | light count
   auto renderTableRow = [&](const std::string& path) {
     std::string stem = std::filesystem::path(path).stem().string();
     bool isCurrent   = (path == lastLoadedWorld);
@@ -1986,7 +1976,6 @@ void Interface::renderWorldsMenu() {
     }
   }
 
-  // FlatBuffer Scenes
   if (!fbSceneFiles.empty()) {
     ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.25f, 0.28f, 0.38f, 0.60f));
     ImGui::Separator();
@@ -2030,9 +2019,6 @@ void Interface::renderWorldsMenu() {
   ImGui::PopStyleColor();
 }
 
-// ---------------------------------------------------------------------------
-// Network menu
-// ---------------------------------------------------------------------------
 
 void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState) {
   if (!nm) {
@@ -2059,7 +2045,6 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
   const uint8_t pid        = nm->getLocalPeerID();
   const uint8_t safeId     = (pid < 5) ? pid : 0;
 
-  // ---- Status ----
   sectionHeader("Status");
   {
     if (!netRunning) {
@@ -2092,7 +2077,6 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
                         "Used to assign deterministic Peer IDs across all instances.");
   }
 
-  // ---- Ownership ----
   sectionHeader("Ownership");
   {
     const int owned = nm->getLocalOwnedCount();
@@ -2113,10 +2097,8 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
     }
   }
 
-  // ---- Actions ----
   sectionHeader("Actions");
   {
-    // ── Networking on/off toggle ──────────────────────────────────────────
     if (netRunning) {
       ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.50f, 0.15f, 0.15f, 1.0f));
       ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.62f, 0.20f, 0.20f, 1.0f));
@@ -2166,7 +2148,6 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
     ImGui::EndDisabled();
   }
 
-  // ---- Peers ----
   sectionHeader("Peers");
   {
     auto peerList = nm->getPeerSnapshot();
@@ -2204,7 +2185,6 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
     }
   }
 
-  // ---- Visualisation ----
   sectionHeader("Visualisation");
   ImGui::Checkbox("Colour objects by owner", &nm->colorByOwner);
   if (ImGui::IsItemHovered())
@@ -2236,7 +2216,6 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
     ImGui::Spacing();
   }
 
-  // ---- Send Rate ----
   sectionHeader("Send Rate");
   {
     ImGui::SetNextItemWidth(180.0f * s);
@@ -2245,7 +2224,6 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
     ImGui::TextDisabled("physics tick rate");
   }
 
-  // ---- Network Conditions ----
   sectionHeader("Conditions");
   {
     fieldLabel("Packet Loss");
@@ -2273,7 +2251,6 @@ void Interface::renderNetworkMenu(NetworkManager* nm, SimulationState& simState)
     ImGui::Spacing();
   }
 
-  // ---- Stats ----
   sectionHeader("Stats");
   {
     auto peerList = nm->getPeerSnapshot();

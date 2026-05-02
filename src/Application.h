@@ -52,12 +52,8 @@ struct UniformBufferObject {
   alignas(4) float time;
 };
 
-// Maximum number of renderable entities per frame.  The instance SSBO is
-// pre-allocated to this size so no per-frame reallocation is needed.
 constexpr uint32_t MAX_INSTANCES = 65536;
 
-// Per-instance data written to the SSBO each frame and read by the vertex
-// shader via gl_InstanceIndex.  Layout must match the GLSL struct exactly.
 struct InstanceData {
   alignas(16) glm::mat4 model;
   alignas(4) uint32_t layerMask;
@@ -66,9 +62,6 @@ struct InstanceData {
   alignas(4) float _pad;
 };
 
-// Per-entity snapshot captured from the registry under simMutex each frame.
-// recordCommandBuffer reads exclusively from this flat array so the mutex
-// does not need to be held during the (expensive) shadow + main render passes.
 struct RenderProxy {
   Entity entity = INVALID_ENTITY;
   glm::mat4 modelMatrix = glm::mat4(1.0f);
@@ -78,7 +71,7 @@ struct RenderProxy {
   RenderMaterialID matID = INVALID_RENDER_MATERIAL_ID;
   bool visible = false;
   uint32_t layerMask = 0xFFFFFFFF;
-  bool isPointLight = false;  // non-Sun light (for gizmo overlay)
+  bool isPointLight = false;
 };
 
 struct PipelineConfigInfo {
@@ -172,9 +165,6 @@ class Application final {
   std::unique_ptr<TimelineSystem> timelineSystem;
   std::unique_ptr<NetworkManager> networkManager;
 
-  // --- Owner-colour material system ---
-  // Created once; IDs indexed [0]=peer1(red) [1]=peer2(green) [2]=peer3(blue)
-  // [3]=peer4(yellow)
   std::array<RenderMaterialID, 4> ownerRenderMaterialIDs = {
       INVALID_RENDER_MATERIAL_ID, INVALID_RENDER_MATERIAL_ID,
       INVALID_RENDER_MATERIAL_ID, INVALID_RENDER_MATERIAL_ID};
@@ -198,15 +188,12 @@ class Application final {
   VkDescriptorSetLayout materialDescriptorSetLayout = VK_NULL_HANDLE;
   VkDescriptorSetLayout instanceDescriptorSetLayout = VK_NULL_HANDLE;
 
-  // Per-frame instance SSBO: holds InstanceData for all batched draw calls
   std::vector<VkBuffer> instanceSSBOBuffers;
   std::vector<VmaAllocation> instanceSSBOAlloc;
   std::vector<void*> instanceSSBOMapped;
   std::vector<VkDescriptorSet> instanceDescriptorSets;
   VkDescriptorPool instanceDescriptorPool = VK_NULL_HANDLE;
 
-  // Combined view-projection matrix stored after Y-flip; used for frustum
-  // culling
   glm::mat4 currentViewProj = glm::mat4(1.0f);
   VkBuffer vertexBuffer = VK_NULL_HANDLE;
   VmaAllocation vertexBufferAlloc = VK_NULL_HANDLE;
@@ -243,27 +230,20 @@ class Application final {
   bool lastBroadcastColorByOwner = false;
 
   float networkSendAccumulator = 0.0f;
-  bool ownershipHighLossMode =
-      false;  // hysteresis flag for packet-loss isolation
+  bool ownershipHighLossMode = false;
 
   MeshID gizmoMeshID = INVALID_MESH_ID;
   RenderMaterialID gizmoRenderMaterialID = INVALID_RENDER_MATERIAL_ID;
 
   std::unique_ptr<DebugRenderer> debugRenderer;
 
-  // Shadow area is recomputed every N frames; Y is never adjusted (no vertical
-  // drift).
   static constexpr int SHADOW_UPDATE_INTERVAL = 200;
   int shadowUpdateFrameCounter = 0;
   float cachedShadowSceneRadius = 100.0f;
   glm::vec3 cachedShadowSceneCenter = glm::vec3(0.0f);
 
-  // ── Simulation thread (pinned to Core 4+) ────────────────────────────────
-  // Runs physicsSystem::update() independently of the render loop so that
-  // simulation Hz and render Hz can be set to different values via ImGui.
   std::thread simulationThread;
   std::atomic<bool> simRunning{false};
-  // Guards shared registry/simState access between the simulation thread
   // (writes physics state) and the render thread (reads for draw calls).
   std::mutex simMutex;
 

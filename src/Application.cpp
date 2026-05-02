@@ -2250,13 +2250,6 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
   setupViewportScissor(commandBuffer, static_cast<float>(swapChainExtent.width),
                        static_cast<float>(swapChainExtent.height));
 
-  // -----------------------------------------------------------------------
-  // Instanced batching + frustum culling
-  // -----------------------------------------------------------------------
-  // Group entities by (materialID, meshID).  After culling, each group is
-  // drawn with a single vkCmdDrawIndexed(instanceCount > 1) reading per-
-  // instance data from a pre-uploaded SSBO at descriptor set=3.
-  // -----------------------------------------------------------------------
 
   struct BatchKey {
     RenderMaterialID matID;
@@ -2305,7 +2298,6 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     batchMap[{proxy.matID, proxy.meshID}].push_back(inst);
   }
 
-  // Append gizmo instances (point-light sphere overlays)
   if (interface && gizmoMeshID != INVALID_MESH_ID) {
     const Mesh* gizmoMesh = meshManager->getMesh(gizmoMeshID);
     const RenderMaterial* gizmoMat =
@@ -2313,8 +2305,6 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     if (gizmoMesh && gizmoMesh->getVertexBuffer() != VK_NULL_HANDLE &&
         gizmoMat && gizmoMat->getDescriptorSet() != VK_NULL_HANDLE) {
       const bool showAll = interface->getShowLightGizmos();
-      // addGizmo uses proxy.position (captured in buildRenderProxies)
-      // so no registry access is needed here.
       auto addGizmo = [&](const RenderProxy& proxy, float highlight) {
         InstanceData inst{};
         inst.model = glm::translate(glm::mat4(1.0f), proxy.position);
@@ -2334,7 +2324,6 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
         Entity gizmoEntity = selEntity;
         if (gizmoEntity == INVALID_ENTITY) gizmoEntity = hovEntity;
         if (gizmoEntity != INVALID_ENTITY) {
-          // Find the proxy for the selected/hovered entity
           auto it = std::find_if(renderProxies.begin(), renderProxies.end(),
                                  [gizmoEntity](const RenderProxy& p) {
                                    return p.entity == gizmoEntity;
@@ -2346,7 +2335,6 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     }
   }
 
-  // Flatten batches into a linear SSBO buffer and build the draw list
   struct DrawBatch {
     RenderMaterialID matID;
     MeshID meshID;
@@ -2366,20 +2354,17 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     allInstances.insert(allInstances.end(), insts.begin(), insts.end());
   }
 
-  // Sort by material to minimise vkCmdBindDescriptorSets calls
   std::sort(drawBatches.begin(), drawBatches.end(),
             [](const DrawBatch& a, const DrawBatch& b) {
               return a.matID != b.matID ? a.matID < b.matID
                                        : a.meshID < b.meshID;
             });
 
-  // Upload all instance transforms to the per-frame SSBO
   if (!allInstances.empty()) {
     memcpy(instanceSSBOMapped[currentFrame], allInstances.data(),
            sizeof(InstanceData) * allInstances.size());
   }
 
-  // Bind sets that don't change within this pass (set=0, set=2, set=3)
   const VkPipelineLayout mainLayout = mainPipeline->getPipelineLayout();
   vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           mainLayout, 0, 1, &descriptorSets[currentFrame], 0,
@@ -2393,7 +2378,6 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
                           mainLayout, 3, 1,
                           &instanceDescriptorSets[currentFrame], 0, nullptr);
 
-  // Issue one draw call per (material, mesh) batch
   RenderMaterialID lastMat = INVALID_RENDER_MATERIAL_ID;
   MeshID lastMesh = INVALID_MESH_ID;
   for (const DrawBatch& batch : drawBatches) {
@@ -2461,20 +2445,16 @@ void Application::recordCommandBuffer(VkCommandBuffer commandBuffer,
     throw std::runtime_error("Failed to record command buffer!");
 }
 
-// ============================================================================
-// Owner-colour material system
-// ============================================================================
 
 void Application::initOwnerMaterials() {
   if (!materialManager) return;
-  if (ownerRenderMaterialIDs[0] != INVALID_RENDER_MATERIAL_ID) return; // already created
+  if (ownerRenderMaterialIDs[0] != INVALID_RENDER_MATERIAL_ID) return;
 
-  // Peer colours: Red, Green, Blue, Yellow
   static const glm::vec3 colors[4] = {
-      {0.85f, 0.20f, 0.20f}, // Peer 1 – Red
-      {0.20f, 0.80f, 0.25f}, // Peer 2 – Green
-      {0.20f, 0.35f, 0.90f}, // Peer 3 – Blue
-      {0.90f, 0.85f, 0.15f}, // Peer 4 – Yellow
+      {0.85f, 0.20f, 0.20f},
+      {0.20f, 0.80f, 0.25f},
+      {0.20f, 0.35f, 0.90f},
+      {0.90f, 0.85f, 0.15f},
   };
   static const char* names[4] = {
       "_net_owner_peer1", "_net_owner_peer2",

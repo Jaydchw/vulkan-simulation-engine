@@ -90,7 +90,6 @@ class TextureManager final {
   VkCommandBuffer beginSingleTimeCommands() const;
   void endSingleTimeCommands(VkCommandBuffer commandBuffer) const;
 
-  // Creates a host-visible staging buffer via VMA and returns the mapped pointer.
   VkBuffer createStagingBuffer(VkDeviceSize size, VmaAllocation& stagingAlloc,
                                void** mappedData) const;
 };

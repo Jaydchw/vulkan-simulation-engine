@@ -9,16 +9,12 @@
 static constexpr float kTau = 6.28318530f;
 static constexpr float kPi  = 3.14159265f;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// init / cleanup
-// ─────────────────────────────────────────────────────────────────────────────
 
 void DebugRenderer::init(VkDevice dev, RenderDevice* rd,
                          VkFormat colorFormat, int framesInFlight) {
   device       = dev;
   renderDevice = rd;
 
-  // ── Per-frame host-visible vertex buffers ───────────────────────────────
   vertexBuffers.resize(framesInFlight, VK_NULL_HANDLE);
   vertexAllocs .resize(framesInFlight, VK_NULL_HANDLE);
   mappedPtrs   .resize(framesInFlight, nullptr);
@@ -35,7 +31,6 @@ void DebugRenderer::init(VkDevice dev, RenderDevice* rd,
     mappedPtrs[i] = static_cast<Vertex*>(mapped);
   }
 
-  // ── Pipeline layout: one push constant (mat4 viewProj = 64 bytes) ───────
   VkPushConstantRange pushRange{};
   pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
   pushRange.offset     = 0;
@@ -48,7 +43,6 @@ void DebugRenderer::init(VkDevice dev, RenderDevice* rd,
   if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
     throw std::runtime_error("DebugRenderer: failed to create pipeline layout");
 
-  // ── Shaders ──────────────────────────────────────────────────────────────
   std::vector<char> vertCode, fragCode;
   RenderUtils::readFile("shaders/debug_vert.spv", vertCode);
   RenderUtils::readFile("shaders/debug_frag.spv", fragCode);
@@ -65,7 +59,6 @@ void DebugRenderer::init(VkDevice dev, RenderDevice* rd,
   stages[1].module = fragMod;
   stages[1].pName  = "main";
 
-  // ── Vertex input ─────────────────────────────────────────────────────────
   VkVertexInputBindingDescription binding{};
   binding.binding   = 0;
   binding.stride    = sizeof(Vertex);
@@ -86,18 +79,15 @@ void DebugRenderer::init(VkDevice dev, RenderDevice* rd,
   vertexInput.vertexAttributeDescriptionCount = 2;
   vertexInput.pVertexAttributeDescriptions    = attrs;
 
-  // ── Input assembly: line list ─────────────────────────────────────────────
   VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
   inputAssembly.sType    = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
 
-  // ── Viewport (dynamic) ───────────────────────────────────────────────────
   VkPipelineViewportStateCreateInfo viewportState{};
   viewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
   viewportState.viewportCount = 1;
   viewportState.scissorCount  = 1;
 
-  // ── Rasterizer ───────────────────────────────────────────────────────────
   VkPipelineRasterizationStateCreateInfo rasterizer{};
   rasterizer.sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
@@ -105,19 +95,16 @@ void DebugRenderer::init(VkDevice dev, RenderDevice* rd,
   rasterizer.cullMode    = VK_CULL_MODE_NONE;
   rasterizer.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
-  // ── Multisampling ────────────────────────────────────────────────────────
   VkPipelineMultisampleStateCreateInfo multisampling{};
   multisampling.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
   multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-  // ── Depth stencil: test yes, write no (overlay on scene geometry) ────────
   VkPipelineDepthStencilStateCreateInfo depthStencil{};
   depthStencil.sType            = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
   depthStencil.depthTestEnable  = VK_TRUE;
   depthStencil.depthWriteEnable = VK_FALSE;
   depthStencil.depthCompareOp   = VK_COMPARE_OP_LESS_OR_EQUAL;
 
-  // ── Color blend: alpha blend ─────────────────────────────────────────────
   VkPipelineColorBlendAttachmentState blendAttach{};
   blendAttach.colorWriteMask      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                                     VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -134,7 +121,6 @@ void DebugRenderer::init(VkDevice dev, RenderDevice* rd,
   colorBlending.attachmentCount = 1;
   colorBlending.pAttachments    = &blendAttach;
 
-  // ── Dynamic states ───────────────────────────────────────────────────────
   std::array<VkDynamicState, 2> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT,
                                                   VK_DYNAMIC_STATE_SCISSOR};
   VkPipelineDynamicStateCreateInfo dynamicState{};
@@ -142,16 +128,12 @@ void DebugRenderer::init(VkDevice dev, RenderDevice* rd,
   dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
   dynamicState.pDynamicStates    = dynamicStates.data();
 
-  // ── Dynamic rendering attachment info ────────────────────────────────────
-  // Must match PostProcessing's offscreen pass (swapchainFormat color,
-  // VK_FORMAT_D32_SFLOAT depth — hardcoded in PostProcessing.cpp).
   VkPipelineRenderingCreateInfo renderingCI{};
   renderingCI.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
   renderingCI.colorAttachmentCount    = 1;
   renderingCI.pColorAttachmentFormats = &colorFormat;
   renderingCI.depthAttachmentFormat   = VK_FORMAT_D32_SFLOAT;
 
-  // ── Assemble pipeline ─────────────────────────────────────────────────────
   VkGraphicsPipelineCreateInfo pipelineInfo{};
   pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipelineInfo.pNext               = &renderingCI;
@@ -166,7 +148,7 @@ void DebugRenderer::init(VkDevice dev, RenderDevice* rd,
   pipelineInfo.pColorBlendState    = &colorBlending;
   pipelineInfo.pDynamicState       = &dynamicState;
   pipelineInfo.layout              = pipelineLayout;
-  pipelineInfo.renderPass          = VK_NULL_HANDLE;  // dynamic rendering
+  pipelineInfo.renderPass          = VK_NULL_HANDLE;
 
   if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo,
                                 nullptr, &pipeline) != VK_SUCCESS)
@@ -186,9 +168,6 @@ void DebugRenderer::cleanup() {
       renderDevice->destroyBuffer(vertexBuffers[i], vertexAllocs[i]);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Geometry builders
-// ─────────────────────────────────────────────────────────────────────────────
 
 void DebugRenderer::begin(uint32_t frameIndex) {
   currentFrame              = frameIndex;
@@ -207,7 +186,6 @@ void DebugRenderer::addWireSphere(const glm::vec3& center, float radius,
                                    const glm::quat& orientation,
                                    const glm::vec4& color, int segs) {
   const glm::mat3 rot(orientation);
-  // Three great-circle rings: XZ (equator), XY (front), YZ (side)
   for (int plane = 0; plane < 3; ++plane) {
     glm::vec3 prev{};
     bool first = true;
@@ -256,7 +234,6 @@ void DebugRenderer::addWireCapsule(const glm::vec3& center, float radius,
   const glm::vec3 top = center + up * halfHeight;
   const glm::vec3 bot = center - up * halfHeight;
 
-  // Top and bottom circles
   for (int cap = 0; cap < 2; ++cap) {
     const glm::vec3& cc = (cap == 0) ? top : bot;
     glm::vec3 prev{};
@@ -270,14 +247,12 @@ void DebugRenderer::addWireCapsule(const glm::vec3& center, float radius,
     }
   }
 
-  // 4 vertical connecting lines
   for (int i = 0; i < 4; ++i) {
     const float a      = static_cast<float>(i) / 4.f * kTau;
     const glm::vec3 off = rot * glm::vec3(std::cos(a) * radius, 0.f, std::sin(a) * radius);
     addLine(top + off, bot + off, color);
   }
 
-  // Hemisphere arcs at each cap (2 perpendicular arcs per cap)
   for (int cap = 0; cap < 2; ++cap) {
     const glm::vec3& cc  = (cap == 0) ? top : bot;
     const float sign     = (cap == 0) ? 1.f : -1.f;
@@ -309,7 +284,6 @@ void DebugRenderer::addWireCylinder(const glm::vec3& center, float radius,
   const glm::vec3 top = center + up * halfHeight;
   const glm::vec3 bot = center - up * halfHeight;
 
-  // Top and bottom flat circles
   for (int cap = 0; cap < 2; ++cap) {
     const glm::vec3& cc = (cap == 0) ? top : bot;
     glm::vec3 prev{};
@@ -323,7 +297,6 @@ void DebugRenderer::addWireCylinder(const glm::vec3& center, float radius,
     }
   }
 
-  // 4 vertical edges
   for (int i = 0; i < 4; ++i) {
     const float a      = static_cast<float>(i) / 4.f * kTau;
     const glm::vec3 off = rot * glm::vec3(std::cos(a) * radius, 0.f, std::sin(a) * radius);
@@ -338,7 +311,6 @@ void DebugRenderer::addArrow(const glm::vec3& from, const glm::vec3& to,
   const float len = glm::length(dir);
   if (len < 0.0001f) return;
   const glm::vec3 n = dir / len;
-  // Build a perpendicular vector for the arrowhead fins
   glm::vec3 perp = (std::abs(n.x) < 0.9f) ? glm::vec3(1.f, 0.f, 0.f)
                                             : glm::vec3(0.f, 1.f, 0.f);
   perp = glm::normalize(glm::cross(n, perp));
@@ -348,16 +320,12 @@ void DebugRenderer::addArrow(const glm::vec3& from, const glm::vec3& to,
   addLine(to, head - perp * headSize, color);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Render
-// ─────────────────────────────────────────────────────────────────────────────
 
 void DebugRenderer::render(VkCommandBuffer cmd, const glm::mat4& viewProj,
                             uint32_t frameIndex, VkExtent2D extent) {
   const uint32_t count = vertexCounts[frameIndex];
   if (count == 0 || pipeline == VK_NULL_HANDLE) return;
 
-  // Re-set viewport/scissor to match the offscreen pass dimensions
   VkViewport vp{0.f, 0.f,
                 static_cast<float>(extent.width),
                 static_cast<float>(extent.height),

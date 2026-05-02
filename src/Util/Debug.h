@@ -75,8 +75,10 @@ class Debug final {
     ensureInitialized();
     runtimeEnabled.store(enabled, std::memory_order_relaxed);
     if (enabled) {
+      shuttingDown.store(false, std::memory_order_relaxed);
       startWorker();
     } else {
+      shuttingDown.store(true, std::memory_order_relaxed);
       stopWorker();
     }
   }
@@ -276,15 +278,12 @@ class Debug final {
   }
 
   static void stopWorker() {
-    std::thread joinThread;
-    {
-      std::lock_guard<std::mutex> lock(workerMutex);
-      if (!workerRunning.load(std::memory_order_relaxed)) return;
-      stopRequested.store(true, std::memory_order_relaxed);
-      queueCv.notify_all();
-      joinThread = std::move(worker);
-      workerRunning.store(false, std::memory_order_relaxed);
-    }
+    std::lock_guard<std::mutex> lock(workerMutex);
+    if (!workerRunning.load(std::memory_order_relaxed)) return;
+    stopRequested.store(true, std::memory_order_relaxed);
+    queueCv.notify_all();
+    std::thread joinThread = std::move(worker);
+    workerRunning.store(false, std::memory_order_relaxed);
     if (joinThread.joinable()) {
       joinThread.join();
     }
@@ -320,7 +319,9 @@ class Debug final {
   static void write(Category category, Verbosity requiredVerbosity,
                     const char* suffix, Args&&... args) {
     ensureInitialized();
+    if (shuttingDown.load(std::memory_order_relaxed)) return;
     if (!runtimeEnabled.load(std::memory_order_relaxed)) return;
+    if (stopRequested.load(std::memory_order_relaxed)) return;
     if (!flags[static_cast<size_t>(category)].load(std::memory_order_relaxed)) return;
     if (static_cast<int>(requiredVerbosity) >
         currentVerbosity.load(std::memory_order_relaxed)) return;
@@ -346,6 +347,7 @@ class Debug final {
   static inline std::array<std::atomic_bool, CATEGORY_COUNT> flags{};
   static inline std::atomic_int currentVerbosity{static_cast<int>(Verbosity::LOW)};
   static inline std::atomic_bool runtimeEnabled{false};
+  static inline std::atomic_bool shuttingDown{false};
   static inline std::atomic_bool stopRequested{false};
   static inline std::atomic_bool workerRunning{false};
 
@@ -357,7 +359,11 @@ class Debug final {
   static inline std::atomic_uint64_t droppedCount{0};
 
   struct ShutdownGuard {
-    ~ShutdownGuard() { Debug::stopWorker(); }
+    ~ShutdownGuard() {
+      Debug::runtimeEnabled.store(false, std::memory_order_relaxed);
+      Debug::shuttingDown.store(true, std::memory_order_relaxed);
+      Debug::stopWorker();
+    }
   };
   static inline ShutdownGuard shutdownGuard;
 };

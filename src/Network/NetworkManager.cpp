@@ -107,7 +107,6 @@ void NetworkManager::setNetworkEnabled(bool enabled) {
   if (!enabled) {
     shutdown();
   } else {
-    // Clear all stale per-session state so we start fresh
     {
       std::lock_guard<std::mutex> lk(peersMutex);
       peers.clear();
@@ -131,14 +130,14 @@ void NetworkManager::setNetworkEnabled(bool enabled) {
       std::lock_guard<std::mutex> lk(deferredMutex);
       deferredSends.clear();
     }
-    init(registry);  // registry is still valid from before shutdown
+    init(registry);
   }
 }
 
 void NetworkManager::tickReceive() {
   if (!running) return;
-  applyRemoteProperties();  // slow channel — usually a no-op, cheap when empty
-  applyRemoteStates();      // fast channel — applied every frame
+  applyRemoteProperties();
+  applyRemoteStates();
 }
 
 void NetworkManager::tickSend() {
@@ -154,9 +153,6 @@ void NetworkManager::assignObjectOwnership() {
     dynamicEntities.push_back(e);
   std::sort(dynamicEntities.begin(), dynamicEntities.end());
 
-  // Build the list of active peer IDs: only connected peers + self.
-  // If simulated packet loss is at or above the isolation threshold, this
-  // instance runs in solo mode and claims all objects locally.
   std::vector<uint8_t> activePeerIds;
   {
     std::lock_guard<std::mutex> lk(peersMutex);
@@ -494,8 +490,6 @@ void NetworkManager::acceptTCPConnections() {
   inet_ntop(AF_INET, &clientAddr.sin_addr, ipBuf, sizeof(ipBuf));
   std::string clientIP(ipBuf);
 
-  // Send our handshake first (socket is still blocking — small packet completes
-  // immediately)
   sendHandshake(clientSock);
 
   u_long nb = 1;
@@ -503,14 +497,11 @@ void NetworkManager::acceptTCPConnections() {
 
   Debug::log(Debug::Category::NETWORK_DISCOVERY, "Incoming TCP from ", clientIP);
 
-  // Don't match by IP — multiple instances share the same IP on one machine.
-  // Identity is resolved when we receive their HANDSHAKE packet.
   std::lock_guard<std::mutex> lk(peersMutex);
   PeerInfo np{};
   np.ip = clientIP;
   np.socket = clientSock;
   np.connected = true;
-  // instanceId=0 until handleHandshake fills it in
   peers.push_back(np);
 }
 
@@ -533,8 +524,6 @@ void NetworkManager::connectToPeer(const std::string& ip, uint16_t port) {
     return;
   }
 
-  // Send our handshake while socket is still blocking — small packet, completes
-  // immediately
   sendHandshake(s);
 
   u_long nb = 1;
@@ -556,7 +545,6 @@ void NetworkManager::connectToPeer(const std::string& ip, uint16_t port) {
 }
 
 void NetworkManager::receiveFromPeer(PeerInfo& peer) {
-  // Persistent buffer reused across calls to avoid per-call heap allocation.
   static thread_local uint8_t tmp[65536];
   int r = recv(peer.socket, reinterpret_cast<char*>(tmp), sizeof(tmp), 0);
   if (r == 0 || (r == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK)) {
@@ -573,13 +561,11 @@ void NetworkManager::receiveFromPeer(PeerInfo& peer) {
     peer.recvBuf.insert(peer.recvBuf.end(), tmp, tmp + r);
   }
 
-  // Process every complete packet in the buffer
   while (peer.recvBuf.size() >= sizeof(TCPHeader)) {
     TCPHeader hdr{};
     std::memcpy(&hdr, peer.recvBuf.data(), sizeof(hdr));
 
     if (hdr.payloadSize > 4 * 1024 * 1024) {
-      // Protocol error — disconnect rather than letting garbage accumulate
       closesocket(peer.socket);
       peer.socket = INVALID_SOCKET;
       peer.connected = false;
@@ -591,7 +577,7 @@ void NetworkManager::receiveFromPeer(PeerInfo& peer) {
     }
 
     size_t needed = sizeof(TCPHeader) + hdr.payloadSize;
-    if (peer.recvBuf.size() < needed) break;  // wait for the rest
+    if (peer.recvBuf.size() < needed) break;
 
     std::vector<uint8_t> payload(peer.recvBuf.begin() + sizeof(TCPHeader),
                                  peer.recvBuf.begin() + needed);
@@ -600,7 +586,7 @@ void NetworkManager::receiveFromPeer(PeerInfo& peer) {
     switch (static_cast<PacketType>(hdr.type)) {
       case PacketType::HANDSHAKE:
         handleHandshake(peer, payload);
-        if (!peer.connected) return;  // duplicate was dropped
+        if (!peer.connected) return;
         break;
       case PacketType::OBJECT_STATES:
         handleObjectStatesBatch(payload);
@@ -648,14 +634,10 @@ void NetworkManager::sendHandshake(SOCKET s) {
 
 void NetworkManager::handleHandshake(PeerInfo& peer,
                                      const std::vector<uint8_t>& payload) {
-  // peersMutex is already held by the caller (networkThreadFunc)
   if (payload.size() < sizeof(HandshakePayload)) return;
   HandshakePayload hs{};
   std::memcpy(&hs, payload.data(), sizeof(hs));
 
-  // Check if we already have a live connection to this instance via the
-  // outbound socket. If so, this is the duplicate incoming connection — drop
-  // it.
   for (auto& p : peers) {
     if (&p == &peer) continue;
     if (p.instanceId == hs.instanceId && p.connected &&
@@ -670,12 +652,9 @@ void NetworkManager::handleHandshake(PeerInfo& peer,
     }
   }
 
-  // Identify this peer
   peer.instanceId = hs.instanceId;
   peer.tcpPort = hs.tcpPort;
 
-  // Add to known instances if not already there (can happen if TCP arrives
-  // before the UDP hello is processed)
   if (!isKnownInstance(hs.instanceId)) {
     allKnownInstances.push_back({hs.instanceId, peer.ip, hs.tcpPort});
     std::sort(allKnownInstances.begin(), allKnownInstances.end(),
@@ -685,7 +664,6 @@ void NetworkManager::handleHandshake(PeerInfo& peer,
     recomputePeerIDs();
   }
 
-  // Ensure this peer has its ID assigned
   for (size_t i = 0; i < allKnownInstances.size(); ++i) {
     if (allKnownInstances[i].instanceId == hs.instanceId) {
       peer.id = static_cast<uint8_t>(i + 1);
@@ -891,7 +869,6 @@ void NetworkManager::applyRemoteProperties() {
 void NetworkManager::sendOwnedObjectStates() {
   if (!registry) return;
 
-  // Early-out: skip all work when no peers are connected (solo mode).
   {
     std::lock_guard<std::mutex> lk(peersMutex);
     bool anyConnected = false;
@@ -900,8 +877,6 @@ void NetworkManager::sendOwnedObjectStates() {
     if (!anyConnected) return;
   }
 
-  // Snapshot remotely-owned entities once under a single lock instead of
-  // calling isLocallyOwned() per entity (n mutex lock/unlock cycles per frame).
   std::unordered_set<Entity> remoteOwned;
   {
     std::lock_guard<std::mutex> lk(ownershipMutex);
@@ -954,7 +929,6 @@ void NetworkManager::sendOwnedObjectStates() {
   std::memcpy(buf.data() + off, entries.data(),
               entries.size() * sizeof(ObjectFastStateEntry));
 
-  // Bandwidth budget reset (1-second window)
   auto now = std::chrono::steady_clock::now();
   if (std::chrono::duration<float>(now - bwWindowStart).count() >= 1.0f) {
     bwBytesThisSecond = 0;
@@ -968,11 +942,9 @@ void NetworkManager::sendOwnedObjectStates() {
   for (auto& peer : peers) {
     if (!peer.connected || peer.socket == INVALID_SOCKET) continue;
 
-    // Per-peer packet loss simulation
     if (simPacketLossPercent > 0.0f && lossDist(rng) < simPacketLossPercent)
       continue;
 
-    // Bandwidth cap: drop if this send would exceed the budget
     if (simBandwidthLimitKBps > 0.0f) {
       uint64_t limitBytes =
           static_cast<uint64_t>(simBandwidthLimitKBps * 1024.0f);
@@ -1090,7 +1062,6 @@ void NetworkManager::sendOwnedObjectProperties() {
   std::memcpy(payload.data() + off, entries.data(),
               entries.size() * sizeof(ObjectPropertyEntry));
 
-  // Sent via the reliable control path — not subject to loss/BW simulation.
   broadcastTCP(PacketType::OBJECT_PROPERTIES, payload.data(), payloadSize);
 }
 

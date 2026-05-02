@@ -26,7 +26,6 @@
 
 class Registry;
 
-// Fast-channel data applied every tick.
 struct RemoteObjectState {
     uint32_t  entityId;
     glm::vec3 position;
@@ -34,7 +33,6 @@ struct RemoteObjectState {
     glm::vec3 velocity = {0.0f, 0.0f, 0.0f};
 };
 
-// Per-entity dead-reckoning state for smooth remote interpolation.
 struct RemoteInterpolationState {
     glm::vec3 position;
     glm::quat orientation;
@@ -43,16 +41,13 @@ struct RemoteInterpolationState {
     bool valid = false;
 };
 
-// Slow-channel data applied once per connect/scene-load.
-// Mirrors ObjectPropertyEntry but uses engine types.
-// colliderType uses the same values as the ColliderType enum (uint8_t).
 struct RemoteObjectProperties {
     uint32_t  entityId;
     float     mass        = 1.0f;
     float     restitution = 0.5f;
     float     damping     = 0.99f;
     bool      useGravity  = true;
-    uint8_t   colliderType = 0;   // 0=Sphere 1=AABB 2=Plane 3=Cylinder
+    uint8_t   colliderType = 0;
     float     radius      = 1.0f;
     float     height      = 1.0f;
     glm::vec3 halfExtents = {0.5f, 0.5f, 0.5f};
@@ -90,8 +85,6 @@ public:
 
     void init(Registry* registry);
     void shutdown();
-    // Gracefully stops or restarts all networking. When disabled, disconnects
-    // all sockets and stops discovery. When re-enabled, starts fresh.
     void setNetworkEnabled(bool enabled);
 
     void tickReceive();
@@ -101,17 +94,11 @@ public:
     bool isLocallyOwned(Entity e) const;
     uint8_t getOwnerPeerID(Entity e) const;
 
-    // Explicitly pin one entity to a specific peer without redistributing all others.
     void setEntityOwner(Entity e, uint8_t peerID);
 
-    // Returns the sorted list of currently active peer IDs (local + connected).
-    // Used by SpawnerSystem for SEQUENTIAL round-robin ownership assignment.
     std::vector<uint8_t> getActivePeerIDs() const;
 
     void sendLoadScene(const std::string& scenePath);
-    // Sends static physics properties (mass, collider, etc.) to all connected peers.
-    // Call after a new peer connects or after a scene reload.
-    // Uses broadcastTCP directly — not subject to loss/BW simulation (it's setup data).
     void sendOwnedObjectProperties();
     void sendSimState(bool isPaused, float timeSpeed,
                       int32_t historyIndex = -1, bool stepForward = false,
@@ -123,13 +110,9 @@ public:
     bool pollPendingSceneLoad(std::string& outPath);
     bool pollPendingSimState(PendingSimState& outState);
     bool pollNewPeerConnected();
-    // Returns true (once) when any peer drops. Triggers ownership reallocation.
     bool pollPeerDropped();
 
-    // Called by SpawnerSystem after creating a new entity locally.
-    // Reads entity components from the registry and broadcasts a SPAWN_ENTITY packet to all peers.
     void broadcastSpawnEntity(Entity e);
-    // Returns true if a remote peer spawned an entity; out is filled with the full description.
     bool pollPendingSpawnedEntity(SpawnEntityPacket& out);
 
     uint8_t     getLocalPeerID()        const { return localPeerID; }
@@ -147,7 +130,6 @@ public:
     bool  colorByOwner  = false;
     float networkSendHz = 120.0f;
 
-    // Network condition simulation (main-thread access only)
     float simPacketLossPercent  = 0.0f;   // 0-100: per-peer drop chance per send
     float simExtraLatencyMs     = 0.0f;   // 0-500: artificial delay before send
     float simBandwidthLimitKBps = 0.0f;   // 0 = unlimited, else max KB/s outbound
@@ -194,7 +176,6 @@ private:
     std::vector<std::string>     pendingSceneLoads;
     std::vector<PendingSimState> pendingSimStates;
 
-    // Network condition simulation internals
     std::mt19937 rng;
 
     struct DeferredSend {
@@ -205,7 +186,6 @@ private:
     std::deque<DeferredSend> deferredSends;
     std::mutex               deferredMutex;
 
-    // Bandwidth tracking (main-thread only)
     uint64_t bwBytesThisSecond = 0;
     std::chrono::steady_clock::time_point bwWindowStart;
 
@@ -234,8 +214,6 @@ private:
     void applyRemoteProperties();
     void sendOwnedObjectStates();
 
-    // Queues a packet for a single socket, applying latency/bandwidth simulation.
-    // Called from main thread; deferredSends flushed by network thread.
     void queueSimulatedSend(SOCKET sock, const std::vector<uint8_t>& data);
     void flushDeferredSends();
 

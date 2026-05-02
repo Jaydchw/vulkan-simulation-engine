@@ -19,7 +19,6 @@ layout(push_constant) uniform PushConstants {
 layout(location = 0) in vec2 fragTexCoord;
 layout(location = 0) out vec4 outColor;
 
-// --- UTILS ---
 
 vec3 rgb2hsv(vec3 c) {
     vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -137,11 +136,8 @@ void main() {
     vec2 texSize = vec2(textureSize(screenTexture, 0));
     float pixelSize = pc.pixelResolution;
 
-    // Snap UV to pixel grid
     vec2 pixelUV = floor(fragTexCoord * texSize / pixelSize) * pixelSize / texSize;
 
-    // Sample the center of each "big pixel" with a slight area average
-    // for smoother downscale (2x2 tap average within the pixel cell)
     vec2 halfPixel = (pixelSize * 0.25) / texSize;
     vec3 s0 = texture(screenTexture, pixelUV + vec2(-halfPixel.x, -halfPixel.y)).rgb;
     vec3 s1 = texture(screenTexture, pixelUV + vec2( halfPixel.x, -halfPixel.y)).rgb;
@@ -149,7 +145,6 @@ void main() {
     vec3 s3 = texture(screenTexture, pixelUV + vec2( halfPixel.x,  halfPixel.y)).rgb;
     vec3 color = (s0 + s1 + s2 + s3) * 0.25;
 
-    // Chromatic aberration (subtle, applied before pixelization look)
     float ca = pc.chromaticAberration;
     if (ca > 0.0) {
         vec2 caDir = pixelUV - vec2(0.5);

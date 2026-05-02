@@ -20,12 +20,12 @@ layout(push_constant) uniform PushConstants {
 layout(location = 0) in vec2 fragTexCoord;
 layout(location = 0) out vec4 outColor;
 
-// --- TOON SETTINGS ---
+// Toon settings
 const float EDGE_THRESHOLD = 0.2; // Lower = more sensitive edges
 const float COLOR_LEVELS = 5.0;   // Number of color bands
 const float EDGE_STRENGTH = 1.0;  // 1.0 = black edges
 
-// Standard Sobel Kernels for edge detection
+// Standard Sobel kernels for edge detection
 const mat3 sx = mat3( 
     1.0, 2.0, 1.0, 
     0.0, 0.0, 0.0, 
@@ -56,12 +56,11 @@ vec3 hsv2rgb(vec3 c) {
 void main() {
     vec2 texSize = textureSize(screenTexture, 0);
     
-    // 1. Edge Detection (Sobel)
+    // Edge detection (Sobel)
     mat3 I;
     for (int i=0; i<3; i++) {
         for (int j=0; j<3; j++) {
             vec3 sampleColor = texture(screenTexture, fragTexCoord + vec2(i-1, j-1) / texSize).rgb;
-            // Use luminance for edge detection
             I[i][j] = length(sampleColor); 
         }
     }
@@ -70,11 +69,8 @@ void main() {
     float gY = dot(sy[0], I[0]) + dot(sy[1], I[1]) + dot(sy[2], I[2]);
     float g = sqrt(gX*gX + gY*gY);
 
-    // 2. Color Quantization (Posterization)
+    // Color quantization (posterization)
     vec3 color = texture(screenTexture, fragTexCoord).rgb;
-    
-    // Optional: Keep your weather tint so it matches the world state
-    // (You can copy the getWeatherTint function from your original shader if desired)
     
     // Quantize only the Value (brightness) channel for better results
     vec3 hsv = rgb2hsv(color);
@@ -83,7 +79,7 @@ void main() {
     hsv.y = min(1.0, hsv.y * 1.2); 
     color = hsv2rgb(hsv);
 
-    // 3. Mix Edge
+    // Mix edge
     float edge = step(EDGE_THRESHOLD, g);
     vec3 finalColor = mix(color, vec3(0.0), edge * EDGE_STRENGTH);
 

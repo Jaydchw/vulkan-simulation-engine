@@ -12,18 +12,13 @@ class RenderDevice final {
   RenderDevice(const RenderDevice&) = delete;
   RenderDevice& operator=(const RenderDevice&) = delete;
 
-  // Creates a buffer and a sub-allocation from the VMA pool.
-  // Pass mappedData != nullptr to enable persistent host-mapped access
-  // (equivalent to the old vkMapMemory pattern).
   void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
                     VkMemoryPropertyFlags properties,
                     VkBuffer& buffer, VmaAllocation& allocation,
                     void** mappedData = nullptr) const;
 
-  // Destroys a buffer and releases its VMA allocation.
   void destroyBuffer(VkBuffer buffer, VmaAllocation allocation) const;
 
-  // Creates an image and a sub-allocation from the VMA pool.
   void createImage(uint32_t width, uint32_t height, uint32_t mipLevels,
                    VkFormat format, VkImageTiling tiling,
                    VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
@@ -32,7 +27,6 @@ class RenderDevice final {
                    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
                    VkImageCreateFlags flags = 0) const;
 
-  // Destroys an image and releases its VMA allocation.
   void destroyImage(VkImage image, VmaAllocation allocation) const;
 
   void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) const;

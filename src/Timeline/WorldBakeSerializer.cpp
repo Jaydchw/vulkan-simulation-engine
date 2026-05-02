@@ -6,16 +6,9 @@
 #include <fstream>
 #include <sstream>
 
-// ---- File format constants ----
 static constexpr char k_Magic[]    = "WORLDBAKE_V1";
 static constexpr char k_DataBegin[] = "DATA_BEGIN";
 
-// ---- Per-frame binary layout ----
-// [uint32_t entityCount]
-// for each entity:
-//   [uint32_t entity]
-//   [float pos.x] [float pos.y] [float pos.z]
-//   [float vel.x] [float vel.y] [float vel.z]
 
 std::string WorldBakeSerializer::bakePathFor(const std::string& worldPath) {
   std::filesystem::path p(worldPath);
@@ -34,7 +27,6 @@ bool WorldBakeSerializer::save(const std::string& worldPath,
   std::ofstream f(outPath, std::ios::binary | std::ios::trunc);
   if (!f.is_open()) return false;
 
-  // ---- Text header ----
   std::time_t now = std::time(nullptr);
   char timeBuf[64];
 #ifdef _WIN32
@@ -71,14 +63,12 @@ bool WorldBakeSerializer::save(const std::string& worldPath,
   std::string hdrStr = hdr.str();
   f.write(hdrStr.c_str(), static_cast<std::streamsize>(hdrStr.size()));
 
-  // ---- Time history ----
   uint32_t histCount = static_cast<uint32_t>(timeHistory.size());
   f.write(reinterpret_cast<const char*>(&histCount), sizeof(histCount));
   if (histCount > 0)
     f.write(reinterpret_cast<const char*>(timeHistory.data()),
             static_cast<std::streamsize>(histCount * sizeof(float)));
 
-  // ---- Per-frame binary data ----
   const auto& snaps = timeline.getSnapshots();
   uint32_t frameCount = static_cast<uint32_t>(snaps.size());
   f.write(reinterpret_cast<const char*>(&frameCount), sizeof(frameCount));
@@ -110,14 +100,12 @@ bool WorldBakeSerializer::load(const std::string& worldPath,
   std::ifstream f(inPath, std::ios::binary);
   if (!f.is_open()) return false;
 
-  // ---- Read text header up to DATA_BEGIN ----
   statsOut = BakeStats{};
   int collisionPairCount = 0;
   std::string line;
 
   // First line must be magic
   if (!std::getline(f, line)) return false;
-  // Strip trailing \r
   if (!line.empty() && line.back() == '\r') line.pop_back();
   if (line != k_Magic) return false;
 
@@ -144,12 +132,10 @@ bool WorldBakeSerializer::load(const std::string& worldPath,
     else if (key == "SimSpeedMultiplier")  statsOut.simSecondsPerWallSecond = std::stod(value);
     else if (key == "CollisionPairs") {
       collisionPairCount = std::stoi(value);
-      // Read each pair on the next lines
       for (int i = 0; i < collisionPairCount; i++) {
         std::string pLine;
         if (!std::getline(f, pLine)) break;
         if (!pLine.empty() && pLine.back() == '\r') pLine.pop_back();
-        // Trim leading spaces
         size_t start = pLine.find_first_not_of(" \t");
         if (start == std::string::npos) { i--; continue; }
         pLine = pLine.substr(start);
@@ -157,15 +143,12 @@ bool WorldBakeSerializer::load(const std::string& worldPath,
         std::string safeName;
         long long checks = 0, resolved = 0;
         ss >> safeName >> checks >> resolved;
-        // Restore spaces from underscores
         for (char& c : safeName) if (c == '_') c = ' ';
         statsOut.collisionPairs.push_back({safeName, checks, resolved});
       }
     }
   }
 
-  // After DATA_BEGIN, read binary
-  // Time history
   uint32_t histCount = 0;
   f.read(reinterpret_cast<char*>(&histCount), sizeof(histCount));
   if (!f) return false;
@@ -175,7 +158,6 @@ bool WorldBakeSerializer::load(const std::string& worldPath,
            static_cast<std::streamsize>(histCount * sizeof(float)));
   if (!f && histCount > 0) return false;
 
-  // Frames
   uint32_t frameCount = 0;
   f.read(reinterpret_cast<char*>(&frameCount), sizeof(frameCount));
   if (!f) return false;

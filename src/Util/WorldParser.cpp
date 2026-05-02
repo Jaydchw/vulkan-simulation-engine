@@ -561,9 +561,6 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
         else if (key == "Enabled")               spawner.enabled = parseBool(val);
       }
 
-      // Spawner entities carry a no-gravity SimulatedComponent so the network
-      // ownership system can assign them to a specific peer.  No collider means
-      // the physics library never touches them; they stay fixed.
       Entity entity = registry.createEntity();
       registry.addComponent<NameComponent>(entity, {spawnerName});
       TransformComponent tc;

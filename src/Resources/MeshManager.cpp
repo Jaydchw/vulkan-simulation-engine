@@ -227,7 +227,6 @@ MeshID MeshManager::createCylinder(float radius, float height,
   std::vector<uint16_t> indices;
   const float pi2 = 2.0f * 3.14159265f;
 
-  // Side rings
   for (uint32_t i = 0; i < 2; ++i) {
     float y = -0.5f * height + i * height;
     for (uint32_t j = 0; j <= segments; ++j) {
@@ -250,7 +249,6 @@ MeshID MeshManager::createCylinder(float radius, float height,
     indices.push_back(j + segments + 2);
   }
 
-  // Bottom cap
   uint16_t botCenter = static_cast<uint16_t>(vertices.size());
   { Vertex v{}; v.pos = {0, -height * 0.5f, 0}; v.normal = {0,-1,0}; v.color = {1,1,1}; vertices.push_back(v); }
   uint16_t botRingStart = static_cast<uint16_t>(vertices.size());
@@ -269,7 +267,6 @@ MeshID MeshManager::createCylinder(float radius, float height,
     indices.push_back(botRingStart + j);
   }
 
-  // Top cap
   uint16_t topCenter = static_cast<uint16_t>(vertices.size());
   { Vertex v{}; v.pos = {0, height * 0.5f, 0}; v.normal = {0,1,0}; v.color = {1,1,1}; vertices.push_back(v); }
   uint16_t topRingStart = static_cast<uint16_t>(vertices.size());
@@ -306,7 +303,6 @@ MeshID MeshManager::createCone(float radius, float height, uint32_t segments) {
   const float halfH = height * 0.5f;
   uint16_t idx = 0;
 
-  // Side faces (flat normals per triangle)
   for (uint32_t j = 0; j < segments; ++j) {
     float t0 = pi2 * float(j) / float(segments);
     float t1 = pi2 * float(j + 1) / float(segments);
@@ -323,7 +319,6 @@ MeshID MeshManager::createCone(float radius, float height, uint32_t segments) {
     idx += 3;
   }
 
-  // Bottom cap
   uint16_t capCenter = idx++;
   { Vertex v{}; v.pos = {0, -halfH, 0}; v.normal = {0,-1,0}; v.color = {1,1,1}; v.texCoord = {0.5f,0.5f}; vertices.push_back(v); }
   uint16_t capRingStart = idx;
@@ -363,10 +358,8 @@ MeshID MeshManager::createCapsule(float radius, float height, uint32_t segments)
   const uint32_t hStacks = std::max(2u, segments / 4);
   const uint32_t totalStacks = hStacks * 2;
 
-  // Top pole
   { Vertex v{}; v.pos = {0, halfCylH + radius, 0}; v.normal = {0,1,0}; v.color = {1,1,1}; vertices.push_back(v); }
 
-  // Latitude bands from south to north (excluding poles)
   for (uint32_t i = 1; i < totalStacks; ++i) {
     float t     = float(i) / totalStacks;
     float theta = pi * t - pi * 0.5f;  // -pi/2 to pi/2
@@ -384,20 +377,17 @@ MeshID MeshManager::createCapsule(float radius, float height, uint32_t segments)
     }
   }
 
-  // Bottom pole
   { Vertex v{}; v.pos = {0, -halfCylH - radius, 0}; v.normal = {0,-1,0}; v.color = {1,1,1}; vertices.push_back(v); }
 
   const uint32_t ringVerts      = segments + 1;
   const uint32_t bottomPoleIdx  = static_cast<uint32_t>(vertices.size()) - 1;
   const uint32_t lastRingStart  = 1 + (totalStacks - 2) * ringVerts;
 
-  // Top cap fan
   for (uint32_t j = 0; j < segments; ++j) {
     indices.push_back(0);
     indices.push_back(1 + j + 1);
     indices.push_back(1 + j);
   }
-  // Middle quads
   for (uint32_t i = 0; i < totalStacks - 2; ++i) {
     uint32_t r0 = 1 + i * ringVerts;
     uint32_t r1 = r0 + ringVerts;
@@ -406,7 +396,6 @@ MeshID MeshManager::createCapsule(float radius, float height, uint32_t segments)
       indices.push_back(r0 + j + 1); indices.push_back(r1 + j + 1); indices.push_back(r1 + j);
     }
   }
-  // Bottom cap fan
   for (uint32_t j = 0; j < segments; ++j) {
     indices.push_back(bottomPoleIdx);
     indices.push_back(lastRingStart + j);
@@ -461,7 +450,6 @@ MeshID MeshManager::createPyramid(float baseSize, float height) {
   const float h = height;
   const float b = baseSize * 0.5f;
 
-  // Apex at top, base centered at origin
   glm::vec3 apex(0.0f, h, 0.0f);
   glm::vec3 bl(-b, 0.0f, -b);
   glm::vec3 br( b, 0.0f, -b);
@@ -487,12 +475,10 @@ MeshID MeshManager::createPyramid(float baseSize, float height) {
     idx += 3;
   };
 
-  // 4 side faces
   addTri(apex, bl, br);
   addTri(apex, br, fr);
   addTri(apex, fr, fl);
   addTri(apex, fl, bl);
-  // 2 base triangles
   addTri(bl, fr, br);
   addTri(bl, fl, fr);
 
@@ -687,7 +673,6 @@ void MeshManager::createBuffers(Mesh* mesh) const {
   mesh->setVertexBuffer(vBuf);
   mesh->setVertexBufferAllocation(vAlloc);
 
-  // Compute bounding sphere radius (max distance of any vertex from origin)
   float maxDist = 0.0f;
   for (const auto& v : vertices) maxDist = std::max(maxDist, glm::length(v.pos));
   mesh->setBoundingRadius(maxDist);

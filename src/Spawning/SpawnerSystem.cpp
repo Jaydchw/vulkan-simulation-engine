@@ -25,7 +25,6 @@ void SpawnerSystem::update(float deltaTime) {
         " interval=", spawner.currentInterval,
         " count=", spawner.spawnCount);
 
-    // Item 4: SingleBurstSpawn — fire all objects at once when start_time elapses.
     if (spawner.burstMode) {
       if (spawner.timer >= 0.0f) {
         int remaining = (spawner.maxSpawns < 0) ? 1 : (spawner.maxSpawns - spawner.spawnCount);
@@ -141,8 +140,6 @@ void SpawnerSystem::applyRemoteSpawn(const SpawnEntityPacket& pkt) {
              " pos=(", pkt.posX, ",", pkt.posY, ",", pkt.posZ, ")");
 }
 
-// ── Private helpers ───────────────────────────────────────────────────────────
-
 float SpawnerSystem::computeInterval(const SpawnerComponent& spawner) {
   float interval = spawner.spawnInterval;
   if (spawner.spawnIntervalRandomness > 0.0f) {
@@ -173,7 +170,6 @@ Entity SpawnerSystem::doSpawn(Entity spawnerEntity, SpawnerComponent& spawner,
                                const SpawnTemplate& tmpl) {
   const auto* spawnerTransform = registry->getComponent<TransformComponent>(spawnerEntity);
 
-  // Position — Item 6: use per-axis box sampling for RandomBox spawners.
   glm::vec3 pos;
   if (spawner.useBoxSpawn) {
     pos = randomInBox(spawner.spawnBoxMin, spawner.spawnBoxMax);
@@ -184,26 +180,22 @@ Entity SpawnerSystem::doSpawn(Entity spawnerEntity, SpawnerComponent& spawner,
       pos += randomInSphere(spawner.positionRandomness);
   }
 
-  // Launch direction with optional cone scatter
   glm::vec3 dir = glm::length(spawner.spawnDirection) > 1e-6f
                       ? glm::normalize(spawner.spawnDirection)
                       : glm::vec3(0.0f, 1.0f, 0.0f);
   if (spawner.directionRandomness > 0.0f)
     dir = randomConeDir(dir, spawner.directionRandomness);
 
-  // Speed with symmetric random variation
   float speed = spawner.spawnSpeed;
   if (spawner.speedRandomness > 0.0f) {
     std::uniform_real_distribution<float> dist(-spawner.speedRandomness, spawner.speedRandomness);
     speed = std::max(speed * (1.0f + dist(rng)), 0.0f);
   }
 
-  // Angular velocity with random sphere offset
   glm::vec3 angVel = spawner.angularVelocity + tmpl.simulated.angularVelocity;
   if (spawner.angularVelocityRandomness > 0.0f)
     angVel += randomInSphere(spawner.angularVelocityRandomness);
 
-  // Build components
   SimulatedComponent phys = tmpl.simulated;
   phys.velocity         = tmpl.simulated.velocity + dir * speed;
   phys.angularVelocity  = angVel;
@@ -261,7 +253,6 @@ glm::vec3 SpawnerSystem::randomInSphere(float radius) {
   return dir * (std::cbrt(ud(rng)) * radius);
 }
 
-// Item 6: per-axis uniform sampling within an axis-aligned box.
 glm::vec3 SpawnerSystem::randomInBox(const glm::vec3& min, const glm::vec3& max) {
   std::uniform_real_distribution<float> ux(min.x, max.x);
   std::uniform_real_distribution<float> uy(min.y, max.y);
@@ -269,17 +260,11 @@ glm::vec3 SpawnerSystem::randomInBox(const glm::vec3& min, const glm::vec3& max)
   return { ux(rng), uy(rng), uz(rng) };
 }
 
-// Item 5: assign ownership of a freshly-spawned entity per the spawner's ownerMode.
 void SpawnerSystem::assignSpawnedOwner(Entity entity, SpawnerComponent& spawner) {
   if (!networkManager) return;
 
   uint8_t peerID;
   if (spawner.ownerMode == 0 || spawner.ownerMode == 5) {
-    // Auto (0) and SEQUENTIAL (5): round-robin across currently active peers.
-    // ownerMode 0 previously called assignObjectOwnership() on every spawn,
-    // causing O(n²) behaviour (full O(n) redistribution per spawn = n²total).
-    // Full redistribution is still triggered by Application on peer connect/drop,
-    // which is the only time global rebalancing is actually needed.
     auto activePeers = networkManager->getActivePeerIDs();
     if (activePeers.empty()) {
       peerID = networkManager->getLocalPeerID();
@@ -288,7 +273,6 @@ void SpawnerSystem::assignSpawnedOwner(Entity entity, SpawnerComponent& spawner)
       ++seqOwnerNext;
     }
   } else {
-    // Fixed peer (ownerMode 1-4).
     peerID = spawner.ownerMode;
   }
 
@@ -307,7 +291,6 @@ glm::vec3 SpawnerSystem::randomConeDir(const glm::vec3& axis, float halfAngle) {
   float sinTheta = std::sqrt(std::max(0.0f, 1.0f - cosTheta * cosTheta));
   float phi      = phiDist(rng);
 
-  // Build orthonormal basis around axis
   glm::vec3 perp     = (std::abs(axis.x) < 0.9f) ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
   glm::vec3 tangent  = glm::normalize(glm::cross(axis, perp));
   glm::vec3 bitangent = glm::cross(axis, tangent);

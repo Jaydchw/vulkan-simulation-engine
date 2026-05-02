@@ -43,8 +43,6 @@ void PhysicsSystem::setRegistry(Registry* reg) {
   dirtyDynamic.clear();
   registry = reg;
   if (registry) {
-    // Pre-reserve physics object store to avoid mid-simulation reallocations
-    // (which would invalidate the raw pointers in world.objects).
     registry->allPhysicsObjectsMut().reserve(16384);
   }
   Debug::log(Debug::Category::PHYSICS, "PhysicsSystem: Registry set, world cleared");
@@ -224,12 +222,7 @@ void PhysicsSystem::resolveCrossPeerCollisions() {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 void PhysicsSystem::rebuildWorldObjects() {
-  // Rebuild world.objects from the dense ComponentStore in slot order so that
-  // consecutive pointer dereferences in integrate() and resolveCollisions()
-  // access memory sequentially — the key cache benefit of change 2.
   world.clear();
   auto& store = registry->allPhysicsObjectsMut();
   const auto& ents  = store.entityList();
@@ -256,8 +249,6 @@ void PhysicsSystem::configurePhysicsObject(jphys::PhysicsObject*      obj,
     case ColliderType::AABB: {
       glm::vec3 he = collider->halfExtents;
       if (isStatic) {
-        // Expand axis-aligned bounds to enclose the oriented bounding box
-        // so collision tracks visual rotation of animated/static objects.
         glm::mat3 R = glm::mat3_cast(transform->rotation);
         he = glm::vec3(
           std::abs(R[0][0])*he.x + std::abs(R[1][0])*he.y + std::abs(R[2][0])*he.z,
@@ -269,8 +260,6 @@ void PhysicsSystem::configurePhysicsObject(jphys::PhysicsObject*      obj,
       break;
     }
     case ColliderType::Plane: {
-      // Rotate the stored normal by the object's current orientation so
-      // animated/tilted planes collide on the correct face.
       glm::vec3 worldNormal = transform->rotation * collider->normal;
       if (collider->finite)
         obj->setCollider(jphys::Collider::createFinitePlane(
@@ -313,25 +302,12 @@ void PhysicsSystem::configurePhysicsObject(jphys::PhysicsObject*      obj,
   }
 }
 
-// ── Change 1: Incremental sync ────────────────────────────────────────────────
-//
-// Instead of world.clear() + full rebuild every frame we:
-//   • Track which entities are in the world (trackedEntities).
-//   • Add newly eligible entities; remove ones that disappeared.
-//   • Static objects: re-configure only when their transform/collider changes.
-//   • Dynamic objects: only push acceleration and forces each frame.
-//     Position/velocity are already correct in the PhysicsObject from the
-//     previous step (written back by syncFromLibrary), so no re-write needed
-//     unless the entity is marked dirty via markPhysicsDirty().
 void PhysicsSystem::syncToLibrary() {
   const auto& entities = registry->getEntities();
 
   Debug::logTrace(Debug::Category::PHYSICS_SYNC,
       "PhysicsSystem::syncToLibrary: processing ", entities.size(), " entities");
 
-  // ── Step 1: build current valid set ─────────────────────────────────────────
-  // An entity is "valid for physics" if it has a collider + transform and is
-  // either static or locally-owned dynamic.
   std::unordered_set<Entity> currentValid;
   currentValid.reserve(entities.size());
   for (Entity e : entities) {
@@ -342,7 +318,6 @@ void PhysicsSystem::syncToLibrary() {
     currentValid.insert(e);
   }
 
-  // ── Step 2: remove stale tracked entities ───────────────────────────────────
   std::vector<Entity> toRemove;
   for (Entity e : trackedEntities) {
     if (!currentValid.count(e)) toRemove.push_back(e);
@@ -355,12 +330,8 @@ void PhysicsSystem::syncToLibrary() {
     staticCache.erase(e);
     anyRemoved = true;
   }
-  // After any removal the ComponentStore may have moved elements (swap-remove),
-  // so we rebuild the raw pointer list. This is O(tracked) but only fires on
-  // entity death, not on every frame.
   if (anyRemoved) rebuildWorldObjects();
 
-  // ── Step 3: update / add valid entities ─────────────────────────────────────
   int addedCount = 0;
   for (Entity e : currentValid) {
     auto* collider  = registry->getComponent<ColliderComponent>(e);
@@ -370,14 +341,11 @@ void PhysicsSystem::syncToLibrary() {
     const bool isNew = !trackedEntities.count(e);
 
     if (isNew) {
-      // ── New entity: full initialisation ───────────────────────────────────
       registry->addPhysicsObject(e);               // insert into dense store
       auto* obj = registry->getPhysicsObjectPtr(e);
       configurePhysicsObject(obj, phys, collider, transform);
 
       trackedEntities.insert(e);
-      // After push_back into ComponentStore the vector may have reallocated,
-      // so all previously stored pointers could be stale — rebuild entirely.
       rebuildWorldObjects();
 
       if (!phys) {
@@ -386,7 +354,6 @@ void PhysicsSystem::syncToLibrary() {
       ++addedCount;
 
     } else if (!phys) {
-      // ── Existing static object: only update when transform changed ─────────
       auto& cached = staticCache[e];
       if (transform->position  != cached.position     ||
           transform->rotation  != cached.rotation     ||
@@ -397,16 +364,9 @@ void PhysicsSystem::syncToLibrary() {
       }
 
     } else {
-      // ── Existing dynamic object: minimal per-frame update ──────────────────
-      // The PhysicsObject's position and velocity are authoritative after the
-      // previous step. We only need to push things that can change externally:
-      //   • acceleration (may change due to wind or game logic)
-      //   • constantTorque (applied every frame)
-      //   • full state if the entity was dirtied by external code
       auto* obj = registry->getPhysicsObjectPtr(e);
 
       if (dirtyDynamic.count(e)) {
-        // External code teleported or reset this entity — push the full ECS state.
         obj->setPosition(transform->position);
         obj->setVelocity(phys->velocity);
         obj->setAngularVelocity(phys->angularVelocity);
@@ -417,8 +377,6 @@ void PhysicsSystem::syncToLibrary() {
       glm::vec3 acceleration = phys->acceleration;
       if (environmentSettings &&
           environmentSettings->windAffects == WindAffectsMode::AllObjects) {
-        // Wind drag depends on current velocity; phys->velocity was written back
-        // by syncFromLibrary last frame so it matches the physics object's state.
         acceleration += jphys::computeWindAcceleration(
             environmentSettings->wind, phys->velocity, environmentSettings->windDrag);
       }
@@ -477,8 +435,6 @@ void PhysicsSystem::syncFromLibrary() {
   Debug::logVerbose(Debug::Category::PHYSICS_SYNC,
       "PhysicsSystem::syncFromLibrary: wrote back ", writtenCount, " dynamic objects");
 
-  // Destroy killbox entities. Each destroyEntity does a swap-remove in the
-  // ComponentStore, so we rebuild world.objects once at the end.
   for (Entity e : toDestroy) {
     auto* obj = registry->getPhysicsObjectPtr(e);
     if (obj) world.removeObject(obj);   // remove before the data is moved

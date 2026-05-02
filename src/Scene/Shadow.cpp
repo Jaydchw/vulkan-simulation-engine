@@ -44,8 +44,8 @@ uint32_t ShadowSystem::createShadowMap(uint32_t lightIndex) {
                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                             shadowMap.image, shadowMap.allocation);
 
-  Debug::log(Debug::Category::SHADOWS, "  - Created shadow map image (",
-             SHADOW_MAP_SIZE, "x", SHADOW_MAP_SIZE, ") via VMA");
+  Debug::log(Debug::Category::SHADOWS, "Created shadow map image (",
+             SHADOW_MAP_SIZE, "x", SHADOW_MAP_SIZE, ")");
 
   VkImageViewCreateInfo viewInfo{};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -372,7 +372,6 @@ glm::mat4 ShadowSystem::calculateLightSpaceMatrix(const LightComponent& light,
       upVector = glm::vec3(1.0f, 0.0f, 0.0f);
     }
 
-    // Place the light far enough back to encompass the whole scene
     const glm::vec3 lightPos = sceneCenter - lightDir * (sceneRadius * 4.0f);
     lightView = glm::lookAt(lightPos, sceneCenter, upVector);
 

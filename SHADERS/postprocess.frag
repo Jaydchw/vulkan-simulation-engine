@@ -19,10 +19,8 @@ layout(push_constant) uniform PushConstants {
 layout(location = 0) in vec2 fragTexCoord;
 layout(location = 0) out vec4 outColor;
 
-// --- CONFIGURATION ---
 const float VIGNETTE_EXTENT = 0.6;
 
-// --- UTILS ---
 
 vec3 tonemap_aces(vec3 color) {
     float a = 2.51;
@@ -64,7 +62,6 @@ vec3 adjustHue(vec3 color, float hueShift) {
 }
 
 vec3 adjustTemperature(vec3 color, float temp) {
-    // Warm shifts towards orange, cool shifts towards blue
     color.r += temp * 0.1;
     color.b -= temp * 0.1;
     return clamp(color, 0.0, 1.0);
@@ -96,10 +93,8 @@ vec3 sharpen(sampler2D tex, vec2 uv, float strength) {
 }
 
 void main() {
-    // 1. Base Sampling with adjustable sharpen
     vec3 color = sharpen(screenTexture, fragTexCoord, pc.sharpenStrength);
 
-    // 2. Chromatic Aberration
     float ca = pc.chromaticAberration;
     if (ca > 0.0) {
         vec2 caDir = fragTexCoord - vec2(0.5);
@@ -109,24 +104,18 @@ void main() {
         color.b = mix(color.b, b, 0.5);
     }
 
-    // 3. Exposure
     color *= pc.exposure;
 
-    // 4. Tone Mapping
     color = tonemap_aces(color);
 
-    // 5. Gamma
     color = pow(color, vec3(1.0 / pc.gamma));
 
-    // 6. Color Grading
     color = adjustHue(color, pc.hue);
     color = adjustSaturation(color, pc.saturation);
     color = adjustContrast(color, pc.contrast);
 
-    // 7. Temperature
     color = adjustTemperature(color, pc.temperature);
 
-    // 8. Film Grain
     if (pc.filmGrain > 0.0) {
         vec2 texSize = vec2(textureSize(screenTexture, 0));
         float noise = hash(fragTexCoord * texSize + fract(pc.filmGrain * 12.9898)) * 2.0 - 1.0;
@@ -134,7 +123,6 @@ void main() {
         color = clamp(color, 0.0, 1.0);
     }
 
-    // 9. Vignette
     float vig = vignette(fragTexCoord);
     color *= mix(1.0 - pc.vignetteStrength, 1.0, vig);
 

@@ -6,15 +6,6 @@
 #include "ECS/Entity.h"
 #include <PhysicsObject.h>
 
-// All component types are stored in a ComponentStore<T> — a dense parallel-vector
-// structure that keeps each component type contiguous in memory.  This ensures
-// that hot iteration paths (renderer, physics, timeline) read linearly from
-// cache-friendly memory rather than chasing scattered heap-node pointers.
-//
-// PhysicsObject is also stored in a ComponentStore (not an unordered_map) so
-// that PhysicsWorld iterates a contiguous array rather than scattered heap nodes.
-// Callers must explicitly addPhysicsObject(e) before calling getPhysicsObject(e).
-
 class Registry final {
  public:
   Registry() : nextEntity(1) {}
@@ -38,8 +29,6 @@ class Registry final {
     cloths.erase(entity);
   }
 
-  // Creates an entity with a specific ID (used when replicating remote spawns).
-  // Advances nextEntity past specificId to avoid future conflicts.
   Entity createEntityWithId(Entity specificId) {
     if (specificId >= nextEntity) nextEntity = specificId + 1;
     return specificId;
@@ -57,12 +46,10 @@ class Registry final {
   template <typename T>
   bool hasComponent(Entity entity) const;
 
-  // Returns a reference to the flat entity list; no heap allocation per call.
   const std::vector<Entity>& getEntities() const {
     return names.entityList();
   }
 
-  // ── Per-component-type accessors ────────────────────────────────────────────
   const ComponentStore<NameComponent>&             allNames()             const { return names; }
   const ComponentStore<TransformComponent>&        allTransforms()        const { return transforms; }
   const ComponentStore<MeshComponent>&             allMeshes()            const { return meshes; }
@@ -81,8 +68,6 @@ class Registry final {
   const ComponentStore<ClothComponent>&            allCloths()            const { return cloths; }
   ComponentStore<ClothComponent>&                  allClothsMut()               { return cloths; }
 
-  // ── Physics object accessors ─────────────────────────────────────────────────
-  // Explicit creation required before calling getPhysicsObject.
   void addPhysicsObject(Entity entity) {
     physicsObjects.insert(entity, jphys::PhysicsObject{});
   }
@@ -100,7 +85,6 @@ class Registry final {
     return physicsObjects.get(entity);
   }
 
-  // Dense store for direct iteration by PhysicsSystem::rebuildWorldObjects().
   ComponentStore<jphys::PhysicsObject>&       allPhysicsObjectsMut()       { return physicsObjects; }
   const ComponentStore<jphys::PhysicsObject>& allPhysicsObjects()    const { return physicsObjects; }
 
@@ -121,11 +105,8 @@ class Registry final {
   ComponentStore<AnimationComponent>       animations;
   ComponentStore<ClothComponent>           cloths;
 
-  // Dense contiguous storage — iteration in PhysicsWorld is cache-friendly.
   ComponentStore<jphys::PhysicsObject>     physicsObjects;
 };
-
-// ── addComponent specialisations ────────────────────────────────────────────
 template <> inline void Registry::addComponent<NameComponent>(Entity e, const NameComponent& c)            { names.insert(e, c); }
 template <> inline void Registry::addComponent<TransformComponent>(Entity e, const TransformComponent& c)  { transforms.insert(e, c); }
 template <> inline void Registry::addComponent<MeshComponent>(Entity e, const MeshComponent& c)            { meshes.insert(e, c); }
@@ -140,7 +121,6 @@ template <> inline void Registry::addComponent<CameraComponent>(Entity e, const 
 template <> inline void Registry::addComponent<AnimationComponent>(Entity e, const AnimationComponent& c)  { animations.insert(e, c); }
 template <> inline void Registry::addComponent<ClothComponent>(Entity e, const ClothComponent& c)          { cloths.insert(e, c); }
 
-// ── getComponent specialisations ────────────────────────────────────────────
 template <> inline NameComponent*            Registry::getComponent<NameComponent>(Entity e)            { return names.get(e); }
 template <> inline TransformComponent*       Registry::getComponent<TransformComponent>(Entity e)       { return transforms.get(e); }
 template <> inline MeshComponent*            Registry::getComponent<MeshComponent>(Entity e)            { return meshes.get(e); }
@@ -155,7 +135,6 @@ template <> inline CameraComponent*          Registry::getComponent<CameraCompon
 template <> inline AnimationComponent*       Registry::getComponent<AnimationComponent>(Entity e)       { return animations.get(e); }
 template <> inline ClothComponent*           Registry::getComponent<ClothComponent>(Entity e)           { return cloths.get(e); }
 
-// ── const getComponent specialisations ──────────────────────────────────────
 template <> inline const NameComponent*            Registry::getComponent<NameComponent>(Entity e)            const { return names.get(e); }
 template <> inline const TransformComponent*       Registry::getComponent<TransformComponent>(Entity e)       const { return transforms.get(e); }
 template <> inline const MeshComponent*            Registry::getComponent<MeshComponent>(Entity e)            const { return meshes.get(e); }
@@ -170,7 +149,6 @@ template <> inline const CameraComponent*          Registry::getComponent<Camera
 template <> inline const AnimationComponent*       Registry::getComponent<AnimationComponent>(Entity e)       const { return animations.get(e); }
 template <> inline const ClothComponent*           Registry::getComponent<ClothComponent>(Entity e)           const { return cloths.get(e); }
 
-// ── hasComponent specialisations ────────────────────────────────────────────
 template <> inline bool Registry::hasComponent<NameComponent>(Entity e)            const { return names.has(e); }
 template <> inline bool Registry::hasComponent<TransformComponent>(Entity e)       const { return transforms.has(e); }
 template <> inline bool Registry::hasComponent<MeshComponent>(Entity e)            const { return meshes.has(e); }

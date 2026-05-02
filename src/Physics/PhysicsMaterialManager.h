@@ -6,7 +6,6 @@
 
 class PhysicsMaterialManager {
 public:
-    // Registers a material and returns its ID. Name must be unique.
     PhysicsMaterialID registerMaterial(const PhysicsMaterial& mat) {
         const PhysicsMaterialID id = static_cast<PhysicsMaterialID>(materials.size() + 1);
         nameToID[mat.name] = id;
@@ -14,7 +13,6 @@ public:
         return id;
     }
 
-    // Register an interaction between two materials by ID.
     void registerInteraction(PhysicsMaterialID a, PhysicsMaterialID b,
                              const PhysicsMaterialInteraction& interaction) {
         interactions[interactionKey(a, b)] = interaction;
@@ -25,7 +23,6 @@ public:
         return &materials[id - 1];
     }
 
-    // Resolve a name to an ID (returns INVALID if not found).
     PhysicsMaterialID findIDByName(const std::string& name) const {
         auto it = nameToID.find(name);
         return it != nameToID.end() ? it->second : INVALID_PHYSICS_MATERIAL_ID;
@@ -34,7 +31,6 @@ public:
     PhysicsMaterialInteraction findInteraction(PhysicsMaterialID a, PhysicsMaterialID b) const {
         auto it = interactions.find(interactionKey(a, b));
         if (it != interactions.end()) return it->second;
-        // Fall back to self-interaction of each material
         it = interactions.find(interactionKey(a, a));
         if (it != interactions.end()) return it->second;
         it = interactions.find(interactionKey(b, b));
