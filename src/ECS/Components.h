@@ -156,6 +156,9 @@ struct ClothComponent {
   int solverIterations = 8;
   glm::vec3 wind = glm::vec3(0.0f);
   float tearability = 0.0f;
+  // Particles adjacent to a tear with <= this many intact structural constraints
+  // are auto-torn free each step. 0 = off, 2 = remove single-thread strands.
+  int weakConnectionThreshold = 2;
   bool twoWayCoupling = false;
   uint8_t ownerPeerId = 0;
 };

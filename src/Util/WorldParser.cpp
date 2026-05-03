@@ -747,8 +747,9 @@ bool WorldParser::load(const std::string& filepath, Registry& registry,
         else if (key == "PinnedTopRow") {
           cloth.hinge = parseBool(val) ? ClothHinge::TopRow : ClothHinge::None;
         }
-        else if (key == "Wind")            cloth.wind = parseVec3(val);
-        else if (key == "TwoWayCoupling")  cloth.twoWayCoupling = parseBool(val);
+        else if (key == "Wind")                  cloth.wind = parseVec3(val);
+        else if (key == "TwoWayCoupling")        cloth.twoWayCoupling = parseBool(val);
+        else if (key == "WeakConnectionThreshold") cloth.weakConnectionThreshold = parseInt(val);
         else if (key == "OwnerPeer")       cloth.ownerPeerId = static_cast<uint8_t>(parseInt(val));
       }
 

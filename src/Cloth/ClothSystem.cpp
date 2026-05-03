@@ -80,6 +80,7 @@ void ClothSystem::initCloth(Entity e) {
   sim->setParticleMass(cloth->particleMass);
   sim->setSolverIterations(cloth->solverIterations);
   sim->setTwoWayCoupling(cloth->twoWayCoupling);
+  sim->setWeakConnectionThreshold(cloth->weakConnectionThreshold);
 
   int sp = (std::max)(cloth->pinSpacing, 1);
 

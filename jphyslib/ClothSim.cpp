@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cfloat>
+#include <unordered_map>
 
 namespace jphys {
 
@@ -30,7 +31,7 @@ ClothSim::ClothSim(int resX, int resZ, float width, float height,
 
   auto addConstraint = [&](int a, int b, bool bending) {
     float len = glm::length(particles[b].position - particles[a].position);
-    constraints.push_back({a, b, len, bending, false});
+    constraints.push_back({a, b, len, bending, false, -1, -1});
   };
 
   for (int z = 0; z < resZ; ++z) {
@@ -44,6 +45,54 @@ ClothSim::ClothSim(int resX, int resZ, float width, float height,
       if (x + 2 < resX) addConstraint(particleIndex(x, z), particleIndex(x + 2, z), true);
       if (z + 2 < resZ) addConstraint(particleIndex(x, z), particleIndex(x, z + 2), true);
     }
+  }
+
+  // Build grid-indexed lookups for structural constraints and wire up bending
+  // constraint dependencies. Two tasks share one pass over constraints:
+  //
+  //  1. horzIdx / vertIdx: O(1) per-cell torn-triangle checks for collision and
+  //     weak-connection auto-tear. diff==1 uniquely identifies horizontal structural
+  //     constraints; diff==resX uniquely identifies vertical ones.
+  //
+  //  2. dep0 / dep1 on bending constraints: the two structural constraints that
+  //     span each bending constraint's intermediate particle. When either dep tears,
+  //     the bending constraint cascade-breaks so torn pieces never remain hinged.
+
+  const int N = static_cast<int>(particles.size());
+  horzIdx.assign((resX - 1) * resZ,    -1);
+  vertIdx.assign(resX       * (resZ - 1), -1);
+  structCountScratch.resize(N, 0);
+  tearAdjacentScratch.resize(N, 0);
+
+  std::unordered_map<uint64_t, int> structEdgeIdx;
+  structEdgeIdx.reserve(constraints.size());
+
+  for (int i = 0; i < static_cast<int>(constraints.size()); ++i) {
+    const auto& c = constraints[i];
+    if (c.isBending) continue;
+    int lo = std::min(c.a, c.b), hi = std::max(c.a, c.b);
+    structEdgeIdx[(uint64_t)lo * N + hi] = i;
+
+    int diff = c.b - c.a;
+    if (diff == 1) {
+      int x = c.a % resX, z = c.a / resX;
+      horzIdx[z * (resX - 1) + x] = i;
+    } else if (diff == resX) {
+      int x = c.a % resX, z = c.a / resX;
+      vertIdx[z * resX + x] = i;
+    }
+  }
+
+  for (auto& c : constraints) {
+    if (!c.isBending) continue;
+    int mid = (c.a + c.b) / 2;
+    auto lookup = [&](int p, int q) -> int {
+      int lo2 = std::min(p, q), hi2 = std::max(p, q);
+      auto it = structEdgeIdx.find((uint64_t)lo2 * N + hi2);
+      return (it != structEdgeIdx.end()) ? it->second : -1;
+    };
+    c.dep0 = lookup(c.a, mid);
+    c.dep1 = lookup(mid, c.b);
   }
 }
 
@@ -70,6 +119,11 @@ void ClothSim::step(float dt, const std::vector<PhysicsObject*>& obstacles) {
     resolveCollisions(obstacles);
   }
   applyImpulseThisIter = false;
+  // After the full solve, remove any particles that are now weakly connected
+  // (adjacent to a fresh tear with too few remaining structural constraints).
+  // This eliminates single-thread strand geometry in the same frame it forms.
+  if (tornSinceLastQuery && weakConnectionThreshold > 0)
+    autoTearWeak();
 }
 
 void ClothSim::integrate(float dt) {
@@ -92,6 +146,17 @@ void ClothSim::integrate(float dt) {
 void ClothSim::satisfyConstraints() {
   for (auto& c : constraints) {
     if (c.broken) continue;
+    // Cascade-break bending constraints whose structural span has been torn.
+    // dep0/dep1 are the indices of the two structural constraints on either side
+    // of this bending constraint's intermediate particle.
+    if (c.isBending) {
+      if ((c.dep0 >= 0 && constraints[c.dep0].broken) ||
+          (c.dep1 >= 0 && constraints[c.dep1].broken)) {
+        c.broken = true;
+        tornSinceLastQuery = true;
+        continue;
+      }
+    }
     ClothParticle& a = particles[c.a];
     ClothParticle& b = particles[c.b];
     float totalInv = a.invMass + b.invMass;
@@ -109,6 +174,51 @@ void ClothSim::satisfyConstraints() {
     a.position += correction * (a.invMass / totalInv);
     b.position -= correction * (b.invMass / totalInv);
   }
+}
+
+void ClothSim::autoTearWeak() {
+  const int n = static_cast<int>(particles.size());
+
+  // Count intact structural constraints per particle and flag particles that are
+  // adjacent to at least one broken structural constraint.
+  structCountScratch.assign(n, 0);
+  tearAdjacentScratch.assign(n, 0);
+  for (const auto& c : constraints) {
+    if (c.isBending) continue;
+    if (!c.broken) {
+      structCountScratch[c.a]++;
+      structCountScratch[c.b]++;
+    } else {
+      tearAdjacentScratch[c.a] = 1;
+      tearAdjacentScratch[c.b] = 1;
+    }
+  }
+
+  // Iteratively break constraints whose non-pinned endpoints are adjacent to a
+  // tear AND have <= weakConnectionThreshold intact structural connections.
+  // Each pass peels off strand tips; typically converges in 1-3 passes.
+  bool anyBroke = true;
+  while (anyBroke) {
+    anyBroke = false;
+    for (auto& c : constraints) {
+      if (c.broken || c.isBending) continue;
+      bool aWeak = particles[c.a].invMass != 0.0f
+                   && tearAdjacentScratch[c.a]
+                   && structCountScratch[c.a] <= weakConnectionThreshold;
+      bool bWeak = particles[c.b].invMass != 0.0f
+                   && tearAdjacentScratch[c.b]
+                   && structCountScratch[c.b] <= weakConnectionThreshold;
+      if (aWeak || bWeak) {
+        c.broken = true;
+        structCountScratch[c.a]--;
+        structCountScratch[c.b]--;
+        tearAdjacentScratch[c.a] = 1;
+        tearAdjacentScratch[c.b] = 1;
+        anyBroke = true;
+      }
+    }
+  }
+  tornSinceLastQuery = true;
 }
 
 void ClothSim::resolveCollisions(const std::vector<PhysicsObject*>& obstacles) {
@@ -468,6 +578,13 @@ void ClothSim::resolveTrianglesVsObject(PhysicsObject& obj) {
 
   for (int z = 0; z < resZ - 1; ++z) {
     for (int x = 0; x < resX - 1; ++x) {
+      // Mirror the visual triangle culling: tri1 needs h(x,z) and v(x,z) intact;
+      // tri2 needs v(x+1,z) and h(x,z+1) intact. Skip cells where both are torn
+      // so that objects can pass through holes in the cloth mesh.
+      bool tri1 = !horzBroken(x, z)     && !vertBroken(x,     z);
+      bool tri2 = !vertBroken(x + 1, z) && !horzBroken(x, z + 1);
+      if (!tri1 && !tri2) continue;
+
       ClothParticle& p00 = particles[particleIndex(x,     z    )];
       ClothParticle& p10 = particles[particleIndex(x + 1, z    )];
       ClothParticle& p01 = particles[particleIndex(x,     z + 1)];
@@ -481,11 +598,11 @@ void ClothSim::resolveTrianglesVsObject(PhysicsObject& obj) {
       if (glm::dot(diff, diff) > broadR2) continue;
 
       if (type == ColliderType::Sphere) {
-        triVsSphere(p00, p10, p01, center, r, reactObj, stepDt);
-        triVsSphere(p10, p11, p01, center, r, reactObj, stepDt);
+        if (tri1) triVsSphere(p00, p10, p01, center, r, reactObj, stepDt);
+        if (tri2) triVsSphere(p10, p11, p01, center, r, reactObj, stepDt);
       } else {
-        triVsCapsule(p00, p10, p01, capA, capB, r, reactObj, stepDt);
-        triVsCapsule(p10, p11, p01, capA, capB, r, reactObj, stepDt);
+        if (tri1) triVsCapsule(p00, p10, p01, capA, capB, r, reactObj, stepDt);
+        if (tri2) triVsCapsule(p10, p11, p01, capA, capB, r, reactObj, stepDt);
       }
     }
   }
