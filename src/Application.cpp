@@ -632,7 +632,7 @@ void Application::initVulkan() {
   interface->setFBSceneDirectory("Scenes/FBs");
   interface->setWorldLoadCallback([this](const std::string& path) {
     auto ext = std::filesystem::path(path).extension().string();
-    if (ext == ".fbscene") {
+    if (ext == ".fbscene" || ext == ".bin") {
       loadFBScene(path);
     } else {
       loadWorld(path);
@@ -669,8 +669,8 @@ while (!window->shouldClose()) {
     simState.reloadRequested = false;
     if (!lastLoadedWorldPath.empty()) {
       auto reloadExt = std::filesystem::path(lastLoadedWorldPath).extension().string();
-      if (reloadExt == ".fbscene") loadFBScene(lastLoadedWorldPath);
-      else                         loadWorld(lastLoadedWorldPath);
+      if (reloadExt == ".fbscene" || reloadExt == ".bin") loadFBScene(lastLoadedWorldPath);
+      else                                               loadWorld(lastLoadedWorldPath);
       if (networkManager && !applyingRemoteSceneLoad) {
         networkManager->sendLoadScene(lastLoadedWorldPath);
         std::lock_guard<std::mutex> lock(simMutex);
@@ -955,8 +955,8 @@ while (!window->shouldClose()) {
     if (networkManager->pollPendingSceneLoad(remotePath) && !remotePath.empty()) {
       applyingRemoteSceneLoad = true;
       auto remoteExt = std::filesystem::path(remotePath).extension().string();
-      if (remoteExt == ".fbscene") loadFBScene(remotePath);
-      else                         loadWorld(remotePath);
+      if (remoteExt == ".fbscene" || remoteExt == ".bin") loadFBScene(remotePath);
+      else                                               loadWorld(remotePath);
       applyingRemoteSceneLoad = false;
       networkManager->flushInterpolation();
       if (interface) interface->setLastLoadedWorld(remotePath);
@@ -1172,6 +1172,9 @@ while (!window->shouldClose()) {
       if (interface->pollCameraSwitch(camSwitch)) {
         switchToCamera(camSwitch);
       }
+      if (interface->pollOrbitToCenter()) {
+        setOrbitToGeometryCenter();
+      }
       interface->setActiveCameraIndex(activeCameraIndex);
 
       if (!ImGui::GetIO().WantCaptureMouse &&
@@ -1202,28 +1205,29 @@ void Application::cleanup() {
   lightManager.reset();
   materialManager.reset();
   textureManager.reset();
-  renderDevice.reset();
   meshManager.reset();
-  if (shadowPipeline != VK_NULL_HANDLE)
-    vkDestroyPipeline(device, shadowPipeline, nullptr);
-  if (shadowPipelineLayout != VK_NULL_HANDLE)
-    vkDestroyPipelineLayout(device, shadowPipelineLayout, nullptr);
-  if (mainPipeline) mainPipeline->cleanup();
+  // Free all VMA-backed application buffers before destroying the allocator.
   for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
     if (i < static_cast<int>(instanceSSBOBuffers.size())) {
       renderDevice->destroyBuffer(instanceSSBOBuffers[i], instanceSSBOAlloc[i]);
     }
   }
+  renderDevice->destroyBuffer(indexBuffer, indexBufferAlloc);
+  renderDevice->destroyBuffer(vertexBuffer, vertexBufferAlloc);
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    renderDevice->destroyBuffer(uniformBuffers[i], uniformBuffersAlloc[i]);
+  renderDevice.reset();
+  if (shadowPipeline != VK_NULL_HANDLE)
+    vkDestroyPipeline(device, shadowPipeline, nullptr);
+  if (shadowPipelineLayout != VK_NULL_HANDLE)
+    vkDestroyPipelineLayout(device, shadowPipelineLayout, nullptr);
+  if (mainPipeline) mainPipeline->cleanup();
   if (instanceDescriptorPool != VK_NULL_HANDLE)
     vkDestroyDescriptorPool(device, instanceDescriptorPool, nullptr);
   if (instanceDescriptorSetLayout != VK_NULL_HANDLE)
     vkDestroyDescriptorSetLayout(device, instanceDescriptorSetLayout, nullptr);
   vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
   vkDestroyDescriptorSetLayout(device, materialDescriptorSetLayout, nullptr);
-  renderDevice->destroyBuffer(indexBuffer, indexBufferAlloc);
-  renderDevice->destroyBuffer(vertexBuffer, vertexBufferAlloc);
-  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-    renderDevice->destroyBuffer(uniformBuffers[i], uniformBuffersAlloc[i]);
   vkDestroyDescriptorPool(device, descriptorPool, nullptr);
   for (size_t i = 0; i < renderFinishedSemaphores.size(); i++)
     vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
@@ -1704,6 +1708,9 @@ void Application::keyCallback(GLFWwindow* win, int key, int scancode,
       case GLFW_KEY_7: app->switchToCamera(6); break;
       case GLFW_KEY_8: app->switchToCamera(7); break;
       case GLFW_KEY_9: app->switchToCamera(8); break;
+      case GLFW_KEY_HOME:
+        app->setOrbitToGeometryCenter();
+        break;
       default:
         break;
     }
@@ -1787,6 +1794,51 @@ void Application::switchToCamera(int index) {
   camCtrl.orbitTheta = atan2(toPos.z, toPos.x);
   camCtrl.lastOrbitPosition = t->position;
   camCtrl.mode = CameraMode::ORBIT;
+}
+
+void Application::setOrbitToGeometryCenter() {
+  if (!registry) return;
+
+  std::vector<glm::vec3> positions;
+  for (const auto& [entity, _] : registry->allMeshes()) {
+    const auto* t = registry->getComponent<TransformComponent>(entity);
+    if (t) positions.push_back(t->position);
+  }
+
+  if (positions.empty()) return;
+
+  glm::vec3 mean(0.0f);
+  for (const auto& p : positions) mean += p;
+  mean /= static_cast<float>(positions.size());
+
+  if (positions.size() >= 4) {
+    glm::vec3 variance(0.0f);
+    for (const auto& p : positions) {
+      glm::vec3 d = p - mean;
+      variance += d * d;
+    }
+    variance /= static_cast<float>(positions.size());
+    glm::vec3 stddev(std::sqrt(variance.x), std::sqrt(variance.y), std::sqrt(variance.z));
+
+    constexpr float kSigma = 2.0f;
+    std::vector<glm::vec3> filtered;
+    filtered.reserve(positions.size());
+    for (const auto& p : positions) {
+      glm::vec3 d = glm::abs(p - mean);
+      if ((stddev.x < 0.001f || d.x <= kSigma * stddev.x) &&
+          (stddev.y < 0.001f || d.y <= kSigma * stddev.y) &&
+          (stddev.z < 0.001f || d.z <= kSigma * stddev.z))
+        filtered.push_back(p);
+    }
+
+    if (!filtered.empty()) {
+      mean = glm::vec3(0.0f);
+      for (const auto& p : filtered) mean += p;
+      mean /= static_cast<float>(filtered.size());
+    }
+  }
+
+  camCtrl.orbitPivot = mean;
 }
 
 void Application::updateCameraController(float deltaTime) {

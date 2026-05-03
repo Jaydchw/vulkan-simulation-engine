@@ -120,6 +120,12 @@ class EntityBuilder final {
     return *this;
   }
 
+  EntityBuilder& friction(float f) {
+    hasSimulated = true;
+    simulatedComp.friction = f;
+    return *this;
+  }
+
   EntityBuilder& useGravity(bool g) {
     hasSimulated = true;
     simulatedComp.useGravity = g;

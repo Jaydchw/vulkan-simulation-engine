@@ -38,6 +38,19 @@ public:
         return {};
     }
 
+    // Returns the interaction for a single material: tries self-interaction first,
+    // then any registered interaction that involves this material.
+    PhysicsMaterialInteraction findInteractionForMaterial(PhysicsMaterialID id) const {
+        auto it = interactions.find(interactionKey(id, id));
+        if (it != interactions.end()) return it->second;
+        for (const auto& [key, inter] : interactions) {
+            auto lo = static_cast<PhysicsMaterialID>(key >> 32);
+            auto hi = static_cast<PhysicsMaterialID>(key & 0xFFFFFFFFu);
+            if (lo == id || hi == id) return inter;
+        }
+        return {};
+    }
+
     void clear() {
         materials.clear();
         nameToID.clear();

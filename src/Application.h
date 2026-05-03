@@ -298,6 +298,7 @@ class Application final {
 
   void initCamerasFromRegistry();
   void updateCameraController(float deltaTime);
+  void setOrbitToGeometryCenter();
   glm::mat4 getActiveCameraViewMatrix() const;
   glm::vec3 getActiveCameraPosition() const;
 

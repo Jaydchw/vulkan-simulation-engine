@@ -8,7 +8,7 @@
 #include "Texture.h"
 
 using RenderMaterialID = uint32_t;
-constexpr RenderMaterialID INVALID_RENDER_MATERIAL_ID = 0;
+constexpr RenderMaterialID INVALID_RENDER_MATERIAL_ID = UINT32_MAX;
 
 struct RenderMaterialProperties {
   glm::vec4 albedoColor = glm::vec4(1.0f);

@@ -1,2 +1,6 @@
-﻿  PhysicsWorld.cpp
+﻿  pch.cpp
+  ClothSim.cpp
+  jphyslib.cpp
+  PhysicsWorld.cpp
+  Generating Code...
   jphyslib.vcxproj -> D:\Files\Documents\AProjects\CPP\vulkan-simulation-engine\x64\Debug\jphyslib.lib

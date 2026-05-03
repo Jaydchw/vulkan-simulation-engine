@@ -1,9 +1,11 @@
 #include "FBSceneLoader.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <sstream>
 
 #include <glm/glm.hpp>
@@ -165,7 +167,7 @@ Entity FBSceneLoader::buildObject(Registry& registry,
                                 bool      gravityOn,
                                 const std::string& materialName) const
 {
-    RenderMaterialID matID = renderMaterialManager->getDefaultMaterial();
+    RenderMaterialID matID = getOrCreateRenderMaterial(materialName);
     const PhysicsMaterialID physMatID = physMatManager ? physMatManager->findIDByName(materialName) : INVALID_PHYSICS_MATERIAL_ID;
     float density = 1000.0f;
     if (physMatManager) {
@@ -173,7 +175,7 @@ Entity FBSceneLoader::buildObject(Registry& registry,
     }
 
     PhysicsMaterialInteraction inter;
-    if (physMatManager) inter = physMatManager->findInteraction(physMatID, physMatID);
+    if (physMatManager) inter = physMatManager->findInteractionForMaterial(physMatID);
     MeshID meshID = meshManager->getDefaultCube();
     EntityBuilder builder;
 
@@ -221,11 +223,12 @@ Entity FBSceneLoader::buildObject(Registry& registry,
            .scale(scale)
            .mesh(meshID)
            .renderMaterial(matID)
-           .physicsMaterial(physMatManager ? physMatManager->findIDByName(materialName) : INVALID_PHYSICS_MATERIAL_ID)
-           .restitution(inter.restitution);
+           .physicsMaterial(physMatManager ? physMatManager->findIDByName(materialName) : INVALID_PHYSICS_MATERIAL_ID);
 
     if (behaviourType == 2) {
-        builder.velocity(linearVel)
+        builder.restitution(inter.restitution)
+               .friction(inter.dynamicFriction)
+               .velocity(linearVel)
                .angularVelocity(glm::radians(angularVelDeg))
                .useGravity(gravityOn)
                .damping(0.99f);
@@ -257,7 +260,7 @@ void FBSceneLoader::buildSpawner(Registry& registry,
                                  glm::vec3 boxMin,
                                  glm::vec3 boxMax) const
 {
-    RenderMaterialID matID = renderMaterialManager->getDefaultMaterial();
+    RenderMaterialID matID = getOrCreateRenderMaterial(materialName);
     const PhysicsMaterialID physMatID = physMatManager ? physMatManager->findIDByName(materialName) : INVALID_PHYSICS_MATERIAL_ID;
     float density = 1000.0f;
     if (physMatManager) {
@@ -265,7 +268,7 @@ void FBSceneLoader::buildSpawner(Registry& registry,
     }
 
     PhysicsMaterialInteraction inter;
-    if (physMatManager) inter = physMatManager->findInteraction(physMatID, physMatID);
+    if (physMatManager) inter = physMatManager->findInteractionForMaterial(physMatID);
 
     float rAvg = (rMin + rMax) * 0.5f;
     float hAvg = (hMin + hMax) * 0.5f;
@@ -351,6 +354,92 @@ void FBSceneLoader::buildSpawner(Registry& registry,
     registry.addComponent<SpawnerComponent>(e, sc);
 }
 
+Entity FBSceneLoader::buildContainerObject(Registry& registry,
+                                            const std::string& name,
+                                            glm::vec3 position,
+                                            glm::vec3 eulerDeg,
+                                            glm::vec3 scale,
+                                            uint8_t   shapeType,
+                                            glm::vec3 cuboidSize,
+                                            float     cylRadius,
+                                            float     cylHeight,
+                                            const std::string& materialName) const
+{
+    RenderMaterialID matID   = getOrCreateRenderMaterial(materialName);
+    const PhysicsMaterialID physMatID = physMatManager
+        ? physMatManager->findIDByName(materialName) : INVALID_PHYSICS_MATERIAL_ID;
+
+    const glm::quat rot = eulerToQuat(eulerDeg);
+    MeshID meshID = meshManager->getDefaultCube();
+
+    // Visual entity – no collider so solid AABB/cylinder collision is skipped.
+    EntityBuilder builder;
+    switch (shapeType) {
+        case 4: // Cylinder
+            meshID = meshManager->createCylinder(cylRadius, cylHeight);
+            break;
+        case 5: // Cuboid
+            meshID  = meshManager->createCube(1.0f);
+            scale  *= cuboidSize;
+            break;
+        default:
+            meshID = meshManager->createCube(1.0f);
+            break;
+    }
+    builder.name(name)
+           .position(position)
+           .rotation(rot)
+           .scale(scale)
+           .mesh(meshID)
+           .renderMaterial(matID)
+           .physicsMaterial(physMatID);
+    Entity visual = builder.build(registry);
+
+    // Build inward-facing infinite planes for each wall.
+    // Stored in local space – PhysicsSystem rotates collider->normal by transform->rotation.
+    struct WallDef { glm::vec3 localOffset; glm::vec3 localNormal; };
+    std::vector<WallDef> walls;
+
+    if (shapeType == 5) { // Box: 6 faces pointing inward
+        glm::vec3 he = cuboidSize * 0.5f;
+        walls = {
+            {{ he.x,    0,    0}, {-1,  0,  0}},
+            {{-he.x,    0,    0}, { 1,  0,  0}},
+            {{   0,  he.y,    0}, { 0, -1,  0}},
+            {{   0, -he.y,    0}, { 0,  1,  0}},
+            {{   0,    0,  he.z}, { 0,  0, -1}},
+            {{   0,    0, -he.z}, { 0,  0,  1}},
+        };
+    } else if (shapeType == 4) { // Cylinder: 2 caps + 16-sided wall ring
+        float hh = cylHeight * 0.5f;
+        walls.push_back({{0,  hh, 0}, {0, -1, 0}}); // top cap  → push down
+        walls.push_back({{0, -hh, 0}, {0,  1, 0}}); // bottom cap → push up
+        constexpr int N = 16;
+        for (int i = 0; i < N; ++i) {
+            float theta = 2.0f * 3.14159265f * float(i) / float(N);
+            float cx = std::cos(theta), cz = std::sin(theta);
+            walls.push_back({{cylRadius * cx, 0, cylRadius * cz}, {-cx, 0, -cz}});
+        }
+    }
+
+    for (const auto& w : walls) {
+        Entity wallE = registry.createEntity();
+        registry.addComponent<NameComponent>(wallE, { name + "_wall" });
+        TransformComponent tc;
+        tc.position = position + rot * w.localOffset;
+        tc.rotation = rot;
+        tc.scale    = glm::vec3(1.0f);
+        registry.addComponent<TransformComponent>(wallE, tc);
+        ColliderComponent cc;
+        cc.type   = ColliderType::Plane;
+        cc.normal = w.localNormal;
+        cc.finite = false;
+        registry.addComponent<ColliderComponent>(wallE, cc);
+    }
+
+    return visual;
+}
+
 bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
                                FBWorldSettings& settings) {
     std::ifstream file(filepath, std::ios::binary | std::ios::ate);
@@ -404,9 +493,9 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
 
             glm::vec3 pos = {}, euler = {}, scale = {1,1,1};
             if (const auto* t = cam->transform()) {
-                pos   = { t->position().x(),    t->position().y(),    t->position().z() };
-                euler = { t->orientation().yaw(), t->orientation().pitch(), t->orientation().roll() };
-                scale = { t->scale().x(),        t->scale().y(),        t->scale().z() };
+                pos   = { t->position().x(),      t->position().y(),      t->position().z() };
+                euler = { t->orientation().pitch(), t->orientation().yaw(), t->orientation().roll() };
+                scale = { t->scale().x(),           t->scale().y(),           t->scale().z() };
             }
 
             CameraComponent camComp;
@@ -443,9 +532,9 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
 
             glm::vec3 pos = {}, euler = {}, scale = {1,1,1};
             if (const auto* t = obj->transform()) {
-                pos   = { t->position().x(),     t->position().y(),     t->position().z() };
-                euler = { t->orientation().yaw(), t->orientation().pitch(), t->orientation().roll() };
-                scale = { t->scale().x(),         t->scale().y(),         t->scale().z() };
+                pos   = { t->position().x(),       t->position().y(),       t->position().z() };
+                euler = { t->orientation().pitch(), t->orientation().yaw(), t->orientation().roll() };
+                scale = { t->scale().x(),            t->scale().y(),            t->scale().z() };
             }
 
             uint8_t shapeType = static_cast<uint8_t>(obj->shape_type());
@@ -485,9 +574,16 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
                 }
             }
 
-            Entity e = buildObject(registry, name, pos, euler, scale,
-                                   shapeType, sphereR, cuboidSz, capsR, capsH, capsR, capsH, planeN,
-                                   behavType, linVel, angVelDeg, settings.gravityOn, mat);
+            const bool isContainer = (obj->collision_type() == Simulation::CollisionType::CONTAINER);
+            Entity e;
+            if (isContainer) {
+                e = buildContainerObject(registry, name, pos, euler, scale,
+                                         shapeType, cuboidSz, capsR, capsH, mat);
+            } else {
+                e = buildObject(registry, name, pos, euler, scale,
+                                shapeType, sphereR, cuboidSz, capsR, capsH, capsR, capsH, planeN,
+                                behavType, linVel, angVelDeg, settings.gravityOn, mat);
+            }
 
             if (obj->behaviour_type() == Simulation::Behaviour::SimulatedObject) {
                 if (const auto* sim = obj->behaviour_as_SimulatedObject()) {
@@ -522,8 +618,11 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
                             animComp.waypoints.push_back(waypoint);
                         }
                     }
-                    if (animComp.waypoints.size() >= 2)
+                    if (animComp.waypoints.size() >= 2) {
+                        if (animComp.totalDuration <= 0.0f)
+                            animComp.totalDuration = animComp.waypoints.back().time;
                         registry.addComponent<AnimationComponent>(e, animComp);
+                    }
                 }
             }
         }
@@ -612,8 +711,8 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
                     if (const auto* fl = base->location_as_FixedLocation()) {
                         if (const auto* t = fl->transform()) {
                             spawnPos = { t->position().x(), t->position().y(), t->position().z() };
-                            glm::vec3 euler = { t->orientation().yaw(),
-                                                t->orientation().pitch(),
+                            glm::vec3 euler = { t->orientation().pitch(),
+                                                t->orientation().yaw(),
                                                 t->orientation().roll() };
                             spawnRot = eulerToQuat(euler);
                         }
@@ -667,6 +766,24 @@ bool FBSceneLoader::loadBinary(const std::string& filepath, Registry& registry,
                          avgLin, settings.gravityOn, spMat, spEnum, rMin, rMax, hMin, hMax, sMin, sMax,
                          spawnRot, avgAngVel, angVelRandom, isBurst, ownerMode, useBoxSpawn, boxMin, boxMax);
         }
+    }
+
+    // The flatbuffer schema has no lights field — add a default sun so scenes are lit.
+    {
+        Entity sun = registry.createEntity();
+        registry.addComponent<NameComponent>(sun, { "Sun" });
+        TransformComponent tc;
+        tc.position = glm::vec3(0.0f);
+        tc.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+        tc.scale    = glm::vec3(1.0f);
+        registry.addComponent<TransformComponent>(sun, tc);
+        LightComponent lc;
+        lc.type         = LightType::Sun;
+        lc.direction    = glm::normalize(glm::vec3(-0.4f, -1.0f, -0.6f));
+        lc.color        = glm::vec3(1.0f, 0.97f, 0.9f);
+        lc.intensity    = 1.2f;
+        lc.castsShadows = true;
+        registry.addComponent<LightComponent>(sun, lc);
     }
 
     Debug::log(Debug::Category::MAIN, "FBSceneLoader: Loaded binary scene '", settings.name, "'");
@@ -817,8 +934,11 @@ bool FBSceneLoader::loadJSON(const std::string& filepath, Registry& registry,
                         animComp.waypoints.push_back(wp);
                     }
                 }
-                if (animComp.waypoints.size() >= 2)
+                if (animComp.waypoints.size() >= 2) {
+                    if (animComp.totalDuration <= 0.0f)
+                        animComp.totalDuration = animComp.waypoints.back().time;
                     registry.addComponent<AnimationComponent>(e, animComp);
+                }
             }
         }
     }
@@ -899,9 +1019,36 @@ bool FBSceneLoader::loadJSON(const std::string& filepath, Registry& registry,
     return true;
 }
 
+RenderMaterialID FBSceneLoader::getOrCreateRenderMaterial(const std::string& name) const {
+    if (!renderMaterialManager) return INVALID_RENDER_MATERIAL_ID;
+    if (name.empty()) return renderMaterialManager->getDefaultMaterial();
+
+    auto it = renderMatCache.find(name);
+    if (it != renderMatCache.end()) return it->second;
+
+    static constexpr std::array<glm::vec3, 8> kPalette = {{
+        {0.82f, 0.34f, 0.34f},
+        {0.34f, 0.60f, 0.90f},
+        {0.34f, 0.78f, 0.45f},
+        {0.90f, 0.76f, 0.22f},
+        {0.70f, 0.35f, 0.80f},
+        {0.90f, 0.52f, 0.22f},
+        {0.30f, 0.80f, 0.80f},
+        {0.82f, 0.34f, 0.65f},
+    }};
+    const glm::vec3 col = kPalette[std::hash<std::string>{}(name) % kPalette.size()];
+
+    RenderMaterialBuilder b;
+    b.name("fb_" + name).albedoColor(col).roughness(0.55f).metallic(0.0f);
+    RenderMaterialID id = renderMaterialManager->registerMaterial(b);
+    renderMatCache[name] = id;
+    return id;
+}
+
 bool FBSceneLoader::load(const std::string& filepath, Registry& registry,
                          FBWorldSettings& settings) {
     if (physMatManager) physMatManager->clear();
+    renderMatCache.clear();
     settings = FBWorldSettings{};
 
     auto ext = std::filesystem::path(filepath).extension().string();

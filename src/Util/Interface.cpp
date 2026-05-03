@@ -2318,6 +2318,12 @@ void Interface::renderCamerasMenu(Registry& registry) {
     displayIndex++;
   }
 
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+  if (ImGui::MenuItem("Set Camera Orbit to Geometry Center", "Home"))
+    orbitToCenterPending = true;
+
   // Settings for the active camera
   if (activeCameraIdx >= 0 && activeCameraIdx < static_cast<int>(sorted.size())) {
     Entity activeCamEntity = sorted[activeCameraIdx];

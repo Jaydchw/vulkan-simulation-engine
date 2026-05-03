@@ -180,6 +180,12 @@ class Interface {
     cameraSwitchPending = false;
     return true;
   }
+  bool pollOrbitToCenter() {
+    if (!orbitToCenterPending) return false;
+    orbitToCenterPending = false;
+    return true;
+  }
+  void requestOrbitToCenter() { orbitToCenterPending = true; }
 
  private:
   GLFWwindow* window;
@@ -254,4 +260,5 @@ class Interface {
   int activeCameraIdx = 0;
   bool cameraSwitchPending = false;
   int cameraSwitchTarget = 0;
+  bool orbitToCenterPending = false;
 };

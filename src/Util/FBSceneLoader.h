@@ -9,6 +9,7 @@
 #include "Physics/PhysicsMaterialManager.h"
 #include "Resources/RenderMaterialManager.h"
 #include "Resources/MeshManager.h"
+#include "Resources/RenderMaterial.h"
 
 struct FBWorldSettings {
     bool gravityOn = true;
@@ -48,6 +49,17 @@ private:
                        bool      gravityOn,
                        const std::string& materialName) const;
 
+    Entity buildContainerObject(Registry& registry,
+                               const std::string& name,
+                               glm::vec3 position,
+                               glm::vec3 eulerDeg,
+                               glm::vec3 scale,
+                               uint8_t   shapeType,
+                               glm::vec3 cuboidSize,
+                               float     cylRadius,
+                               float     cylHeight,
+                               const std::string& materialName) const;
+
     void buildSpawner(Registry& registry,
                       const std::string& name,
                       float     startTime,
@@ -73,4 +85,8 @@ private:
 
     bool loadBinary(const std::string& filepath, Registry& registry, FBWorldSettings& settings);
     bool loadJSON  (const std::string& filepath, Registry& registry, FBWorldSettings& settings);
+
+    RenderMaterialID getOrCreateRenderMaterial(const std::string& materialName) const;
+
+    mutable std::unordered_map<std::string, RenderMaterialID> renderMatCache;
 };
