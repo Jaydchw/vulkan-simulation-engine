@@ -42,9 +42,14 @@ class ClothSim {
   void step(float dt, const std::vector<PhysicsObject*>& obstacles);
 
   const std::vector<ClothParticle>& getParticles() const { return particles; }
+  const std::vector<ClothConstraint>& getConstraints() const { return constraints; }
   int getResolutionX() const { return resX; }
   int getResolutionZ() const { return resZ; }
   int particleIndex(int x, int z) const { return z * resX + x; }
+
+  // Returns true if any constraint tore since the last call to clearTornFlag().
+  bool hasTorn() const { return tornSinceLastQuery; }
+  void clearTornFlag() { tornSinceLastQuery = false; }
 
  private:
   int resX, resZ;
@@ -58,6 +63,7 @@ class ClothSim {
   float windDrag            = 0.2f;
   float tearability         = 0.0f;
   int solverIterations      = 8;
+  bool tornSinceLastQuery   = false;
   bool twoWayCoupling       = false;
   float stepDt              = 0.016f;
   bool applyImpulseThisIter = false;

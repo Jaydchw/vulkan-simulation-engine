@@ -31,6 +31,8 @@ class ClothSystem final {
     std::unique_ptr<jphys::ClothSim> sim;
     MeshID meshID = INVALID_MESH_ID;
     std::vector<Vertex> vertexScratch;
+    std::vector<uint16_t> indexScratch;
+    bool hasTearing = false;
   };
 
   Registry* registry = nullptr;

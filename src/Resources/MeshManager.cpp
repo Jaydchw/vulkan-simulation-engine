@@ -615,25 +615,19 @@ MeshID MeshManager::createDynamicMesh(const std::vector<Vertex>& vertices,
   mesh->setMappedVertexData(mappedData);
   mesh->setBoundingRadius(1e6f);
 
-  VkBuffer stagingBuffer;
-  VmaAllocation stagingAlloc;
-  void* stagingData;
   const VkDeviceSize indexBufferSize = sizeof(uint16_t) * indices.size();
-  renderDevice->createBuffer(indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                             stagingBuffer, stagingAlloc, &stagingData);
-  memcpy(stagingData, indices.data(), static_cast<size_t>(indexBufferSize));
   VkBuffer iBuf;
   VmaAllocation iAlloc;
+  void* iMapped = nullptr;
   renderDevice->createBuffer(
       indexBufferSize,
-      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, iBuf, iAlloc);
-  renderDevice->copyBuffer(stagingBuffer, iBuf, indexBufferSize);
-  renderDevice->destroyBuffer(stagingBuffer, stagingAlloc);
+      VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      iBuf, iAlloc, &iMapped);
+  memcpy(iMapped, indices.data(), static_cast<size_t>(indexBufferSize));
   mesh->setIndexBuffer(iBuf);
   mesh->setIndexBufferAllocation(iAlloc);
+  mesh->setMappedIndexData(iMapped);
 
   return registerMesh(mesh);
 }
@@ -643,6 +637,13 @@ void MeshManager::updateDynamicMeshVertices(MeshID id, const std::vector<Vertex>
   if (!mesh || !mesh->getMappedVertexData()) return;
   memcpy(mesh->getMappedVertexData(), vertices.data(),
          sizeof(Vertex) * vertices.size());
+}
+
+void MeshManager::updateDynamicMeshIndices(MeshID id, const std::vector<uint16_t>& indices) {
+  Mesh* mesh = getMesh(id);
+  if (!mesh || !mesh->getMappedIndexData()) return;
+  memcpy(mesh->getMappedIndexData(), indices.data(), sizeof(uint16_t) * indices.size());
+  mesh->setIndices(indices);  // keeps getIndexCount() in sync with the new draw count
 }
 
 void MeshManager::createBuffers(Mesh* mesh) const {

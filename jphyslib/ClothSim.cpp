@@ -101,6 +101,7 @@ void ClothSim::satisfyConstraints() {
     if (dist < 1e-7f) continue;
     if (tearability > 1.0f && !c.isBending && dist > c.restLength * tearability) {
       c.broken = true;
+      tornSinceLastQuery = true;
       continue;
     }
     float s = c.isBending ? bendingStiffness : structuralStiffness;

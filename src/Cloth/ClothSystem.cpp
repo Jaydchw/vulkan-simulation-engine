@@ -1,6 +1,7 @@
 #include "ClothSystem.h"
 
 #include <cstring>
+#include <unordered_set>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -128,18 +129,43 @@ void ClothSystem::initCloth(Entity e) {
   *registry->getComponent<TransformComponent>(e) = flat;
 
   ClothEntry entry;
-  entry.sim          = std::move(sim);
-  entry.meshID       = mid;
+  entry.sim           = std::move(sim);
+  entry.meshID        = mid;
   entry.vertexScratch = verts;
-  entries[e]         = std::move(entry);
+  entry.indexScratch  = inds;
+  entries[e]          = std::move(entry);
 }
 
-void ClothSystem::updateMesh(Entity e, ClothEntry& entry) {
+void ClothSystem::updateMesh(Entity /*e*/, ClothEntry& entry) {
   if (entry.meshID == INVALID_MESH_ID) return;
   const auto& particles = entry.sim->getParticles();
   int resX   = entry.sim->getResolutionX();
   int resZ   = entry.sim->getResolutionZ();
   int vCount = resX * resZ;
+
+  // Build a broken-edge lookup whenever any tearing has occurred. Encoded as
+  // min(a,b)*vCount + max(a,b) so each undirected edge has a unique key.
+  std::unordered_set<uint32_t> brokenEdges;
+  const bool newTear = entry.sim->hasTorn();
+  if (newTear) {
+    entry.hasTearing = true;
+    entry.sim->clearTornFlag();
+  }
+  if (entry.hasTearing) {
+    for (const auto& c : entry.sim->getConstraints()) {
+      if (c.broken && !c.isBending) {
+        uint32_t lo = static_cast<uint32_t>((std::min)(c.a, c.b));
+        uint32_t hi = static_cast<uint32_t>((std::max)(c.a, c.b));
+        brokenEdges.insert(lo * static_cast<uint32_t>(vCount) + hi);
+      }
+    }
+  }
+
+  auto edgeBroken = [&](int a, int b) -> bool {
+    uint32_t lo = static_cast<uint32_t>((std::min)(a, b));
+    uint32_t hi = static_cast<uint32_t>((std::max)(a, b));
+    return brokenEdges.count(lo * static_cast<uint32_t>(vCount) + hi) > 0;
+  };
 
   auto& verts = entry.vertexScratch;
   verts.resize(vCount);
@@ -161,10 +187,13 @@ void ClothSystem::updateMesh(Entity e, ClothEntry& entry) {
       glm::vec3 n1 = glm::cross(v01 - v00, v10 - v00);
       glm::vec3 n2 = glm::cross(v10 - v11, v01 - v11);
 
-      normals[i00] += n1;
-      normals[i01] += n1 + n2;
-      normals[i10] += n1 + n2;
-      normals[i11] += n2;
+      // Triangle 1 (i00, i01, i10): present when its two boundary edges are intact.
+      bool tri1 = !edgeBroken(i00, i01) && !edgeBroken(i00, i10);
+      // Triangle 2 (i10, i01, i11): present when its two boundary edges are intact.
+      bool tri2 = !edgeBroken(i10, i11) && !edgeBroken(i01, i11);
+
+      if (tri1) { normals[i00] += n1; normals[i01] += n1; normals[i10] += n1; }
+      if (tri2) { normals[i10] += n2; normals[i01] += n2; normals[i11] += n2; }
     }
   }
 
@@ -185,6 +214,28 @@ void ClothSystem::updateMesh(Entity e, ClothEntry& entry) {
   }
 
   meshManager->updateDynamicMeshVertices(entry.meshID, verts);
+
+  // Rebuild the index buffer only when a new tear occurred this frame.
+  if (newTear) {
+    auto& inds = entry.indexScratch;
+    inds.clear();
+    for (int z = 0; z < resZ - 1; ++z) {
+      for (int x = 0; x < resX - 1; ++x) {
+        uint16_t i00 = static_cast<uint16_t>(entry.sim->particleIndex(x,     z    ));
+        uint16_t i10 = static_cast<uint16_t>(entry.sim->particleIndex(x + 1, z    ));
+        uint16_t i01 = static_cast<uint16_t>(entry.sim->particleIndex(x,     z + 1));
+        uint16_t i11 = static_cast<uint16_t>(entry.sim->particleIndex(x + 1, z + 1));
+
+        if (!edgeBroken(i00, i01) && !edgeBroken(i00, i10)) {
+          inds.push_back(i00); inds.push_back(i01); inds.push_back(i10);
+        }
+        if (!edgeBroken(i10, i11) && !edgeBroken(i01, i11)) {
+          inds.push_back(i10); inds.push_back(i01); inds.push_back(i11);
+        }
+      }
+    }
+    meshManager->updateDynamicMeshIndices(entry.meshID, inds);
+  }
 }
 
 std::vector<Vertex> ClothSystem::buildVertices(const jphys::ClothSim& sim) {

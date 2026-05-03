@@ -60,6 +60,9 @@ class Mesh final {
   VmaAllocation getIndexBufferAllocation() const { return indexBufferAllocation; }
   void setIndexBufferAllocation(VmaAllocation alloc) { indexBufferAllocation = alloc; }
 
+  void* getMappedIndexData() const { return mappedIndexData; }
+  void setMappedIndexData(void* ptr) { mappedIndexData = ptr; }
+
   MeshType getType() const { return type; }
   void setType(MeshType t) { type = t; }
 
@@ -80,6 +83,7 @@ class Mesh final {
   void* mappedVertexData = nullptr;
   VkBuffer indexBuffer = VK_NULL_HANDLE;
   VmaAllocation indexBufferAllocation = VK_NULL_HANDLE;
+  void* mappedIndexData = nullptr;
 
   MeshType type = MeshType::Custom;
   float boundingRadius = 0.0f;
@@ -107,6 +111,7 @@ class MeshManager final {
   MeshID createDynamicMesh(const std::vector<Vertex>& vertices,
                            const std::vector<uint16_t>& indices);
   void updateDynamicMeshVertices(MeshID id, const std::vector<Vertex>& vertices);
+  void updateDynamicMeshIndices(MeshID id, const std::vector<uint16_t>& indices);
   Mesh* getMesh(MeshID id);
   const Mesh* getMesh(MeshID id) const;
   MeshID getDefaultCube() const { return defaultCubeID; }
